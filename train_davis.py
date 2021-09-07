@@ -58,7 +58,6 @@ def get_arguments():
 	parser.add_argument("--expname", type=str, default='', help="path to data")
 	parser.add_argument("--local_rank", type=int, help='local rank for DistributedDataParallel', default=0)
 
-	
 	args = parser.parse_args()
 	return args
 
