@@ -8,7 +8,6 @@ from torchvision import models
  
 # general libs
 import cv2
-import matplotlib.pyplot as plt
 from PIL import Image
 import numpy as np
 import math

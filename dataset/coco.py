@@ -404,7 +404,6 @@ if __name__ == '__main__':
     pwd = os.getcwd()
     sys.path.append(pwd)
     from utils.helpers import overlay_davis
-    import matplotlib.pyplot as plt
     import pdb
     import argparse
     def get_arguments():

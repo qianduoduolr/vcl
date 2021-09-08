@@ -103,7 +103,6 @@ class DAVIS(object):
 
 
 if __name__ == '__main__':
-    from matplotlib import pyplot as plt
 
     only_first_frame = True
     subsets = ['train', 'val']

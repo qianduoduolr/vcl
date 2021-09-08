@@ -130,7 +130,6 @@ if __name__ == '__main__':
 
 
     from helpers import overlay_davis
-    import matplotlib.pyplot as plt
     import os
     import pdb
 
