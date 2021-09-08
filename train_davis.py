@@ -97,18 +97,25 @@ def main(args, logger):
 
 	Testloader = DAVIS_MO_Test(DATA_ROOT, resolution='480p', imset='20{}/{}.txt'.format(17,'val'), single_object=False)
 
+	logger.info('Build dataset successfully')
+
 	# build model
 	model = STM(args.backbone).cuda()
+
+	if args.pretrained_model:
+		logger.info('Loading weights:{}'.format(args.pretrained_model))
+		state_dict = torch.load(args.pretrained_model)
+		state_dict_new = {k.replace('module.',''):v for k,v in state_dict.items()}
+		model.load_state_dict(state_dict_new)
+
 	if args.multi:
 		model = DistributedDataParallel(model, device_ids=[args.local_rank], broadcast_buffers=False)
-		if args.pretrained_model:
-			logger.info('Loading weights:{}'.format(args.pretrained_model))
-			model.load_state_dict(torch.load(args.pretrained_model))
-		
 		if dist.get_rank() == 0:
 			summary_writer = SummaryWriter(log_dir=os.path.join(args.output_dir,'logs'))
 		else:
 			summary_writer = None
+
+	logger.info('Build model successfully')
 
 	model.train()
 	for module in model.modules():
