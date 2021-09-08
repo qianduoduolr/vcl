@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import torch.nn.init as init
 import torch.utils.model_zoo as model_zoo
 from torchvision import models
+import torch.distributed as dist
  
 # general libs
 import cv2
@@ -241,22 +242,27 @@ class KeyValue(nn.Module):
 
 
 class STM(nn.Module):
-    def __init__(self,backbone = 'resnet50'):
+    def __init__(self,backbone = 'resnet50', logger=None, args=None):
         super(STM, self).__init__()
         self.backbone = backbone
         assert backbone == 'resnet50' or backbone == 'resnet18' or backbone == 'resnest101'
         scale_rate = (1 if (backbone == 'resnet50' or backbone == 'resnest101') else 4)
-
+        print('start {}'.format(args.local_rank))
         self.Encoder_M = Encoder_M(backbone) 
+        print('em{}'.format(args.local_rank))
         self.Encoder_Q = Encoder_Q(backbone) 
+        print('eq{}'.format(args.local_rank))
 
         self.KV_M_r4 = KeyValue(1024//scale_rate, keydim=128//scale_rate, valdim=512//scale_rate)
         self.KV_Q_r4 = KeyValue(1024//scale_rate, keydim=128//scale_rate, valdim=512//scale_rate)
-
+        print('kv{}'.format(args.local_rank))
         self.Memory = Memory()
+        print('mem{}'.format(args.local_rank))
         self.Decoder = Decoder(256,scale_rate,backbone)
+        print('dec{}'.format(args.local_rank))
         if backbone == 'resnest101':
             self.aspp = ASPP()
+        print(dist.get_rank())
  
     def Pad_memory(self, mems, num_objects, K):
         pad_mems = []

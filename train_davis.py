@@ -63,11 +63,15 @@ def get_arguments():
 	return args
 
 def main(args, logger):
+	logger.info('Main start')
 	rate = args.sample_rate
 
 	DATA_ROOT = args.Ddavis
 	palette = Image.open(DATA_ROOT + '/Annotations/480p/blackswan/00000.png').getpalette()
 	torch.backends.cudnn.benchmark = True
+
+	print(args.local_rank)
+	logger.info('Build dataset')
 
 	# for DAVIS
 	Trainset = DAVIS_MO_Train(DATA_ROOT, resolution='480p', imset='20{}/{}.txt'.format(17,'train'), single_object=False)
@@ -81,6 +85,7 @@ def main(args, logger):
 		Trainloader = data.DataLoader(Trainset, batch_size=1, num_workers=1,shuffle = True, pin_memory=True)
 	loader_iter = iter(Trainloader)
 
+	print(args.local_rank)
 	# for Youtube
 	YOUTUBE_ROOT = args.Dyoutube
 	Trainset1 = Youtube_MO_Train('{}train/'.format(YOUTUBE_ROOT))
@@ -96,11 +101,12 @@ def main(args, logger):
 	loader_iter1 = iter(Trainloader1)
 
 	Testloader = DAVIS_MO_Test(DATA_ROOT, resolution='480p', imset='20{}/{}.txt'.format(17,'val'), single_object=False)
-
+	print(args.local_rank)
 	logger.info('Build dataset successfully')
 
 	# build model
-	model = STM(args.backbone).cuda()
+	model = STM(args.backbone, logger, opt).cuda()
+	logger.info('Build model')
 
 	if args.pretrained_model:
 		logger.info('Loading weights:{}'.format(args.pretrained_model))
@@ -143,6 +149,7 @@ def main(args, logger):
 	sampler_epoch = 0
 
 	for iter_ in range(args.total_iter):
+    	
 		start = time.time()
 
 		if (iter_ + 1) % (1000 * ratio) == 0:
@@ -250,6 +257,7 @@ def main(args, logger):
 if __name__ == '__main__':
 	opt = get_arguments()
 	file_path = os.path.dirname(os.path.abspath(__file__))
+	print(opt.local_rank)
 	if opt.multi:
 		file = time.strftime("%Y-%m-%d-%H-%M", time.localtime())
 		exp_path = 'log-stm-{args.backbone}-iters{args.total_iter}-expname{args.expname}'.format(args=opt)
@@ -260,6 +268,8 @@ if __name__ == '__main__':
 		cudnn.benchmark = True
 		logs_dir = os.path.join(opt.output_dir, 'logs')
 		os.makedirs(logs_dir, exist_ok=True)
+
+		print(dist.get_rank())
 		distributed_rank = dist.get_rank() if opt.multi else 0
 		logger = setup_logger(output=logs_dir, distributed_rank=distributed_rank, name="stm")
 

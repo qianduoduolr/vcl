@@ -4,7 +4,7 @@ echo 'run bash'
 Ddavis=/gdata/lirui/dataset/DAVIS/data/
 Dyoutube=/gdata/lirui/dataset/YouTube-VOS/
 batch_size=1
-num_workers=4
+num_workers=0
 
 eval_freq=${1}
 total_iter=${2}
