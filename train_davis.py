@@ -106,7 +106,6 @@ def main(args, logger):
 
 	# build model
 	model = STM(args.backbone, logger, opt).cuda()
-	print('hh')
 	logger.info('Build model')
 
 	if args.pretrained_model:
