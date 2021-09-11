@@ -47,7 +47,7 @@ def get_arguments():
 	parser.add_argument("--change_skip_step", type=int, help="change max skip per x iter",default=3000)
 	parser.add_argument("--total-iter", type=int, help="total iter num",default=800000)
 	parser.add_argument("--eval-freq", type=int, help="evaluate per x iters",default=400000)
-	parser.add_argument("--print-freq", type=int, help="log per x iters",default=100)
+	parser.add_argument("--print-freq", type=int, help="log per x iters",default=3000)
 	parser.add_argument("--pretrained-model",type=str,default='')
 	parser.add_argument("--output-dir",type=str,default='./output')
 	parser.add_argument("--sample_rate",type=float,default=0.08)
@@ -133,6 +133,7 @@ def main(args, logger):
 	max_jf = 0
 	ratio = args.total_iter / 800000
 	sampler_epoch = 0
+	loss_meter = AverageMeter()
 
 	for iter_ in range(args.total_iter):
 		start = time.time()
@@ -153,22 +154,26 @@ def main(args, logger):
 		if random.random() < rate:
 			try:
 				Fs, Ms, num_objects, info = next(loader_iter)
+				data_flag = 'davis'
 			except:
 				if args.multi:
 					sampler_epoch += 1
 					Trainloader.sampler.set_epoch(sampler_epoch)
 				loader_iter = iter(Trainloader)
 				Fs, Ms, num_objects, info = next(loader_iter)
+				data_flag = 'davis'
 		else:
 			try:
 				Fs, Ms, num_objects, info = next(loader_iter1)
+				data_flag = 'youtube'
 			except:
 				if args.multi:
 					sampler_epoch += 1
 					Trainloader1.sampler.set_epoch(sampler_epoch)
 				loader_iter1 = iter(Trainloader1)
 				Fs, Ms, num_objects, info = next(loader_iter1)
-		
+				data_flag = 'youtube'
+
 		seq_name = info['name'][0]
 		num_frames = info['num_frames'][0].item()
 		num_frames = 3
@@ -212,7 +217,8 @@ def main(args, logger):
 
 		if (iter_+1) % args.print_freq == 0:
 			# print('iteration:{}, loss:{}, remaining iteration:{}'.format(iter_,loss_momentum/log_iter, args.total_iter - iter_))
-			logger.info('Train: [{:>3d}]/[{:>4d}] BT={:>0.3f} Loss={:>0.3f} '.format(iter_+1, args.total_iter, batch_time, loss.item()))
+			logger.info('Train: [{:>3d}]/[{:>4d}] BT={:>0.3f} Loss={:>0.3f} / {:>0.3f}'.format(iter_+1, args.total_iter, batch_time, loss.item(), loss_meter.avg))
+			loss_meter.reset()
 
 
 		if (iter_+1) % args.eval_freq == 0:

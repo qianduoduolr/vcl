@@ -303,6 +303,7 @@ class STM(nn.Module):
 
     def segment(self, frame, keys, values, num_objects): 
         num_objects = num_objects[0].item()
+
         _, K, keydim, T, H, W = keys.shape # B = 1
         # pad
         [frame], pad = pad_divide_by([frame], 16, (frame.size()[2], frame.size()[3]))
