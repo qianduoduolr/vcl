@@ -47,11 +47,11 @@ def get_arguments():
 	parser.add_argument("--change_skip_step", type=int, help="change max skip per x iter",default=3000)
 	parser.add_argument("--total-iter", type=int, help="total iter num",default=800000)
 	parser.add_argument("--eval-freq", type=int, help="evaluate per x iters",default=400000)
-	parser.add_argument("--print-freq", type=int, help="log per x iters",default=3000)
-	parser.add_argument("--pretrained-model",type=str,default='')
+	parser.add_argument("--print-freq", type=int, help="log per x iters",default=100)
+	parser.add_argument("--pretrained-model",type=str,default='/home/lr/models/segmentation/coco_pretrained_resnet50_679999_169.pth')
 	parser.add_argument("--output-dir",type=str,default='./output')
 	parser.add_argument("--sample_rate",type=float,default=0.08)
-	parser.add_argument("--backbone", type=str, help="backbone ['resnet50', 'resnet18']",default='resnet18')
+	parser.add_argument("--backbone", type=str, help="backbone ['resnet50', 'resnet18']",default='resnet50')
 
 	# dist
 	parser.add_argument("--multi", type=str2bool, default='false')
@@ -95,19 +95,25 @@ def main(args, logger):
 	loader_iter1 = iter(Trainloader1)
 
 	Testloader = DAVIS_MO_Test(DATA_ROOT, resolution='480p', imset='20{}/{}.txt'.format(17,'val'), single_object=False)
+	logger.info('Build dataset successfully')
 
 	# build model
 	model = STM(args.backbone).cuda()
+
 	if args.multi:
 		model = DistributedDataParallel(model, device_ids=[args.local_rank], broadcast_buffers=False)
 		if args.pretrained_model:
 			logger.info('Loading weights:{}'.format(args.pretrained_model))
-			model.load_state_dict(torch.load(args.pretrained_model))
-		
+			state_dict = torch.load(args.pretrained_model)
+			[un, miss] = model.load_state_dict(convert_model(state_dict), strict=False)
+			logger.info(un)
+			logger.info(miss)
+
 		if dist.get_rank() == 0:
 			summary_writer = SummaryWriter(log_dir=os.path.join(args.output_dir,'logs'))
 		else:
 			summary_writer = None
+	logger.info('Build model successfully')
 
 	model.train()
 	for module in model.modules():
@@ -250,7 +256,7 @@ if __name__ == '__main__':
 	file_path = os.path.dirname(os.path.abspath(__file__))
 	if opt.multi:
 		file = time.strftime("%Y-%m-%d-%H-%M", time.localtime())
-		exp_path = 'log-stm-{args.backbone}-iters{args.total_iter}-expname{args.expname}'.format(args=opt)
+		exp_path = 'log-stm-s-{args.backbone}-iters{args.total_iter}-expname{args.expname}'.format(args=opt)
 		opt.output_dir = os.path.join(opt.output_dir, exp_path + file)
 		torch.cuda.set_device(opt.local_rank)
 
@@ -268,6 +274,6 @@ if __name__ == '__main__':
 			logger.info("Full config saved to {}".format(path))
 			os.system('cp -r {} {}'.format(file_path, opt.output_dir))
 	else:
-		logger = setup_logger(output=None, distributed_rank=0, name="stm")
+		logger = setup_logger(output=None, distributed_rank=0, name="stm-s")
 
 	main(opt, logger)

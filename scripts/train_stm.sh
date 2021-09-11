@@ -1,10 +1,11 @@
-cd /ghome/lirui/project/sclvos/stm
+cd /ghome/lirui/project/sclvos/stm-s
 echo 'run bash'
 
 Ddavis=/gdata/lirui/dataset/DAVIS/data/
 Dyoutube=/gdata/lirui/dataset/YouTube-VOS/
 batch_size=1
 num_workers=4
+print_freq=3000
 
 eval_freq=${1}
 total_iter=${2}
@@ -15,7 +16,7 @@ expname=reproduce_stm
 output_dir=/gdata/lirui/expdir/SCLVOS/group-stm-scl
 backbone=resnet50
 
-python -m torch.distributed.launch --nproc_per_node $gpu train_davis.py  --batch-size $batch_size \
+python -m torch.distributed.launch --nproc_per_node $gpu train_davis.py  --batch-size $batch_size --print-freq $print_freq \
 --num-workers $num_workers --total-iter $total_iter  --eval-freq $eval_freq  --expname $expname --backbone $backbone \
 --multi true \
 --pretrained-model $pre_model --Ddavis $Ddavis --Dyoutube $Dyoutube --output-dir $output_dir

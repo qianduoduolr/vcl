@@ -95,9 +95,9 @@ class Encoder_M(nn.Module):
         r4 = self.res4(r3) # 1/8, 1024
         return r4, r3, r2, c1, f
  
-class Encoder_Q(nn.Module):
+class Encoder(nn.Module):
     def __init__(self, backbone):
-        super(Encoder_Q, self).__init__()
+        super(Encoder, self).__init__()
 
         if backbone == 'resnet50':
             resnet = models.resnet50(pretrained=False)
@@ -105,6 +105,9 @@ class Encoder_Q(nn.Module):
             resnet = models.resnet18(pretrained=False)
         elif backbone == 'resnest101':
             resnet = resnest101()
+
+        self.conv1_m = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        self.conv1_o = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
 
         self.conv1 = resnet.conv1
         self.bn1 = resnet.bn1
@@ -118,7 +121,7 @@ class Encoder_Q(nn.Module):
         self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1,3,1,1))
         self.register_buffer('std', torch.FloatTensor([0.229, 0.224, 0.225]).view(1,3,1,1))
 
-    def forward(self, in_f):
+    def forward_q(self, in_f):
         f = (in_f - self.mean) / self.std
 
         x = self.conv1(f) 
@@ -129,6 +132,26 @@ class Encoder_Q(nn.Module):
         r3 = self.res3(r2) # 1/8, 512
         r4 = self.res4(r3) # 1/8, 1024
         return r4, r3, r2, c1, f
+
+    def forward_m(self, in_f, in_m, in_o):
+        f = (in_f - self.mean) / self.std
+        m = torch.unsqueeze(in_m, dim=1).float() # add channel dim
+        o = torch.unsqueeze(in_o, dim=1).float() # add channel dim
+
+        x = self.conv1(f) + self.conv1_m(m) + self.conv1_o(o)
+        x = self.bn1(x)
+        c1 = self.relu(x)   # 1/2, 64
+        x = self.maxpool(c1)  # 1/4, 64
+        r2 = self.res2(x)   # 1/4, 256
+        r3 = self.res3(r2) # 1/8, 512
+        r4 = self.res4(r3) # 1/8, 1024
+        return r4, r3, r2, c1, f
+    
+    def forward(self, in_f, in_m=None, in_o=None, mode='q'):
+        if mode == 'q':
+            return self.forward_q(in_f)
+        else:
+            return self.forward_m(in_f, in_m, in_o)
 
 
 class Refine(nn.Module):
@@ -248,8 +271,8 @@ class STM(nn.Module):
         assert backbone == 'resnet50' or backbone == 'resnet18' or backbone == 'resnest101'
         scale_rate = (1 if (backbone == 'resnet50' or backbone == 'resnest101') else 4)
 
-        self.Encoder_M = Encoder_M(backbone) 
-        self.Encoder_Q = Encoder_Q(backbone) 
+        # self.Encoder_M = Encoder_M(backbone) 
+        self.Encoder_Q = Encoder(backbone) 
 
         self.KV_M_r4 = KeyValue(1024//scale_rate, keydim=128//scale_rate, valdim=512//scale_rate)
         self.KV_Q_r4 = KeyValue(1024//scale_rate, keydim=128//scale_rate, valdim=512//scale_rate)
@@ -287,7 +310,7 @@ class STM(nn.Module):
         for arg in B_list.keys():
             B_[arg] = torch.cat(B_list[arg], dim=0)
 
-        r4, _, _, _, _ = self.Encoder_M(B_['f'], B_['m'], B_['o'])
+        r4, _, _, _, _ = self.Encoder_Q(B_['f'], B_['m'], B_['o'], mode='m')
         k4, v4 = self.KV_M_r4(r4) # num_objects, 128 and 512, H/16, W/16
         k4, v4 = self.Pad_memory([k4, v4], num_objects=num_objects, K=K)
         return k4, v4

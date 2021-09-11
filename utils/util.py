@@ -185,3 +185,6 @@ def seed_torch(seed):
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
+def convert_model(state_dict):
+    state_dict = { k.replace('Encoder_M.conv1_','Encoder_Q.conv1_'):v for k,v in state_dict.items()}
+    return state_dict
