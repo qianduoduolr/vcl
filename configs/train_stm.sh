@@ -12,7 +12,7 @@ total_iter=${2}
 gpu=${3}
 
 pre_model=/gdata/lirui/models/coco_pretrained_resnet50_679999_169.pth
-expname=reproduce_stm
+expname=stc_style
 output_dir=/gdata/lirui/expdir/SCLVOS/group-stm-scl
 backbone=resnet50
 

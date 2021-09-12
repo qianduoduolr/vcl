@@ -34,11 +34,11 @@ class Youtube_MO_Train(data.Dataset):
             self.mask_files[_video] = tmp_masks
             self.num_frames[_video] = len(tmp_imgs)
 
-
-
         self.K = 11
         self.skip = 0
         self.aug = aug_heavy()
+
+
 
     def __len__(self):
         return len(self.videos)
@@ -127,6 +127,71 @@ class Youtube_MO_Train(data.Dataset):
         num_objects = torch.LongTensor([num_object])
         return Fs, Ms, num_objects, info
 
+class Youtube_MO_Train_Contrast(Youtube_MO_Train):
+    
+    def __init__(self, list_path, **kwargs):
+        super(Youtube_MO_Train_Contrast, self).__init__(**kwargs)
+        self.list_path = list_path
+        self.frame_meta_data = self.load_annotations()
+
+    def load_annotations(self):
+        with open(self.list_path, 'r') as f:
+            meta_data = json.load(f)
+        return meta_data
+
+    def __getitem__(self, index):
+
+        video = self.videos[index]
+        img_files = self.img_files[video]
+        mask_files = self.mask_files[video]
+        info = {}
+        info['name'] = video
+        info['num_frames'] = self.num_frames[video]
+        # info['size_480p'] = self.size_480p[video]
+
+        N_frames = np.empty((3,)+(384,384,)+(3,), dtype=np.float32)
+        N_masks = np.empty((3,)+(384,384,), dtype=np.uint8)
+        frames_ = []
+        masks_ = []
+        n1 = random.sample(range(0,self.num_frames[video] - 2),1)[0]
+        n2 = random.sample(range(n1 + 1,min(self.num_frames[video] - 1,n1 + 2 + self.skip)),1)[0]
+        n3 = random.sample(range(n2 + 1,min(self.num_frames[video],n2 + 2 + self.skip)),1)[0]
+        frame_list = [n1,n2,n3]
+        num_object = 0
+        ob_list = []
+        for f in range(3):
+            img_file = img_files[frame_list[f]]
+            tmp_frame = np.array(Image.open(img_file).convert('RGB'))
+            try:
+                mask_file = mask_files[frame_list[f]]  
+                tmp_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
+            except:
+                tmp_mask = 255
+
+            h,w = tmp_mask.shape
+            if h < w:
+                tmp_frame = cv2.resize(tmp_frame, (int(w/h*480), 480), interpolation=cv2.INTER_LINEAR)
+                tmp_mask = Image.fromarray(tmp_mask).resize((int(w/h*480), 480), resample=Image.NEAREST)  
+            else:
+                tmp_frame = cv2.resize(tmp_frame, (480, int(h/w*480)), interpolation=cv2.INTER_LINEAR)
+                tmp_mask = Image.fromarray(tmp_mask).resize((480, int(h/w*480)), resample=Image.NEAREST) 
+
+            frames_.append(tmp_frame)
+            masks_.append(np.array(tmp_mask))
+
+        frames_,masks_ = self.aug(frames_,masks_)
+
+        for f in range(3):
+            masks_[f],num_object,ob_list = self.mask_process(masks_[f],f,num_object,ob_list)
+            N_frames[f],N_masks[f] = frames_[f],masks_[f]
+
+        Fs = torch.from_numpy(np.transpose(N_frames.copy(), (3, 0, 1, 2)).copy()).float()
+        Ms = torch.from_numpy(self.All_to_onehot(N_masks).copy()).float()
+
+        if num_object == 0:
+            num_object += 1
+        num_objects = torch.LongTensor([num_object])
+        return Fs, Ms, num_objects, info
 
 
 if __name__ == '__main__':

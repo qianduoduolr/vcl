@@ -32,7 +32,7 @@ import json
 from dataset.dataset import DAVIS_MO_Test
 from dataset.davis import DAVIS_MO_Train
 from dataset.youtube import Youtube_MO_Train
-from model.model import STM
+from model.model import STM, STM_
 from eval import evaluate
 from utils.helpers import overlay_davis
 
@@ -51,7 +51,7 @@ def get_arguments():
 	parser.add_argument("--pretrained-model",type=str,default='/home/lr/models/segmentation/coco_pretrained_resnet50_679999_169.pth')
 	parser.add_argument("--output-dir",type=str,default='./output')
 	parser.add_argument("--sample_rate",type=float,default=0.08)
-	parser.add_argument("--backbone", type=str, help="backbone ['resnet50', 'resnet18']",default='resnet50')
+	parser.add_argument("--backbone", type=str, help="backbone ['resnet50', 'resnet18']",default='resnet18')
 
 	# dist
 	parser.add_argument("--multi", type=str2bool, default='false')
@@ -98,14 +98,14 @@ def main(args, logger):
 	logger.info('Build dataset successfully')
 
 	# build model
-	model = STM(args.backbone).cuda()
+	model = STM_(args.backbone).cuda()
 
 	if args.multi:
-		model = DistributedDataParallel(model, device_ids=[args.local_rank], broadcast_buffers=False)
+		model = DistributedDataParallel(model, device_ids=[args.local_rank], broadcast_buffers=False, find_unused_parameters=True)
 		if args.pretrained_model:
 			logger.info('Loading weights:{}'.format(args.pretrained_model))
 			state_dict = torch.load(args.pretrained_model)
-			[un, miss] = model.load_state_dict(convert_model(state_dict), strict=False)
+			[un, miss] = model.load_state_dict(state_dict, strict=False)
 			logger.info(un)
 			logger.info(miss)
 
@@ -140,6 +140,7 @@ def main(args, logger):
 	ratio = args.total_iter / 800000
 	sampler_epoch = 0
 	loss_meter = AverageMeter()
+	time_meter = AverageMeter()
 
 	for iter_ in range(args.total_iter):
 		start = time.time()
@@ -209,13 +210,15 @@ def main(args, logger):
 		Es[:,:,2] = F.softmax(n3_logit, dim=1)
 
 		loss = n2_loss + n3_loss
-
 		loss.backward()
+
+		loss_meter.update(loss.item())
 
 		optimizer.step()
 		optimizer.zero_grad()
 
 		batch_time = time.time() - start
+		time_meter.update(batch_time)
 
 		if args.multi:
 			if dist.get_rank() == 0:
@@ -223,7 +226,7 @@ def main(args, logger):
 
 		if (iter_+1) % args.print_freq == 0:
 			# print('iteration:{}, loss:{}, remaining iteration:{}'.format(iter_,loss_momentum/log_iter, args.total_iter - iter_))
-			logger.info('Train: [{:>3d}]/[{:>4d}] BT={:>0.3f} Loss={:>0.3f} / {:>0.3f}'.format(iter_+1, args.total_iter, batch_time, loss.item(), loss_meter.avg))
+			logger.info('Train: [{:>3d}]/[{:>4d}] BT={:>0.3f} / {:>0.3f} Loss={:>0.3f} / {:>0.3f}'.format(iter_+1, args.total_iter, batch_time, time_meter.avg, loss.item(), loss_meter.avg))
 			loss_meter.reset()
 
 
@@ -265,7 +268,7 @@ if __name__ == '__main__':
 		logs_dir = os.path.join(opt.output_dir, 'logs')
 		os.makedirs(logs_dir, exist_ok=True)
 		distributed_rank = dist.get_rank() if opt.multi else 0
-		logger = setup_logger(output=logs_dir, distributed_rank=distributed_rank, name="stm")
+		logger = setup_logger(output=logs_dir, distributed_rank=distributed_rank, name="stm-s")
 
 		if dist.get_rank() == 0:
 			path = os.path.join(logs_dir, "config.json")

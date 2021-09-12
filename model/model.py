@@ -23,7 +23,6 @@ from resnest.torch import resnest101
 from utils.helpers import *
  
 
-
 class ResBlock(nn.Module):
     def __init__(self, backbone, indim, outdim=None, stride=1):
         super(ResBlock, self).__init__()
@@ -86,7 +85,7 @@ class Encoder_M(nn.Module):
         m = torch.unsqueeze(in_m, dim=1).float() # add channel dim
         o = torch.unsqueeze(in_o, dim=1).float() # add channel dim
 
-        x = self.conv1(f) + self.conv1_m(m) + self.conv1_o(o)
+        x = self.conv1(f) + self.conv1_m(m) + self.conv1_o(o) 
         x = self.bn1(x)
         c1 = self.relu(x)   # 1/2, 64
         x = self.maxpool(c1)  # 1/4, 64
@@ -95,9 +94,9 @@ class Encoder_M(nn.Module):
         r4 = self.res4(r3) # 1/8, 1024
         return r4, r3, r2, c1, f
  
-class Encoder(nn.Module):
+class Encoder_Q(nn.Module):
     def __init__(self, backbone):
-        super(Encoder, self).__init__()
+        super(Encoder_Q, self).__init__()
 
         if backbone == 'resnet50':
             resnet = models.resnet50(pretrained=False)
@@ -105,9 +104,6 @@ class Encoder(nn.Module):
             resnet = models.resnet18(pretrained=False)
         elif backbone == 'resnest101':
             resnet = resnest101()
-
-        self.conv1_m = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.conv1_o = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
 
         self.conv1 = resnet.conv1
         self.bn1 = resnet.bn1
@@ -121,7 +117,7 @@ class Encoder(nn.Module):
         self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1,3,1,1))
         self.register_buffer('std', torch.FloatTensor([0.229, 0.224, 0.225]).view(1,3,1,1))
 
-    def forward_q(self, in_f):
+    def forward(self, in_f):
         f = (in_f - self.mean) / self.std
 
         x = self.conv1(f) 
@@ -132,26 +128,6 @@ class Encoder(nn.Module):
         r3 = self.res3(r2) # 1/8, 512
         r4 = self.res4(r3) # 1/8, 1024
         return r4, r3, r2, c1, f
-
-    def forward_m(self, in_f, in_m, in_o):
-        f = (in_f - self.mean) / self.std
-        m = torch.unsqueeze(in_m, dim=1).float() # add channel dim
-        o = torch.unsqueeze(in_o, dim=1).float() # add channel dim
-
-        x = self.conv1(f) + self.conv1_m(m) + self.conv1_o(o)
-        x = self.bn1(x)
-        c1 = self.relu(x)   # 1/2, 64
-        x = self.maxpool(c1)  # 1/4, 64
-        r2 = self.res2(x)   # 1/4, 256
-        r3 = self.res3(r2) # 1/8, 512
-        r4 = self.res4(r3) # 1/8, 1024
-        return r4, r3, r2, c1, f
-    
-    def forward(self, in_f, in_m=None, in_o=None, mode='q'):
-        if mode == 'q':
-            return self.forward_q(in_f)
-        else:
-            return self.forward_m(in_f, in_m, in_o)
 
 
 class Refine(nn.Module):
@@ -258,10 +234,13 @@ class KeyValue(nn.Module):
         self.Key = nn.Conv2d(indim, keydim, kernel_size=(3,3), padding=(1,1), stride=1)
         self.Value = nn.Conv2d(indim, valdim, kernel_size=(3,3), padding=(1,1), stride=1)
  
-    def forward(self, x):  
-        return self.Key(x), self.Value(x)
-
-
+    def forward(self, x, mode='all'):
+        if mode == 'key':
+            return self.Key(x)
+        elif mode == 'value':
+            return self.Value(x)
+        else:
+            return self.Key(x), self.Value(x)
 
 
 class STM(nn.Module):
@@ -271,8 +250,8 @@ class STM(nn.Module):
         assert backbone == 'resnet50' or backbone == 'resnet18' or backbone == 'resnest101'
         scale_rate = (1 if (backbone == 'resnet50' or backbone == 'resnest101') else 4)
 
-        # self.Encoder_M = Encoder_M(backbone) 
-        self.Encoder_Q = Encoder(backbone) 
+        self.Encoder_M = Encoder_M(backbone) 
+        self.Encoder_Q = Encoder_Q(backbone) 
 
         self.KV_M_r4 = KeyValue(1024//scale_rate, keydim=128//scale_rate, valdim=512//scale_rate)
         self.KV_Q_r4 = KeyValue(1024//scale_rate, keydim=128//scale_rate, valdim=512//scale_rate)
@@ -310,7 +289,7 @@ class STM(nn.Module):
         for arg in B_list.keys():
             B_[arg] = torch.cat(B_list[arg], dim=0)
 
-        r4, _, _, _, _ = self.Encoder_Q(B_['f'], B_['m'], B_['o'], mode='m')
+        r4, _, _, _, _ = self.Encoder_M(B_['f'], B_['m'], B_['o'])
         k4, v4 = self.KV_M_r4(r4) # num_objects, 128 and 512, H/16, W/16
         k4, v4 = self.Pad_memory([k4, v4], num_objects=num_objects, K=K)
         return k4, v4
@@ -326,7 +305,6 @@ class STM(nn.Module):
 
     def segment(self, frame, keys, values, num_objects): 
         num_objects = num_objects[0].item()
-
         _, K, keydim, T, H, W = keys.shape # B = 1
         # pad
         [frame], pad = pad_divide_by([frame], 16, (frame.size()[2], frame.size()[3]))
@@ -360,3 +338,67 @@ class STM(nn.Module):
             return self.segment(*args, **kwargs)
         else:
             return self.memorize(*args, **kwargs)
+
+
+class STM_(STM):
+
+    def memorize(self, frame, masks, num_objects): 
+        # memorize a frame 
+        num_objects = num_objects[0].item()
+        _, K, H, W = masks.shape # B = 1
+
+        (frame, masks), pad = pad_divide_by([frame, masks], 16, (frame.size()[2], frame.size()[3]))
+
+        # make batch arg list
+        B_list = {'f':[], 'm':[], 'o':[]}
+        for o in range(1, num_objects+1): # 1 - no
+            B_list['f'].append(frame)
+            B_list['m'].append(masks[:,o])
+            B_list['o'].append( (torch.sum(masks[:,1:o], dim=1) + \
+                torch.sum(masks[:,o+1:num_objects+1], dim=1)).clamp(0,1) )
+
+        # make Batch
+        B_ = {}
+        for arg in B_list.keys():
+            B_[arg] = torch.cat(B_list[arg], dim=0)
+
+        r4k, _, _, _, _ = self.Encoder_Q(B_['f'])
+        r4v, _, _, _, _ = self.Encoder_M(B_['f'], B_['m'], B_['o'])
+
+        k4 = self.KV_Q_r4(r4k, mode='key') # num_objects, 128 and 512, H/16, W/16
+        v4 = self.KV_M_r4(r4v, mode='value')
+        k4, v4 = self.Pad_memory([k4, v4], num_objects=num_objects, K=K)
+
+        return k4, v4
+    
+    def segment(self, frame, keys, values, num_objects): 
+        num_objects = num_objects[0].item()
+
+        _, K, keydim, T, H, W = keys.shape # B = 1
+        # pad
+        [frame], pad = pad_divide_by([frame], 16, (frame.size()[2], frame.size()[3]))
+
+        r4, r3, r2, _, _ = self.Encoder_Q(frame)
+        k4  = self.KV_Q_r4(r4, mode='key')   # 1, dim, H/16, W/16
+        v4  = self.KV_Q_r4(r4, mode='value')   # 1, dim, H/16, W/16
+
+        # expand to ---  no, c, h, w
+        k4e, v4e = k4.expand(num_objects,-1,-1,-1), v4.expand(num_objects,-1,-1,-1) 
+        r3e, r2e = r3.expand(num_objects,-1,-1,-1), r2.expand(num_objects,-1,-1,-1)
+        
+        # memory select kv:(1, K, C, T, H, W)
+        m4, viz = self.Memory(keys[0,1:num_objects+1], values[0,1:num_objects+1], k4e, v4e)
+        if self.backbone == 'resnest101':
+            m4 = self.aspp(m4)
+        logits = self.Decoder(m4, r3e, r2e)
+        ps = F.softmax(logits, dim=1)[:,1] # no, h, w  
+        #ps = indipendant possibility to belong to each object
+        
+        logit = self.Soft_aggregation(ps, K) # 1, K, H, W
+
+        if pad[2]+pad[3] > 0:
+            logit = logit[:,:,pad[2]:-pad[3],:]
+        if pad[0]+pad[1] > 0:
+            logit = logit[:,:,:,pad[0]:-pad[1]]
+
+        return logit
