@@ -4,13 +4,24 @@ import imgaug.augmenters as iaa
 import random
 import cv2
 from PIL import Image
+import torchvision.transforms.functional as F
+from torchvision import transforms
+
+class Resize(object):
+
+    def __call__(self, imgs, labels):
+        for i in range(len(imgs)):
+            imgs[i] = cv2.resize(imgs[i], (384, 384), interpolation=cv2.INTER_LINEAR)
+            labels[i] = cv2.resize(labels[i], (384, 384), interpolation=cv2.INTER_NEAREST)
+        
+        return imgs, labels
 
 class Flip(object):
     def __init__(self,rate):
         self.rate = rate
     def __call__(self,images,labels):
         if random.random() < self.rate:
-            for i in range(3):
+            for i in range(len(images)):
                 # Random flipping
                 images[i] = np.fliplr(images[i]).copy()  # HWC
                 labels[i] = np.fliplr(labels[i]).copy()  # HW
@@ -27,13 +38,13 @@ class RandomSizedCrop(object):
         x2_ = []
         y1_ = []
         y2_ = []
-        for i in range(3): 
+        for i in range(len(images)): 
             h, w = labels[i].shape
             h, w = (max(384,int(h * scale_factor)), max(384,int(w * scale_factor)))
             images[i] = (cv2.resize(images[i], (w, h), interpolation=cv2.INTER_LINEAR))
             labels[i] = Image.fromarray(labels[i]).resize((w, h), resample=Image.NEAREST)
             labels[i] = np.asarray(labels[i], dtype=np.int8)
-        ob_loc = ((labels[0] + labels[1] + labels[2]) > 0).astype(np.uint8)
+        ob_loc = ((sum(labels)) > 0).astype(np.uint8)
         box = cv2.boundingRect(ob_loc)
 
         x_min = box[0]
@@ -58,7 +69,7 @@ class RandomSizedCrop(object):
 
         end_h = start_h + 384
         end_w = start_w + 384
-        for i in range(3):
+        for i in range(len(images)):
             start_h = random.randint(start_h-20,start_h+20)
             start_h = max(0,start_h)
             start_h = min(h - 384,start_h)
@@ -96,11 +107,14 @@ class aug_heavy(object):
             ], random_order=True)
 
         self.crop = RandomSizedCrop([0.80,1.1],384)
+        self.resize = Resize()
         self.flip = Flip(0.5)
+
     def __call__(self,images,labels):
         images,labels = self.flip(images,labels)
-        for i in range(3):
+        for i in range(len(images)):
             images[i],labels[i] = self.affinity(image = images[i],segmentation_maps = labels[i][np.newaxis,:,:,np.newaxis])
             labels[i] = labels[i][0,:,:,0]
         images,labels = self.crop(images,labels)
+        # images, labels = self.resize(images,labels)
         return images,labels

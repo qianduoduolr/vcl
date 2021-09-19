@@ -340,7 +340,37 @@ class STM(nn.Module):
             return self.memorize(*args, **kwargs)
 
 
-class STM_(STM):
+class STM_SCL(STM):
+    def __init__(self, backbone='resnet50'):
+        super(STM_SCL, self).__init__(backbone=backbone)
+        self.backbone = backbone
+        assert backbone == 'resnet50' or backbone == 'resnet18' or backbone == 'resnest101'
+        scale_rate = (1 if (backbone == 'resnet50' or backbone == 'resnest101') else 4)
+
+        self.Encoder_M = Encoder_M(backbone) 
+        self.Encoder_Q = Encoder_Q(backbone) 
+        self.Encoder_Q_M = Encoder_Q(backbone) 
+
+        self.KV_M_r4 = KeyValue(1024//scale_rate, keydim=128//scale_rate, valdim=512//scale_rate)
+        self.KV_Q_r4 = KeyValue(1024//scale_rate, keydim=128//scale_rate, valdim=512//scale_rate)
+
+        self.proj = nn.Sequential(
+            nn.Conv2d(1024//scale_rate,1024//scale_rate, 1),
+            nn.ReLU(),
+            nn.Conv2d(1024//scale_rate,128, 1)
+        )
+
+        self.proj_m = nn.Sequential(
+            nn.Conv2d(1024//scale_rate,1024//scale_rate, 1),
+            nn.ReLU(),
+            nn.Conv2d(1024//scale_rate,128, 1)
+        )
+
+        self.Memory = Memory()
+        self.Decoder = Decoder(256,scale_rate,backbone)
+        if backbone == 'resnest101':
+            self.aspp = ASPP()
+
 
     def memorize(self, frame, masks, num_objects): 
         # memorize a frame 
@@ -371,7 +401,7 @@ class STM_(STM):
 
         return k4, v4
     
-    def segment(self, frame, keys, values, num_objects): 
+    def segment(self, frame, keys, values, num_objects, contrast=False): 
         num_objects = num_objects[0].item()
 
         _, K, keydim, T, H, W = keys.shape # B = 1
@@ -381,7 +411,7 @@ class STM_(STM):
         r4, r3, r2, _, _ = self.Encoder_Q(frame)
         k4  = self.KV_Q_r4(r4, mode='key')   # 1, dim, H/16, W/16
         v4  = self.KV_Q_r4(r4, mode='value')   # 1, dim, H/16, W/16
-
+    
         # expand to ---  no, c, h, w
         k4e, v4e = k4.expand(num_objects,-1,-1,-1), v4.expand(num_objects,-1,-1,-1) 
         r3e, r2e = r3.expand(num_objects,-1,-1,-1), r2.expand(num_objects,-1,-1,-1)
@@ -401,4 +431,62 @@ class STM_(STM):
         if pad[0]+pad[1] > 0:
             logit = logit[:,:,:,pad[0]:-pad[1]]
 
-        return logit
+        if contrast:
+            k4c = self.proj(r4)
+            return logit, k4c
+        else:
+            return logit
+
+    def cts(self, x):
+        r4k, _, _, _, _ = self.Encoder_Q_M(x)
+        k4c = self.proj_m(r4k)
+        return k4c
+
+    def forward(self, *args, **kwargs):
+        if len(args) == 1:
+            return self.cts(*args)
+        elif args[1].dim() > 4: # keys
+            return self.segment(*args, **kwargs)
+        else:
+            return self.memorize(*args, **kwargs)
+
+
+class STM_SSL(nn.Module):
+    def __init__(self, backbone='resnet50'):
+        super(STM_SSL, self).__init__()
+        self.backbone = backbone
+        assert backbone == 'resnet50' or backbone == 'resnet18' or backbone == 'resnest101'
+        scale_rate = (1 if (backbone == 'resnet50' or backbone == 'resnest101') else 4)
+
+        self.Encoder_Q = Encoder_Q(backbone) 
+        self.Encoder_Q_M = Encoder_Q(backbone) 
+
+        self.KV_M_r4 = KeyValue(1024//scale_rate, keydim=128//scale_rate, valdim=512//scale_rate)
+        self.KV_Q_r4 = KeyValue(1024//scale_rate, keydim=128//scale_rate, valdim=512//scale_rate)
+
+        self.proj = nn.Sequential(
+            nn.Conv2d(1024//scale_rate,1024//scale_rate, 1),
+            nn.ReLU(),
+            nn.Conv2d(1024//scale_rate,128, 1)
+        )
+
+        self.proj_m = nn.Sequential(
+            nn.Conv2d(1024//scale_rate,1024//scale_rate, 1),
+            nn.ReLU(),
+            nn.Conv2d(1024//scale_rate,128, 1)
+        )
+    
+    def forward(self, x, mode='query'):
+        if mode == 'query':
+            r4k, _, _, _, _ = self.Encoder_Q(x)
+            k4c = self.proj(r4k)
+            return k4c
+        else:
+            r4k, _, _, _, _ = self.Encoder_Q_M(x)
+            k4c = self.proj_m(r4k)
+            return k4c
+
+        
+
+
+

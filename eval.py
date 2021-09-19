@@ -24,7 +24,7 @@ import copy
 
 ### My libs
 from dataset.dataset import DAVIS_MO_Test
-from model.model import STM
+from model.model import STM, STM_SCL
 
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -45,10 +45,11 @@ def Run_video(dataset,video, num_frames, num_objects,model,Mem_every=None, Mem_n
     else:
         raise NotImplementedError
     F_last,M_last = dataset.load_single_image(video,0)
-    F_last = F_last.unsqueeze(0)
-    M_last = M_last.unsqueeze(0)
+    F_last = F_last.unsqueeze(0).cuda()
+    M_last = M_last.unsqueeze(0).cuda()
     E_last = M_last
     pred = np.zeros((num_frames,M_last.shape[3],M_last.shape[4]))
+    all_Fs = [F_last.cpu().numpy()]
     all_Ms = []
     for t in range(1,num_frames):
 
@@ -65,10 +66,12 @@ def Run_video(dataset,video, num_frames, num_objects,model,Mem_every=None, Mem_n
 
         F_,M_ = dataset.load_single_image(video,t)
 
-        F_ = F_.unsqueeze(0)
-        M_ = M_.unsqueeze(0)
+        F_ = F_.unsqueeze(0).cuda()
+        M_ = M_.unsqueeze(0).cuda()
         all_Ms.append(M_.cpu().numpy())
+        all_Fs.append(F_.cpu().numpy())
         del M_
+
         # segment
         with torch.no_grad():
             logit = model(F_[:,:,0], this_keys, this_values, torch.tensor([num_objects]))
@@ -82,7 +85,8 @@ def Run_video(dataset,video, num_frames, num_objects,model,Mem_every=None, Mem_n
         E_last = E.unsqueeze(2)
         F_last = F_
     Ms = np.concatenate(all_Ms,axis=2)
-    return pred,Ms
+    Fs = np.concatenate(all_Fs,axis=2)
+    return pred,Ms,Fs
 
 def evaluate_semisupervised(all_gt_masks, all_res_masks, all_void_masks, metric):
     if all_res_masks.shape[0] > all_gt_masks.shape[0]:
@@ -108,13 +112,18 @@ def evaluate(model,Testloader,metric):
     if 'F' in metric:
         metrics_res['F'] = {"M": [], "R": [], "D": [], "M_per_object": {}}
 
-    for V in tqdm.tqdm(Testloader):
+    vid_jfm = {}
+
+    for idx,V in enumerate(tqdm.tqdm(Testloader)):
+
+        # if idx >= 3: break
         num_objects, info = V
         seq_name = info['name']
         num_frames = info['num_frames']
+        vid_jfm[seq_name] = {'JM':[], 'FM':[]}
         #print('[{}]: num_frames: {}, num_objects: {}'.format(seq_name, num_frames, num_objects[0][0]))
         
-        pred,Ms = Run_video(Testloader, seq_name, num_frames, num_objects,model,Mem_every=8, Mem_number=None)
+        pred,Ms,_ = Run_video(Testloader, seq_name, num_frames, num_objects,model,Mem_every=8, Mem_number=None)
         # all_res_masks = Es[0].cpu().numpy()[1:1+num_objects]
         all_res_masks = np.zeros((num_objects,pred.shape[0],pred.shape[1],pred.shape[2]))
         for i in range(1,num_objects+1):
@@ -129,18 +138,21 @@ def evaluate(model,Testloader,metric):
                 metrics_res['J']["M"].append(JM)
                 metrics_res['J']["R"].append(JR)
                 metrics_res['J']["D"].append(JD)
+                vid_jfm[seq_name]['JM'].append(JM)
             if 'F' in metric:
                 [FM, FR, FD] = utils.db_statistics(f_metrics_res[ii])
                 metrics_res['F']["M"].append(FM)
                 metrics_res['F']["R"].append(FR)
                 metrics_res['F']["D"].append(FD)
+                vid_jfm[seq_name]['FM'].append(FM)
+
 
     J, F = metrics_res['J'], metrics_res['F']
     g_measures = ['J&F-Mean', 'J-Mean', 'J-Recall', 'J-Decay', 'F-Mean', 'F-Recall', 'F-Decay']
     final_mean = (np.mean(J["M"]) + np.mean(F["M"])) / 2.
     g_res = np.array([final_mean, np.mean(J["M"]), np.mean(J["R"]), np.mean(J["D"]), np.mean(F["M"]), np.mean(F["R"]),
                       np.mean(F["D"])])
-    return g_res
+    return g_res, vid_jfm
 	    
 
 
@@ -149,12 +161,16 @@ if __name__ == "__main__":
     torch.set_grad_enabled(False) # Volatile
     def get_arguments():
         parser = argparse.ArgumentParser(description="xxx")
-        parser.add_argument("-g", type=str, help="0; 0,1; 0,3; etc", required=True)
-        parser.add_argument("-s", type=str, help="set", required=True)
-        parser.add_argument("-y", type=int, help="year", required=True)
-        parser.add_argument("-D", type=str, help="path to data",default='/smart/haochen/cvpr/data/DAVIS/')
+        parser.add_argument("-g", type=str, help="0; 0,1; 0,3; etc", default='0')
+        parser.add_argument("-s", type=str, help="set", default='val')
+        parser.add_argument("-y", type=int, help="year", default=17)
+        parser.add_argument("-D", type=str, help="path to data",default='/home/lr/dataset/DAVIS/')
         parser.add_argument("-backbone", type=str, help="backbone ['resnet50', 'resnet18','resnest101']",default='resnet50')
-        parser.add_argument("-p", type=str, help="path to weights",default='/smart/haochen/cvpr/weights/davis_youtube_resnet50_799999.pth')
+        parser.add_argument("-p", type=str, help="path to weights",default='/home/lr/models/segmentation/coco_pretrained_resnet50_679999_169.pth')
+        parser.add_argument("-output-dir", type=str, help="path to weights",default='./output')
+        parser.add_argument("-model-name", type=str, help="path to weights",default='STM')
+
+
         return parser.parse_args()
 
     args = get_arguments()
@@ -165,20 +181,34 @@ if __name__ == "__main__":
     DATA_ROOT = args.D
 
     # Model and version
-    MODEL = 'STM'
+    MODEL = args.model_name
     print(MODEL, ': Testing on DAVIS')
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = GPU
-    if torch.cuda.is_available():
-        print('using Cuda devices, num:', torch.cuda.device_count())
-
     Testloader = DAVIS_MO_Test(DATA_ROOT, resolution='480p', imset='20{}/{}.txt'.format(YEAR,SET), single_object=(YEAR==16))
-    model = nn.DataParallel(STM(args.backbone))
+
+    if args.model_name == 'STM':
+        model = STM(args.backbone)
+    else:
+        model = STM_SCL(args.backbone)
+
+    model = nn.DataParallel(model)
     if torch.cuda.is_available():
         model.cuda()
     model.eval()
     pth = args.p
 
-    model.load_state_dict(torch.load(pth))
+    [miss, un] = model.load_state_dict(torch.load(pth), strict=False)
+    print('miss:',miss)
     metric = ['J','F']
-    print(evaluate(model,Testloader,metric))
+    g_res, vid_jfm =  evaluate(model,Testloader,metric)
+
+    print(g_res)
+    
+    output_dir = os.path.join(args.output_dir, 'eval_output')
+    os.makedirs(output_dir, exist_ok=True)
+
+    with open(os.path.join(output_dir, 'result.txt'), 'a') as f:
+        for vname, metric in vid_jfm.items():
+            jfm = (np.mean(metric['JM']) +  np.mean(metric['FM'])) / 2
+            f.write('video_name:{},  J&F-mean:{}'.format(vname, jfm) + '\n')
+        f.write('J&F-Mean: {}, J-Mean:{}, J-Recall: {}, J-Decay:{}, F-Mean:{}, F-Recall:{}, F-Decay{}'.format(g_res[0], g_res[1], g_res[2], g_res[3], g_res[4], g_res[5], g_res[6]))

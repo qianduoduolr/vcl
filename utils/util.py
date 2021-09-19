@@ -188,3 +188,8 @@ def seed_torch(seed):
 def convert_model(state_dict):
     state_dict = { k.replace('Encoder_M.conv1_','Encoder_Q.conv1_'):v for k,v in state_dict.items()}
     return state_dict
+
+
+def adjust_learning_rate(iteration,power = 0.9):
+    lr = 1e-5 * pow((1 - 1.0 * iteration / args.total_iter), power)
+    return lr

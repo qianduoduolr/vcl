@@ -28,7 +28,10 @@ for k,v in meta_data['videos'].items():
             else:
                 c_num = categorys[category]
             if c_num >= cnum_max: cnum_max = c_num
-            frame_wise_anno[k][frame_id].append((c_num, idx+1))
+            frame_wise_anno[k][frame_id].append((c_num, int(obj)))
+
+        if frame_id not in frame_wise_anno[k].keys():
+            frame_wise_anno[k][frame_id] = []
 
 with open('/home/lr/dataset/YouTube-VOS/train/generated_frame_wise_meta.json','w') as f:
     json.dump(frame_wise_anno,f)

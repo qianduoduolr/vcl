@@ -24,8 +24,9 @@ import copy
 
 ### My libs
 from dataset.dataset import DAVIS_MO_Test
-from model.model import STM
+from model.model import STM, STM_SCL
 from utils.helpers import overlay_davis
+# from eval import Run_video
 
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -110,13 +111,18 @@ def Run_video(dataset,video, num_frames, num_objects,model,Mem_every=None, Mem_n
     Fs = np.concatenate(all_Fs,axis=2)
     return pred,Fs
 
-def demo(model,Testloader,output_mask_path,output_viz_path):
+def demo(model,Testloader,output_mask_path,output_viz_path, video_set=None):
     for V in tqdm.tqdm(Testloader):
+
         num_objects, info = V
         seq_name = info['name']
         num_frames = info['num_frames']
+
+        if video_set != ['all']:
+            if seq_name not in video_set:
+                continue
         
-        pred,Fs = Run_video(Testloader, seq_name, num_frames, num_objects,model,Mem_every=5, Mem_number=None)
+        pred,  Fs = Run_video(Testloader, seq_name, num_frames, num_objects,model,Mem_every=8, Mem_number=None)
 
         
         # Save results for quantitative eval ######################
@@ -141,9 +147,9 @@ def demo(model,Testloader,output_mask_path,output_viz_path):
             canvas = Image.fromarray(canvas)
             canvas.save(os.path.join(seq_output_viz_path, 'f{}.jpg'.format(f)))
 
-        vid_path = os.path.join(output_viz_path, '{}.mp4'.format(seq_name))
-        frame_path = os.path.join(output_viz_path, seq_name, 'f%d.jpg')
-        os.system('ffmpeg -framerate 10 -i {} {} -vcodec libx264 -crf 10  -pix_fmt yuv420p  -nostats -loglevel 0 -y'.format(frame_path, vid_path))
+        # vid_path = os.path.join(output_viz_path, '{}.mp4'.format(seq_name))
+        # frame_path = os.path.join(output_viz_path, seq_name, 'f%d.jpg')
+        # os.system('ffmpeg -framerate 10 -i {} {} -vcodec libx264 -crf 10  -pix_fmt yuv420p  -nostats -loglevel 0 -y'.format(frame_path, vid_path))
 
 
 
@@ -151,14 +157,18 @@ if __name__ == "__main__":
     torch.set_grad_enabled(False) # Volatile
     def get_arguments():
         parser = argparse.ArgumentParser(description="xxx")
-        parser.add_argument("-g", type=str, help="0; 0,1; 0,3; etc", required=True)
-        parser.add_argument("-s", type=str, help="set", required=True)
-        parser.add_argument("-y", type=int, help="year", required=True)
-        parser.add_argument("-D", type=str, help="path to data",default='/smart/haochen/cvpr/data/DAVIS/')
+        parser.add_argument("-g", type=str, help="0; 0,1; 0,3; etc", default='0')
+        parser.add_argument("-s", type=str, help="set", default='val')
+        parser.add_argument("-y", type=int, help="year", default=17)
+        parser.add_argument("-D", type=str, help="path to data",default='/home/lr/dataset/DAVIS/')
         parser.add_argument("-backbone", type=str, help="backbone ['resnet50', 'resnet18','resnest101']",default='resnet50')
-        parser.add_argument("-p", type=str, help="path to weights",default='/smart/haochen/cvpr/weights/davis_youtube_resnet50_799999.pth')
-        parser.add_argument("-output_mask_path", type=str, help="path to segmentation maps",default='./output')
-        parser.add_argument("-output_viz_path", type=str, help="path to videos",default='./viz')
+        parser.add_argument("-p", type=str, help="path to weights",default='/home/lr/models/segmentation/coco_pretrained_resnet50_679999_169.pth')
+        parser.add_argument("-output_mask_path", type=str, help="path to segmentation maps",default='./output/vis/')
+        parser.add_argument("-output_viz_path", type=str, help="path to videos",default='./output/vis/')
+        parser.add_argument("-model-name", type=str, help="path to weights",default='STM')
+        parser.add_argument("-video-set", type=str, help="path to weights",default='all')
+
+
         return parser.parse_args()
 
     args = get_arguments()
@@ -170,6 +180,7 @@ if __name__ == "__main__":
     output_mask_path = args.output_mask_path
     output_viz_path = args.output_viz_path
 
+    
     if not os.path.exists(output_mask_path):
         os.makedirs(output_mask_path)
     if not os.path.exists(output_viz_path):
@@ -179,17 +190,22 @@ if __name__ == "__main__":
     MODEL = 'STM'
     print(MODEL, ': Testing on DAVIS')
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = GPU
-    if torch.cuda.is_available():
-        print('using Cuda devices, num:', torch.cuda.device_count())
+
+    if args.model_name == 'STM':
+        model = STM(args.backbone)
+    else:
+        model = STM_SCL(args.backbone)
 
     Testloader = DAVIS_MO_Test(DATA_ROOT, resolution='480p', imset='20{}/{}.txt'.format(YEAR,SET), single_object=(YEAR==16))
-    model = nn.DataParallel(STM(args.backbone))
+    model = nn.DataParallel(model)
     if torch.cuda.is_available():
         model.cuda()
     model.eval()
     pth = args.p
 
-    model.load_state_dict(torch.load(pth))
+    [miss, un] = model.load_state_dict(torch.load(pth), strict=False)
+    print(miss)
     metric = ['J','F']
-    demo(model,Testloader,output_mask_path,output_viz_path)
+
+    with torch.no_grad():
+        demo(model,Testloader,output_mask_path,output_viz_path, [args.video_set])

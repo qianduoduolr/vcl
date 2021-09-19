@@ -88,9 +88,4 @@ class DAVIS_MO_Test(data.Dataset):
         else:
             Ms = torch.from_numpy(self.All_to_onehot(N_masks).copy()).float()
             num_objects = torch.LongTensor([int(self.num_objects[video])])
-            return Fs, Ms      
-
-
-
-if __name__ == '__main__':
-    pass
+            return Fs, Ms
