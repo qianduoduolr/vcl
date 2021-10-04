@@ -15,58 +15,24 @@ import pdb
 
 from .base_dataset import BaseDataset
 from .registry import DATASETS
-from .pipelines.aug import aug_heavy
+from .pipelines.my_aug import aug_heavy
 
 
 MAX_OBJECT_NUM_PER_SAMPLE = 5
 
 @DATASETS.register_module()
-class VOS_davis_dataset(BaseDataset):
+class VOS_dataset_base(BaseDataset):
 
-    def __init__(self, imset, resolution, single_object, root, pipeline=None, test_mode=False):
+    def __init__(self, root,  
+                       list_path, 
+                       pipeline=None, 
+                       test_mode=False
+                       ):
         super().__init__(pipeline, test_mode)
 
-        self.K = 11
-
         self.root = root
-        self.single_object = single_object
-        self.imset = imset
-        self.resolution = resolution
+        self.list_path = list_path
 
-        self.aug = aug_heavy()
-        self.load_annotations()
-
-    def load_annotations(self):
-
-        self.mask_dir = os.path.join(self.root, 'Annotations', self.resolution)
-        self.mask480_dir = os.path.join(self.root, 'Annotations', '480p')
-        self.image_dir = os.path.join(self.root, 'JPEGImages', self.resolution)
-        _imset_dir = os.path.join(self.root, 'ImageSets')
-        _imset_f = os.path.join(_imset_dir, self.imset)
-
-        self.skip = 0
-        self.videos = []
-        self.num_frames = {}
-        self.num_objects = {}
-        self.shape = {}
-        self.size_480p = {}
-        with open(os.path.join(_imset_f), "r") as lines:
-            for line in lines:
-                _video = line.rstrip('\n')
-                self.videos.append(_video)
-                self.num_frames[_video] = len(glob.glob(os.path.join(self.image_dir, _video, '*.jpg')))
-                _mask = np.array(Image.open(os.path.join(self.mask_dir, _video, '00000.png')).convert("P"))
-                self.num_objects[_video] = np.max(_mask)
-                self.shape[_video] = np.shape(_mask)
-                _mask480 = np.array(Image.open(os.path.join(self.mask480_dir, _video, '00000.png')).convert("P"))
-                self.size_480p[_video] = np.shape(_mask480)
-
-
-    def __len__(self):
-        return len(self.videos)
-
-    def change_skip(self,f):
-        self.skip = f
 
     def To_onehot(self, mask):
         M = np.zeros((self.K, mask.shape[0], mask.shape[1]), dtype=np.uint8)
@@ -95,71 +61,105 @@ class VOS_davis_dataset(BaseDataset):
             mask_[mask == l] = i + 1
         return mask_,n,ob_list
 
-    def load_single_image(self, video, f):  
+    def _parser_rgb_jpg_cv(self, offsets, frames_path):
+        """read frame"""
+        frame_list_all = []
+        for idx, offset in enumerate(offsets):
+            frame_path = frames_path[offset]
+            frame = cv2.imread(frame_path)
+            frame_list_all.append(frame)
+        return frame_list_all
     
-        N_frames = np.empty((1,)+self.shape[video]+(3,), dtype=np.float32)
-        N_masks = np.empty((1,)+self.shape[video], dtype=np.uint8)
-
-        img_file = os.path.join(self.image_dir, video, '{:05d}.jpg'.format(f))
-
-        N_frames[0] = np.array(Image.open(img_file).convert('RGB'))/255.
-        try:
-            mask_file = os.path.join(self.mask_dir, video, '{:05d}.png'.format(f))  
-            N_masks[0] = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
-        except:
-            N_masks[0] = 255
-        Fs = torch.from_numpy(np.transpose(N_frames.copy(), (3, 0, 1, 2)).copy()).float()
-        if self.single_object:
-            N_masks = (N_masks > 0.5).astype(np.uint8) * (N_masks < 255).astype(np.uint8)
-            Ms = torch.from_numpy(self.All_to_onehot(N_masks).copy()).float()
-            num_objects = torch.LongTensor([int(1)])
-            return Fs, Ms, num_objects
-        else:
-            Ms = torch.from_numpy(self.All_to_onehot(N_masks).copy()).float()
-            num_objects = torch.LongTensor([int(self.num_objects[video])])
-            return Fs, Ms
+    def _parser_mask(self, offsets, masks_path):
+        """read mask"""
+        mask_list_all = []
+        for idx, offset in enumerate(offsets):
+            mask_path = masks_path[offset]
+            mask = np.array(Image.open(mask_path).convert('P'), dtype=np.uint8)
+            mask_list_all.append(mask)
+        return mask_list_all
 
 
-    def prepare_train_data(self, index):
-        video = self.videos[index]
-        info = {}
-        info['name'] = video
-        info['num_frames'] = self.num_frames[video]
-        info['size_480p'] = self.size_480p[video]
+@DATASETS.register_module()
+class VOS_davis_dataset_stm(VOS_dataset_base):
 
-        N_frames = np.empty((3,)+(384,384,)+(3,), dtype=np.float32)
-        N_masks = np.empty((3,)+(384,384,), dtype=np.uint8)
-        frames_ = []
-        masks_ = []
-        n1 = random.sample(range(0,self.num_frames[video] - 2),1)[0]
-        n2 = random.sample(range(n1+1,min(self.num_frames[video] - 1,n1 + 2 + self.skip)),1)[0]
-        n3 = random.sample(range(n2+1,min(self.num_frames[video],n2 + 2 + self.skip)),1)[0]
-        frame_list = [n1,n2,n3]
+    def __init__(self, root,  
+                       list_path, 
+                       resolution, 
+                       year, 
+                       single_object, 
+                       sample_type='stm', 
+                       pipeline=None, 
+                       test_mode=False
+                       ):
+        super().__init__(root, list_path, pipeline, test_mode)
+
+        self.sample_type = sample_type
+        self.aug = aug_heavy()
+        self.K = 11
+        self.skip = 0
+        
+        self.resolution = resolution
+        self.year = year
+
+    def load_annotations(self):
+        
+        self.samples = []
+
+        mask_dir = osp.join(self.root, 'Annotations', self.resolution)
+        video_dir = osp.join(self.root, 'JPEGImages', self.resolution)
+        list_path = osp.join(self.list_path, f'davis{self.year}_train_list.txt') if not self.test_mode else  osp.join(self.list_path, f'davis{self.year}_val_list.txt')
+
+        with open(list_path, 'r') as f:
+            for line in f.readlines():
+                sample = dict()
+                vname, num_frames = line.strip('\n').split()
+                sample['frames_path'] = sorted(glob.glob(osp.join(video_dir, vname, '*.jpg')))
+                sample['masks_path'] = sorted(glob.glob(osp.join(mask_dir, vname, '*.png')))
+                sample['num_frames'] = int(num_frames)
+
+                _mask = np.array(Image.open(sample['masks_path'][0]).convert('P'), dtype=np.uint8)
+                sample['num_objects'] = np.max(_mask)
+                self.samples.append(sample)
+
+    def __len__(self):
+        return len(self.samples)
+
+    def change_skip(self,f):
+        self.skip = f
+
+    def prepare_train_data_stm(self, index):
+
+        sample = self.samples[index]
+        num_frames = sample['num_frames']
+        masks_path = sample['masks_path']
+        frames_path = sample['frames_path']
+       
+        # sample on temporal
+        n1 = random.sample(range(0,num_frames - 2),1)[0]
+        n2 = random.sample(range(n1 + 1,min(num_frames - 1,n1 + 2 + self.skip)),1)[0]
+        n3 = random.sample(range(n2 + 1,min(num_frames,n2 + 2 + self.skip)),1)[0]
+        offsets = [n1,n2,n3]
         num_object = 0
         ob_list = []
-
-        for f in range(3):
-            img_file = os.path.join(self.image_dir, video, '{:05d}.jpg'.format(frame_list[f]))
-            tmp_frame = np.array(Image.open(img_file).convert('RGB'))
-            try:
-                mask_file = os.path.join(self.mask_dir, video, '{:05d}.png'.format(frame_list[f]))  
-                tmp_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
-            except:
-                tmp_mask = 255
-
-            frames_.append(tmp_frame.astype(np.float32))
-            masks_.append(tmp_mask)
-        frames_,masks_ = self.aug(frames_,masks_)
-
-        for f in range(3):
-            masks_[f],num_object,ob_list = self.mask_process(masks_[f],f,num_object,ob_list)
-            N_frames[f],N_masks[f] = frames_[f],masks_[f]
         
-        Fs = torch.from_numpy(np.transpose(N_frames.copy(), (3, 0, 1, 2)).copy()).float()
-        Ms = torch.from_numpy(self.All_to_onehot(N_masks).copy()).float()
+        # load frames and masks
+        frames = self._parser_rgb_jpg_cv(offsets, frames_path)
+        masks = self._parser_mask(offsets, masks_path)
+
+        # apply augmentations
+        frames_,masks_ = self.aug(frames,masks)
+
+        for f in range(len(frames)):
+            masks_[f],num_object,ob_list = self.mask_process(masks_[f],f,num_object,ob_list)
+            
+        
+        Fs = torch.from_numpy(np.transpose(np.stack(frames_, axis=0), (3, 0, 1, 2))).float()
+        Ms = torch.from_numpy(self.All_to_onehot(np.stack(masks_, axis=0))).float()
 
         if num_object == 0:
             num_object += 1
+            
         num_objects = torch.LongTensor([num_object])
 
         data = {
@@ -170,20 +170,22 @@ class VOS_davis_dataset(BaseDataset):
 
         return data
 
-    def prepare_test_data(self, index):
-        video = self.videos[index]
-        info = {}
-        info['name'] = video
-        info['num_frames'] = self.num_frames[video]
-        info['size_480p'] = self.size_480p[video]
+    def prepare_train_data(self, idx):
 
-        N_frames = np.empty((self.num_frames[video],)+self.shape[video]+(3,), dtype=np.float32)
-        N_masks = np.empty((self.num_frames[video],)+self.shape[video], dtype=np.uint8)
-        num_objects = torch.LongTensor([int(self.num_objects[video])])
+        data_sampler = getattr(self, f'prepare_train_data_{self.sample_type}')
+
+        return data_sampler(idx)
+
+    def prepare_test_data(self, index):
+        sample = self.samples[index]
+        num_frames = sample['num_frames']
+        num_objects = sample['num_objects']
+
+        num_objects = torch.LongTensor([int(num_objects)])
 
         data = {
             'num_objects': num_objects,
-            'num_frames': info['num_frames'],
+            'num_frames': num_frames,
             'video': index
         }
 
@@ -208,6 +210,24 @@ class VOS_davis_dataset(BaseDataset):
             metric: np.mean(values)
             for metric, values in eval_results.items()
         }
-
         return eval_results
+    
+    def load_single_image(self, sample, f):  
 
+        frame_file = sample['frames_path'][f]
+
+        N_frames = (np.array(Image.open(frame_file).convert('RGB'))/255)[None, :]
+
+        mask_file = sample['masks_path'][f]
+        N_masks = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)[None, :]
+
+        Fs = torch.from_numpy(np.transpose(N_frames, (3, 0, 1, 2))).float()
+        if self.single_object:
+            N_masks = (N_masks > 0.5).astype(np.uint8) * (N_masks < 255).astype(np.uint8)
+            Ms = torch.from_numpy(self.All_to_onehot(N_masks).copy()).float()
+            num_objects = torch.LongTensor([int(1)])
+            return Fs, Ms, num_objects
+        else:
+            Ms = torch.from_numpy(self.All_to_onehot(N_masks)).float()
+            num_objects = torch.LongTensor([int(sample['num_objects'])])
+            return Fs, Ms

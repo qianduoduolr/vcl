@@ -134,7 +134,7 @@ class Resize:
             dict: A dict containing the processed data and information.
         """
         if self.size_factor:
-            h, w = results[self.keys[0]].shape[:2]
+            h, w = results[self.keys[0]].shape[:2] if not isinstance(results[self.keys[0]], list) else results[self.keys[0]][0].shape[:2]
             new_h = h - (h % self.size_factor)
             new_w = w - (w % self.size_factor)
             if self.max_size:
@@ -144,9 +144,10 @@ class Resize:
                             new_w)
             self.scale = (new_w, new_h)
         for key, out_key in zip(self.keys, self.output_keys):
-            results[out_key] = self._resize(results[key])
+            # modify to support clip-wise resize
+            results[out_key] = self._resize(results[key]) if not isinstance(results[key], list) else [self._resize(x) for x in results[key]]
             if len(results[out_key].shape) == 2:
-                results[out_key] = np.expand_dims(results[out_key], axis=2)
+                results[out_key] = np.expand_dims(results[out_key], axis=2) if not isinstance(results[key], list) else [np.expand_dims(x, axis=2) for x in results[out_key]]
 
         results['scale_factor'] = self.scale_factor
         results['keep_ratio'] = self.keep_ratio

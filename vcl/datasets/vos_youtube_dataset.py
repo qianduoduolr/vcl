@@ -11,126 +11,90 @@ import cv2
 from PIL import Image
 
 from mmcv import scandir
+import mmcv
 
 from .base_dataset import BaseDataset
 from .registry import DATASETS
-from .pipelines.aug import aug_heavy
+from .pipelines.my_aug import aug_heavy
+from .vos_davis_dataset import VOS_dataset_base
+
+from .pipelines import Compose
 
 MAX_OBJECT_NUM_PER_SAMPLE = 5
 
+
 @DATASETS.register_module()
-class VOS_youtube_dataset(BaseDataset):
-    # for multi object, do shuffling
-    def __init__(self, root, pipeline=None, test_mode=False):
-        super().__init__(pipeline, test_mode)
-        self.root = root
+class VOS_youtube_dataset_stm(VOS_dataset_base):
+
+    def __init__(self, root,  
+                       list_path, 
+                       sample_type='stm', 
+                       pipeline=None, 
+                       test_mode=False
+                       ):
+        super().__init__(root, list_path, pipeline, test_mode)
 
         self.K = 11
         self.skip = 0
+        self.sample_type = sample_type
         self.aug = aug_heavy()
-        self.load_annotations()
-
+    
     def load_annotations(self):
-        self.mask_dir = os.path.join(self.root, 'Annotations')
-        self.image_dir = os.path.join(self.root, 'JPEGImages')
+        
+        self.samples = []
 
-        self.videos = [i.split('/')[-1] for i in glob.glob(os.path.join(self.image_dir,'*'))]
-        self.num_frames = {}
-        self.img_files = {}
-        self.mask_files = {}
-        for _video in self.videos:
-            tmp_imgs = glob.glob(os.path.join(self.image_dir, _video,'*.jpg'))
-            tmp_masks = glob.glob(os.path.join(self.mask_dir, _video,'*.png'))
-            tmp_imgs.sort()
-            tmp_masks.sort()
-            self.img_files[_video] = tmp_imgs
-            self.mask_files[_video] = tmp_masks
-            self.num_frames[_video] = len(tmp_imgs)
+        mask_dir = osp.join(self.root, 'Annotations')
+        video_dir = osp.join(self.root, 'JPEGImages')
+        list_path = osp.join(self.list_path, 'youtube2018_train_list.txt') if not self.test_mode else  osp.join(self.list_path, 'youtube2018_test_list.txt')
 
-    def __len__(self):
-        return len(self.videos)
+        with open(list_path, 'r') as f:
+            for line in f.readlines():
+                sample = dict()
+                vname, num_frames = line.strip('\n').split()
+                sample['frames_path'] = sorted(glob.glob(osp.join(video_dir, vname, '*.jpg')))
+                sample['masks_path'] = sorted(glob.glob(osp.join(mask_dir, vname, '*.png')))
+                sample['vname'] = vname
+                sample['num_frames'] = int(num_frames)
+                self.samples.append(sample)
+        
+        # meta data
+        self.meta_data = mmcv.load(osp.join(self.list_path, 'generated_frame_wise_meta.json'))
 
     def change_skip(self,f):
         self.skip = f
 
-    def To_onehot(self, mask):
-        M = np.zeros((self.K, mask.shape[0], mask.shape[1]), dtype=np.uint8)
-        for k in range(self.K):
-            M[k] = (mask == k).astype(np.uint8)
-        return M
-    
-    def All_to_onehot(self, masks):
-        Ms = np.zeros((self.K, masks.shape[0], masks.shape[1], masks.shape[2]), dtype=np.uint8)
-        for n in range(masks.shape[0]):
-            Ms[:,n] = self.To_onehot(masks[n])
-        return Ms
+    def prepare_train_data_stm(self, index):
 
-    def mask_process(self,mask,f,num_object,ob_list):
-        n = num_object
-        mask_ = np.zeros(mask.shape).astype(np.uint8)
-        if f == 0:
-            for i in range(1,11):
-                if np.sum(mask == i) > 0:
-                    n += 1
-                    ob_list.append(i)
-            if n > MAX_OBJECT_NUM_PER_SAMPLE:
-                n = MAX_OBJECT_NUM_PER_SAMPLE
-                ob_list = random.sample(ob_list,n)
-        for i,l in enumerate(ob_list):
-            mask_[mask == l] = i + 1
-        return mask_,n,ob_list
-
-
-    def prepare_train_data(self, index):
-        video = self.videos[index]
-        img_files = self.img_files[video]
-        mask_files = self.mask_files[video]
-        info = {}
-        info['name'] = video
-        info['num_frames'] = self.num_frames[video]
-        # info['size_480p'] = self.size_480p[video]
-
-        N_frames = np.empty((3,)+(384,384,)+(3,), dtype=np.float32)
-        N_masks = np.empty((3,)+(384,384,), dtype=np.uint8)
-        frames_ = []
-        masks_ = []
-        n1 = random.sample(range(0,self.num_frames[video] - 2),1)[0]
-        n2 = random.sample(range(n1 + 1,min(self.num_frames[video] - 1,n1 + 2 + self.skip)),1)[0]
-        n3 = random.sample(range(n2 + 1,min(self.num_frames[video],n2 + 2 + self.skip)),1)[0]
-        frame_list = [n1,n2,n3]
+        sample = self.samples[index]
+        num_frames = sample['num_frames']
+        masks_path = sample['masks_path']
+        frames_path = sample['frames_path']
+       
+        # sample on temporal
+        n1 = random.sample(range(0,num_frames - 2),1)[0]
+        n2 = random.sample(range(n1 + 1,min(num_frames - 1,n1 + 2 + self.skip)),1)[0]
+        n3 = random.sample(range(n2 + 1,min(num_frames,n2 + 2 + self.skip)),1)[0]
+        offsets = [n1,n2,n3]
         num_object = 0
         ob_list = []
-        for f in range(3):
-            img_file = img_files[frame_list[f]]
-            tmp_frame = np.array(Image.open(img_file).convert('RGB'))
-            try:
-                mask_file = mask_files[frame_list[f]]  
-                tmp_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
-            except:
-                tmp_mask = 255
+        
+        # load frames and masks
+        frames = self._parser_rgb_jpg_cv(offsets, frames_path)
+        masks = self._parser_mask(offsets, masks_path)
 
-            h,w = tmp_mask.shape
-            if h < w:
-                tmp_frame = cv2.resize(tmp_frame, (int(w/h*480), 480), interpolation=cv2.INTER_LINEAR)
-                tmp_mask = Image.fromarray(tmp_mask).resize((int(w/h*480), 480), resample=Image.NEAREST)  
-            else:
-                tmp_frame = cv2.resize(tmp_frame, (480, int(h/w*480)), interpolation=cv2.INTER_LINEAR)
-                tmp_mask = Image.fromarray(tmp_mask).resize((480, int(h/w*480)), resample=Image.NEAREST) 
+        # apply augmentations
+        frames_,masks_ = self.aug(frames,masks)
 
-            frames_.append(tmp_frame)
-            masks_.append(np.array(tmp_mask))
-
-        frames_,masks_ = self.aug(frames_,masks_)
-
-        for f in range(3):
+        for f in range(len(frames)):
             masks_[f],num_object,ob_list = self.mask_process(masks_[f],f,num_object,ob_list)
-            N_frames[f],N_masks[f] = frames_[f],masks_[f]
-
-        Fs = torch.from_numpy(np.transpose(N_frames.copy(), (3, 0, 1, 2)).copy()).float()
-        Ms = torch.from_numpy(self.All_to_onehot(N_masks).copy()).float()
+            
+        
+        Fs = torch.from_numpy(np.transpose(np.stack(frames_, axis=0), (3, 0, 1, 2))).float()
+        Ms = torch.from_numpy(self.All_to_onehot(np.stack(masks_, axis=0))).float()
 
         if num_object == 0:
             num_object += 1
+            
         num_objects = torch.LongTensor([num_object])
 
         data = {
@@ -140,3 +104,141 @@ class VOS_youtube_dataset(BaseDataset):
         }
 
         return data
+
+    def prepare_train_data(self, idx):
+
+        data_sampler = getattr(self, f'prepare_train_data_{self.sample_type}')
+
+        return data_sampler(idx)
+
+@DATASETS.register_module()
+class VOS_youtube_dataset_pixel(VOS_dataset_base):
+
+    def __init__(self, root,  
+                       list_path, 
+                       sample_type='pixel', 
+                       pipeline=None, 
+                       test_mode=False
+                       ):
+        super().__init__(root, list_path, pipeline, test_mode)
+        
+        self.K = 11
+        self.sample_type = sample_type
+        self.pipeline = Compose(pipeline)
+        self.load_annotations()
+
+    def load_annotations(self):
+        self.samples = []
+
+        mask_dir = osp.join(self.root, 'Annotations')
+        video_dir = osp.join(self.root, 'JPEGImages')
+        list_path = osp.join(self.list_path, 'youtube2018_train_list.txt') if not self.test_mode else  osp.join(self.list_path, 'youtube2018_test_list.txt')
+
+        # meta data
+        self.meta_data = mmcv.load(osp.join(self.list_path, 'generated_frame_wise_meta.json'))
+
+        with open(list_path, 'r') as f:
+            for line in f.readlines():
+                obj_frames = defaultdict(list)
+                sample = defaultdict(dict)
+                vname, num_frames = line.strip('\n').split()
+
+                video_info = self.meta_data[vname]
+
+                for frame_name, objs in video_info.items():
+                    for obj in objs:
+                        obj_frames[obj[1]].append(frame_name)
+                for obj, frames in obj_frames.items():
+                    if len(frames) >= 3:
+                        sample[obj]['frames_path'] = list([osp.join(video_dir, vname, f'{f}.jpg') for f in frames])
+                        sample[obj]['masks_path'] = list([osp.join(mask_dir, vname, f'{f}.png') for f in frames])
+                        sample[obj]['vname'] = vname
+                
+                if len(sample) > 0:
+                    self.samples.append(sample)
+        
+
+    def obj_mask_process(self, frame_obj_masks, obj_num):
+        
+        random_flag = False
+        masks = []
+        for i,frame_obj_mask in enumerate(frame_obj_masks):
+            obj_mask = (frame_obj_mask == obj_num).astype(np.uint8)
+            value = obj_mask.sum()
+            if value == 0: random_flag =True
+            masks.append(obj_mask)
+        
+        if random_flag:
+            rx = random.randint(0, masks[0].shape[0] - 1)
+            ry = random.randint(0, masks[0].shape[0] - 1)
+            for i in range(len(masks)):
+                masks[i][rx, ry] = 1
+            
+        return np.array(masks)
+
+    def prepare_train_data_pixel(self, index):
+        
+        sample = self.samples[index]
+        obj_list = list(sample.keys())
+
+        # random select a object
+        obj_idx = random.sample(obj_list, 1)[0]
+
+        sample_obj = sample[obj_idx]
+
+        masks_path = sample_obj['masks_path']
+        frames_path = sample_obj['frames_path']
+        vname = sample_obj['vname']
+
+        num_frames = len(frames_path)
+
+        # sample on temporal
+        n1 = random.sample(range(0,num_frames - 2),1)[0]
+        n2 = random.sample(range(n1 + 1,min(num_frames - 1,n1 + 2 )),1)[0]
+        n3 = random.sample(range(n2 + 1,min(num_frames,n2 + 2 )),1)[0]
+        offsets = [n1,n2,n3]
+        num_object = 0
+        ob_list = []
+        frame_obj_masks_ = []
+        
+        # load frames and masks
+        frames = self._parser_rgb_jpg_cv(offsets, frames_path)
+        masks = self._parser_mask(offsets, masks_path)
+
+        # apply augmentations
+        results = dict(images=frames, labels=masks, obj_num=obj_idx)
+        results = self.pipeline(results)
+        frames_, masks_ = results['images'], results['labels']
+
+        for m in masks_:
+            frame_obj_masks_.append(cv2.resize(m, (48,48), interpolation=cv2.INTER_NEAREST).astype(np.uint8))
+
+        for f in range(len(frames)):
+            masks_[f],num_object,ob_list = self.mask_process(masks_[f],f,num_object,ob_list)
+            
+        
+        Fs = torch.from_numpy(np.transpose(np.stack(frames_, axis=0), (3, 0, 1, 2))).float()
+        Ms = torch.from_numpy(self.All_to_onehot(np.stack(masks_, axis=0))).float()
+
+        Ms_obj = self.obj_mask_process(frame_obj_masks_, obj_idx)
+        Ms_obj = torch.from_numpy(Ms_obj)
+
+        if num_object == 0:
+            num_object += 1
+            
+        num_objects = torch.LongTensor([num_object])
+
+        data = {
+            'Fs': Fs,
+            'Ms': Ms,
+            'Ms_obj': Ms_obj,
+            'num_objects':num_objects
+        }
+
+        return data
+
+    def prepare_train_data(self, idx):
+
+        data_sampler = getattr(self, f'prepare_train_data_{self.sample_type}')
+
+        return data_sampler(idx)

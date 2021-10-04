@@ -244,7 +244,7 @@ class STM(BaseModel):
         
         # componets
         self.Encoder_M = Encoder_M(depth) 
-        self.Encoder_Q = Encoder_Q(depth) 
+        self.Encoder_Q = Encoder_Q(depth)
 
         self.KV_M_r4 = KeyValue(1024//scale_rate, keydim=128//scale_rate, valdim=512//scale_rate)
         self.KV_Q_r4 = KeyValue(1024//scale_rate, keydim=128//scale_rate, valdim=512//scale_rate)
@@ -405,9 +405,9 @@ class STM(BaseModel):
         else:
             raise NotImplementedError
         
-        video_name = dataset.videos[video.view(-1).item()]
+        sample = dataset.samples[video.view(-1).item()]
 
-        F_last,M_last = dataset.load_single_image(video_name,0)
+        F_last,M_last = dataset.load_single_image(sample,0)
         F_last = F_last.unsqueeze(0).cuda()
         M_last = M_last.unsqueeze(0).cuda()
         E_last = M_last
@@ -426,7 +426,7 @@ class STM(BaseModel):
                 this_values = torch.cat([values, prev_value], dim=3)
             del prev_key,prev_value
 
-            F_,M_ = dataset.load_single_image(video_name,t)
+            F_,M_ = dataset.load_single_image(sample,t)
 
             F_ = F_.unsqueeze(0).cuda()
             M_ = M_.unsqueeze(0).cuda()

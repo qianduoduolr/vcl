@@ -29,7 +29,6 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
         if pipeline != None:
             self.pipeline = Compose(pipeline)
 
-    @abstractmethod
     def load_annotations(self):
         """Abstract function for loading annotation.
 
@@ -66,7 +65,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
         Returns:
             int: Length of the dataset.
         """
-        return len(self.data_infos)
+        return len(self.samples)
 
     def __getitem__(self, idx):
         """Get item at each call.

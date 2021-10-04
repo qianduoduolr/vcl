@@ -19,8 +19,8 @@ from vcl.utils import collect_env, get_root_logger
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train an editor')
-    parser.add_argument('--config', help='train config file path', default='/home/lr/project/base/configs/supervised/stm_shared_resnet50_iters200k.py')
-    parser.add_argument('--work-dir', help='the dir to save logs and models', default='./output')
+    parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/supervised/pixel_contrast_resnet50_iters200k.py')
+    parser.add_argument('--work-dir', help='the dir to save logs and models')
     parser.add_argument(
         '--resume-from', help='the checkpoint file to resume from')
     parser.add_argument(
@@ -82,6 +82,12 @@ def main():
 
     # create work_dir
     mmcv.mkdir_or_exist(osp.abspath(cfg.work_dir))
+
+    # cp code to work_dir
+    if distributed:
+        file_path = osp.dirname(osp.dirname(osp.abspath(__file__)))
+        os.system(f'cp -r {file_path} {cfg.work_dir}')
+
     # init the logger before other steps
     timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
     log_file = osp.join(cfg.work_dir, f'{timestamp}.log')
@@ -108,6 +114,7 @@ def main():
         cfg.model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
 
     datasets = [build_dataset(cfg.data.train)]
+
     if len(cfg.workflow) == 2:
         val_dataset = copy.deepcopy(cfg.data.val)
         val_dataset.pipeline = cfg.data.train.pipeline
