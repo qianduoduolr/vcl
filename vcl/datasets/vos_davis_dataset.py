@@ -69,6 +69,15 @@ class VOS_dataset_base(BaseDataset):
             frame = cv2.imread(frame_path)
             frame_list_all.append(frame)
         return frame_list_all
+
+    def _parser_rgb_jpg_pillow(self, offsets, frames_path):
+        """read frame"""
+        frame_list_all = []
+        for idx, offset in enumerate(offsets):
+            frame_path = frames_path[offset]
+            frame = Image.open(frame_path)
+            frame_list_all.append(frame)
+        return frame_list_all
     
     def _parser_mask(self, offsets, masks_path):
         """read mask"""
@@ -78,6 +87,7 @@ class VOS_dataset_base(BaseDataset):
             mask = np.array(Image.open(mask_path).convert('P'), dtype=np.uint8)
             mask_list_all.append(mask)
         return mask_list_all
+    
 
 
 @DATASETS.register_module()

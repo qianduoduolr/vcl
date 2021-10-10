@@ -11,7 +11,7 @@ from mmcv.parallel import MMDataParallel
 from mmcv.runner import HOOKS, IterBasedRunner
 from mmcv.utils import build_from_cfg
 
-from vcl.core import DistEvalIterHook, EvalIterHook, build_optimizers, IterBasedRunner_Custom
+from vcl.core import DistEvalIterHook, EvalIterHook, build_optimizers, IterBasedRunner_Custom, EpochBasedRunner_Custom
 from vcl.core.distributed_wrapper import DistributedDataParallelWrapper
 from vcl.datasets.builder import build_dataloader, build_dataset
 from vcl.utils import get_root_logger
@@ -136,12 +136,20 @@ def _dist_train(model,
 
     # build runner
     optimizer = build_optimizers(model, cfg.optimizers)
-    runner = IterBasedRunner_Custom(
-        model,
-        optimizer=optimizer,
-        work_dir=cfg.work_dir,
-        logger=logger,
-        meta=meta)
+    if cfg.runner_type is 'iter':
+        runner = IterBasedRunner_Custom(
+            model,
+            optimizer=optimizer,
+            work_dir=cfg.work_dir,
+            logger=logger,
+            meta=meta)
+    else:
+        runner = EpochBasedRunner_Custom(
+            model,
+            optimizer=optimizer,
+            work_dir=cfg.work_dir,
+            logger=logger,
+            meta=meta)
     # an ugly walkaround to make the .log and .log.json filenames the same
     runner.timestamp = timestamp
 
@@ -204,7 +212,11 @@ def _dist_train(model,
         runner.resume(cfg.resume_from)
     elif cfg.load_from:
         runner.load_checkpoint(cfg.load_from)
-    runner.run(data_loaders, cfg.workflow, cfg.total_iters)
+
+    if cfg.runner_type is 'iter':
+        runner.run(data_loaders, cfg.workflow, cfg.total_iters)
+    else:
+        runner.run(data_loaders, cfg.workflow, cfg.max_epoch)
 
 
 def _non_dist_train(model,
@@ -260,13 +272,21 @@ def _non_dist_train(model,
 
     # build runner
     optimizer = build_optimizers(model, cfg.optimizers)
-    runner = IterBasedRunner(
-        model,
-        optimizer=optimizer,
-        work_dir=cfg.work_dir,
-        logger=logger,
-        meta=meta)
 
+    if cfg.runner_type is 'iter':
+        runner = IterBasedRunner_Custom(
+            model,
+            optimizer=optimizer,
+            work_dir=cfg.work_dir,
+            logger=logger,
+            meta=meta)
+    else:
+        runner = EpochBasedRunner_Custom(
+            model,
+            optimizer=optimizer,
+            work_dir=cfg.work_dir,
+            logger=logger,
+            meta=meta)
     # an ugly walkaround to make the .log and .log.json filenames the same
     runner.timestamp = timestamp
 
@@ -328,4 +348,9 @@ def _non_dist_train(model,
         runner.resume(cfg.resume_from)
     elif cfg.load_from:
         runner.load_checkpoint(cfg.load_from)
-    runner.run(data_loaders, cfg.workflow, cfg.total_iters)
+
+    if cfg.runner_type is 'iter':
+        runner.run(data_loaders, cfg.workflow, cfg.total_iters)
+    else:
+        runner.run(data_loaders, cfg.workflow, cfg.max_epoch)
+

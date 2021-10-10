@@ -49,3 +49,7 @@ def build_loss(cfg):
         cfg (dict): Configuration for building loss.
     """
     return build(cfg, LOSSES)
+
+def build_component(cfg):
+
+    return build(cfg. COMPONENTS)

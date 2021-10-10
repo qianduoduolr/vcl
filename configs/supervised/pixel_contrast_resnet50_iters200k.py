@@ -2,13 +2,13 @@ exp_name = 'pixel_contrast_resnet50_iters200k'
 
 # model settings
 model = dict(
-    type='STM',
-    depth=18,
-    pixel_loss=dict(type='Pixel_Ce_Loss', loss_weight=1.0, reduction='mean'))
+    type='PixelContrast',
+    backbone=dict(type='ResNet',depth=18),
+    nce_loss=dict(type='Nce_Loss', loss_weight=1.0, reduction='mean'))
 
 # model training and testing settings
 train_cfg = None
-test_cfg = dict(test_memory_every_frame=5, memory_num=None, metrics=['JFM'])
+test_cfg = None
 
 # dataset settings
 train_dataset_type = 'VOS_youtube_dataset_pixel'
@@ -39,7 +39,7 @@ data = dict(
             dict(
             type=train_dataset_type,
             root='/home/lr/dataset/YouTube-VOS/train',
-            sample_type='pixel',
+            sample_type='pair',
             list_path='/home/lr/dataset/YouTube-VOS/train',
             pipeline=train_pipeline,
             test_mode=False),
@@ -55,7 +55,9 @@ optimizers = dict(
         )
 
 # learning policy
-total_iters = 200000
+# total_iters = 200000
+ruuner_type='epoch'
+max_epoch=200
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.01,
@@ -74,9 +76,6 @@ log_config = dict(
 
 visual_config = None
 
-# custom_hooks = [
-#     dict(type='EMAHook_MoCo', source_name='Encoder_Q', target_name='Encoder_Q_M', momentum=0.999, priority='NORMAL')
-# ]
 
 # runtime settings
 dist_params = dict(backend='nccl')

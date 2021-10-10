@@ -8,6 +8,7 @@ import torchvision.transforms.functional as F
 from torchvision import transforms
 import warnings
 import math
+import torch
 
 from ..registry import PIPELINES
 
@@ -75,9 +76,84 @@ class ClipRandomSizedCrop_stm(object):
         return results
 
 @PIPELINES.register_module()
+class ClipRandomSizedCrop(object):
+    def __init__(self, size,  scale=(0.08, 1.0), ratio=(3. / 4., 4. / 3.), interpolation=Image.BILINEAR, backend='pillow'):
+        if isinstance(size, (tuple, list)):
+            self.size = size
+        else:
+            self.size = (size, size)
+        if (scale[0] > scale[1]) or (ratio[0] > ratio[1]):
+            warnings.warn("range should be of kind (min, max)")
+
+        self.interpolation = interpolation
+        self.scale = scale
+        self.ratio = ratio
+
+        self.backend = backend
+
+    @staticmethod
+    def get_params(img, scale, ratio):
+        """Get parameters for ``crop`` for a random sized crop.
+        Args:
+            img (Image): Image to be cropped.
+            scale (tuple): range of size of the origin size cropped
+            ratio (tuple): range of aspect ratio of the origin aspect ratio cropped
+        Returns:
+            tuple: params (i, j, h, w) to be passed to ``crop`` for a random
+                sized crop.
+        """
+        if self.backend == 'pillow':
+            width, height, _ = img.size()
+        else:
+            height, width, _ = img.shape
+
+        area = height * width
+
+
+        for _ in range(20):
+            sc = random.uniform(*scale)
+            target_area = sc * area
+            log_ratio = (math.log(ratio[0]), math.log(ratio[1]))
+            aspect_ratio = math.exp(random.uniform(*log_ratio))
+
+            w = int(round(math.sqrt(target_area * aspect_ratio)))
+            h = int(round(math.sqrt(target_area / aspect_ratio)))
+
+            if 0 < w <= width and 0 < h <= height:
+                i = random.randint(0, height - h)
+                j = random.randint(0, width - w)
+                return i, j, h, w
+
+        # Fallback to central crop
+        in_ratio = float(width) / float(height)
+        if (in_ratio < min(ratio)):
+            w = width
+            h = int(round(w / min(ratio)))
+        elif (in_ratio > max(ratio)):
+            h = height
+            w = int(round(h * max(ratio)))
+        else:  # whole image
+            w = width
+            h = height
+
+        i = (height - h) // 2
+        j = (width - w) // 2
+
+        return i, j, h, w
+
+    def __call__(self, results):
+        i, j, h, w = self.get_params(results['images'][0], self.scale, self.ratio)
+
+        if self.backend == 'pillow':
+            results['images'] = list([F.resized_crop(img, i, j, h, w, self.size, self.interpolation) for img in results['images']])
+        else:
+            results['images'] = list([cv2.resize(img[i:i+h, j:j+w], self.size, self.interpolation) for img in results['images']])
+
+
+@PIPELINES.register_module()
 class ClipRandomResizedCropObject(object):
 
-    def __init__(self, size,  scale=(0.08, 1.0), ratio=(1.5, 1.8), bakend='cv2'):
+    def __init__(self, size,  scale=(0.08, 1.0), ratio=(1.5, 1.8), backend='cv2'):
         if isinstance(size, (tuple, list)):
             self.size = size
         else:
@@ -87,7 +163,7 @@ class ClipRandomResizedCropObject(object):
 
         self.scale = scale
         self.ratio = ratio
-        self.bakend = bakend
+        self.backend = backend
 
     @staticmethod
     def get_params(imgs, labels, obj_num, scale, ratio):
@@ -223,9 +299,33 @@ class ClipRandomGrayscale(transforms.RandomGrayscale):
             results['images'] = [F.to_grayscale(img, num_output_channels=num_output_channels) for img in images]
             return results
         return results
-               
 
 
+@PIPELINES.register_module()
+class ToClipTensor():
+    def __call__(self, results):
+        """
+        Args:
+            clip (List of PIL Image or numpy.ndarray): Clip to be converted to tensor.
+        Returns:
+            Tensor: Converted clip.
+        """
+        results['images'] = list([F.to_tensor(img) for img in results['images']])
+        return results
+
+@PIPELINES.register_module()
+class ClipOrganize():
+    def __init__(self, time_dim='T'):
+        self.time_dim = time_dim
+    
+    def __call__(self, results):
+        if self.time_dim == 'T':
+            results['images'] = torch.stack(results['images'], 1)
+        else:
+            results['images'] = torch.cat(results['images'],0)
+        return results
+
+'''
 class aug_heavy(object):
     def __init__(self):
         self.affinity = iaa.Sequential([
@@ -260,3 +360,4 @@ class aug_heavy(object):
         images,labels = self.crop(images,labels, obj_num)
         # images, labels = self.resize(images,labels, (384,384))
         return images,labels
+'''

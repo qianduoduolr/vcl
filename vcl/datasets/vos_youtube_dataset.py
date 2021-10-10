@@ -6,6 +6,7 @@ import glob
 import os
 import random
 import torch
+import torchvision.transforms.functional as F
 import numpy as np
 import cv2
 from PIL import Image
@@ -193,10 +194,9 @@ class VOS_youtube_dataset_pixel(VOS_dataset_base):
         num_frames = len(frames_path)
 
         # sample on temporal
-        n1 = random.sample(range(0,num_frames - 2),1)[0]
-        n2 = random.sample(range(n1 + 1,min(num_frames - 1,n1 + 2 )),1)[0]
-        n3 = random.sample(range(n2 + 1,min(num_frames,n2 + 2 )),1)[0]
-        offsets = [n1,n2,n3]
+        n1 = random.randint(0, num_frames-2)
+        offsets = [n1,n1+1]
+
         num_object = 0
         ob_list = []
         frame_obj_masks_ = []
@@ -210,8 +210,9 @@ class VOS_youtube_dataset_pixel(VOS_dataset_base):
         results = self.pipeline(results)
         frames_, masks_ = results['images'], results['labels']
 
+        # post processing for frames and masks
         for m in masks_:
-            frame_obj_masks_.append(cv2.resize(m, (48,48), interpolation=cv2.INTER_NEAREST).astype(np.uint8))
+            frame_obj_masks_.append(cv2.resize(m, (32,32), interpolation=cv2.INTER_NEAREST).astype(np.uint8))
 
         for f in range(len(frames)):
             masks_[f],num_object,ob_list = self.mask_process(masks_[f],f,num_object,ob_list)
@@ -236,6 +237,25 @@ class VOS_youtube_dataset_pixel(VOS_dataset_base):
         }
 
         return data
+
+    def prepare_train_data_pair(self, index):
+
+        sample = self.samples[index]
+        masks_path = sample_obj['masks_path']
+        frames_path = sample_obj['frames_path']
+        vname = sample_obj['vname']
+
+        num_frames = len(frames_path)
+
+        # sample on temporal
+        offsets = list([random.randint(0, num_frames-1) for i in range(2)])
+
+        frames = self._parser_rgb_jpg_pillow(offsets, frames_path)
+        results = dict(images=frames)
+
+        return self.pipeline(results)
+
+
 
     def prepare_train_data(self, idx):
 
