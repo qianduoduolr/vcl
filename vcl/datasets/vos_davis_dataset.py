@@ -13,6 +13,9 @@ import glob
 from collections import *
 import pdb
 
+from davis2017.evaluation import DAVISEvaluation
+
+
 from .base_dataset import BaseDataset
 from .registry import DATASETS
 from .pipelines.my_aug import aug_heavy
@@ -22,7 +25,6 @@ MAX_OBJECT_NUM_PER_SAMPLE = 5
 
 @DATASETS.register_module()
 class VOS_dataset_base(BaseDataset):
-
     def __init__(self, root,  
                        list_path, 
                        pipeline=None, 
@@ -30,9 +32,8 @@ class VOS_dataset_base(BaseDataset):
                        ):
         super().__init__(pipeline, test_mode)
 
-        self.root = root
         self.list_path = list_path
-
+        self.root = root
 
     def To_onehot(self, mask):
         M = np.zeros((self.K, mask.shape[0], mask.shape[1]), dtype=np.uint8)
@@ -87,8 +88,189 @@ class VOS_dataset_base(BaseDataset):
             mask = np.array(Image.open(mask_path).convert('P'), dtype=np.uint8)
             mask_list_all.append(mask)
         return mask_list_all
-    
 
+@DATASETS.register_module()
+class VOS_davis_dataset_test(VOS_dataset_base):
+    
+    def __init__(self, root,  
+                       list_path, 
+                       resolution, 
+                       year, 
+                       pipeline=None, 
+                       test_mode=False
+                       ):
+        super().__init__(root, list_path, pipeline, test_mode)
+        
+        self.resolution = resolution
+        self.year = year
+
+        self.list_path = list_path
+        self.root = root
+
+        self.load_annotations()
+
+    def load_annotations(self):
+        
+        self.samples = []
+
+        mask_dir = osp.join(self.root, 'Annotations', self.resolution)
+        video_dir = osp.join(self.root, 'JPEGImages', self.resolution)
+        list_path = osp.join(self.list_path, f'davis{self.year}_val_list.txt')
+
+        with open(list_path, 'r') as f:
+            for line in f.readlines():
+                sample = dict()
+                vname, num_frames = line.strip('\n').split()
+                sample['frames_path'] = sorted(glob.glob(osp.join(video_dir, vname, '*.jpg')))
+                sample['masks_path'] = sorted(glob.glob(osp.join(mask_dir, vname, '*.png')))
+                sample['video_path'] = osp.join(mask_dir, vname)
+
+                sample['num_frames'] = int(num_frames)
+
+                _mask = np.array(Image.open(sample['masks_path'][0]).convert('P'), dtype=np.uint8)
+                sample['num_objects'] = np.max(_mask)
+                self.samples.append(sample)
+
+    def __len__(self):
+        return len(self.samples)
+
+    def prepare_test_data(self, index):
+        sample = self.samples[index]
+        num_frames = sample['num_frames']
+        masks_path = sample['masks_path']
+        frames_path = sample['frames_path']
+        
+        # load frames and masks
+        frames = self._parser_rgb_jpg_cv(range(num_frames), frames_path)
+        ref = np.array(self._parser_rgb_jpg_pillow([0], masks_path)[0])
+        original_shape = frames[0].shape[:2]
+
+        data = {
+            'imgs': frames,
+            'ref_seg_map': ref,
+            'video_path': sample['video_path'],
+            'original_shape': original_shape,
+            'modality': 'RGB',
+            'num_clips': 1,
+            'clip_len': num_frames
+        }
+
+        return self.pipeline(data)
+
+    def davis_evaluate(self, results, output_dir, logger=None):
+        dataset_eval = DAVISEvaluation(
+            davis_root=self.data_root, task=self.task, gt_set=self.split)
+        if isinstance(results, str):
+            metrics_res = dataset_eval.evaluate(results)
+        else:
+            assert len(results) == len(self)
+            for vid_idx in range(len(self)):
+                assert len(results[vid_idx]) == \
+                       self.samples[vid_idx]['num_frames'] or \
+                       isinstance(results[vid_idx], str)
+            if output_dir is None:
+                tmp_dir = tempfile.TemporaryDirectory()
+                output_dir = tmp_dir.name
+            else:
+                tmp_dir = None
+                mmcv.mkdir_or_exist(output_dir)
+
+            if terminal_is_available():
+                prog_bar = mmcv.ProgressBar(len(self))
+            for vid_idx in range(len(results)):
+                cur_results = results[vid_idx]
+                if isinstance(cur_results, str):
+                    file_path = cur_results
+                    cur_results = np.load(file_path)
+                    os.remove(file_path)
+                for img_idx in range(
+                        self.samples[vid_idx]['num_frames']):
+                    result = cur_results[img_idx].astype(np.uint8)
+                    img = Image.fromarray(result)
+                    img.putpalette(
+                        np.asarray(self.PALETTE, dtype=np.uint8).ravel())
+                    video_path = self.samples[vid_idx]['video_path']
+                    save_path = osp.join(
+                        output_dir, osp.relpath(video_path, self.data_prefix),
+                        self.filename_tmpl.format(img_idx).replace(
+                            'jpg', 'png'))
+                    mmcv.mkdir_or_exist(osp.dirname(save_path))
+                    img.save(save_path)
+                if terminal_is_available():
+                    prog_bar.update()
+            metrics_res = dataset_eval.evaluate(output_dir)
+            if tmp_dir is not None:
+                tmp_dir.cleanup()
+
+        J, F = metrics_res['J'], metrics_res['F']
+
+        # Generate dataframe for the general results
+        g_measures = [
+            'J&F-Mean', 'J-Mean', 'J-Recall', 'J-Decay', 'F-Mean', 'F-Recall',
+            'F-Decay'
+        ]
+        final_mean = (np.mean(J['M']) + np.mean(F['M'])) / 2.
+        g_res = np.array([
+            final_mean,
+            np.mean(J['M']),
+            np.mean(J['R']),
+            np.mean(J['D']),
+            np.mean(F['M']),
+            np.mean(F['R']),
+            np.mean(F['D'])
+        ])
+        g_res = np.reshape(g_res, [1, len(g_res)])
+        print_log(f'\nGlobal results for {self.split}', logger=logger)
+        table_g = pd.DataFrame(data=g_res, columns=g_measures)
+        print_log('\n' + table_g.to_string(index=False), logger=logger)
+
+        # Generate a dataframe for the per sequence results
+        seq_names = list(J['M_per_object'].keys())
+        seq_measures = ['Sequence', 'J-Mean', 'F-Mean']
+        J_per_object = [J['M_per_object'][x] for x in seq_names]
+        F_per_object = [F['M_per_object'][x] for x in seq_names]
+        table_seq = pd.DataFrame(
+            data=list(zip(seq_names, J_per_object, F_per_object)),
+            columns=seq_measures)
+        print_log(f'\nPer sequence results for  {self.split}', logger=logger)
+        print_log('\n' + table_seq.to_string(index=False), logger=logger)
+
+        eval_results = table_g.to_dict('records')[0]
+
+        return eval_results
+
+    def evaluate(self, results, metrics='daivs', output_dir=None, logger=None):
+        metrics = metrics if isinstance(metrics, (list, tuple)) else [metrics]
+        allowed_metrics = ['davis']
+        for metric in metrics:
+            if metric not in allowed_metrics:
+                raise KeyError(f'metric {metric} is not supported')
+        eval_results = dict()
+        if mmcv.is_seq_of(results, np.ndarray) and results[0].ndim == 4:
+            num_feats = results[0].shape[0]
+            for feat_idx in range(num_feats):
+                cur_results = [result[feat_idx] for result in results]
+                eval_results.update(
+                    add_prefix(
+                        self.davis_evaluate(cur_results, output_dir, logger),
+                        prefix=f'feat_{feat_idx}'))
+        elif mmcv.is_seq_of(results, list):
+            num_feats = len(results[0])
+            for feat_idx in range(num_feats):
+                cur_results = [result[feat_idx] for result in results]
+                eval_results.update(
+                    add_prefix(
+                        self.davis_evaluate(cur_results, output_dir, logger),
+                        prefix=f'feat_{feat_idx}'))
+        else:
+            eval_results.update(
+                self.davis_evaluate(results, output_dir, logger))
+        copypaste = []
+        for k, v in eval_results.items():
+            if 'J&F' in k:
+                copypaste.append(f'{float(v)*100:.2f}')
+        print_log(f'Results copypaste  {",".join(copypaste)}', logger=logger)
+        return eval_results
 
 @DATASETS.register_module()
 class VOS_davis_dataset_stm(VOS_dataset_base):

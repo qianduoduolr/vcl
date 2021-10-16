@@ -1,1134 +1,1591 @@
-# Copyright (c) OpenMMLab. All rights reserved.
-import copy
-import math
-import numbers
-import os.path as osp
+import random
+from collections.abc import Sequence
 
-import cv2
 import mmcv
 import numpy as np
+from numpy import random as npr
+from PIL import Image, ImageFilter
+from skimage.util import view_as_windows
+from torch.nn.modules.utils import _pair
+from torchvision.transforms import ColorJitter as _ColorJitter
+from torchvision.transforms import RandomAffine as _RandomAffine
+from torchvision.transforms import RandomResizedCrop as _RandomResizedCrop
+from torchvision.transforms import functional as F
 
 from ..registry import PIPELINES
 
 
-@PIPELINES.register_module()
-class Resize:
-    """Resize data to a specific size for training or resize the images to fit
-    the network input regulation for testing.
+def _init_lazy_if_proper(results, lazy):
+    """Initialize lazy operation properly.
 
-    When used for resizing images to fit network input regulation, the case is
-    that a network may have several downsample and then upsample operation,
-    then the input height and width should be divisible by the downsample
-    factor of the network.
-    For example, the network would downsample the input for 5 times with
-    stride 2, then the downsample factor is 2^5 = 32 and the height
-    and width should be divisible by 32.
+    Make sure that a lazy operation is properly initialized,
+    and avoid a non-lazy operation accidentally getting mixed in.
 
-    Required keys are the keys in attribute "keys", added or modified keys are
-    "keep_ratio", "scale_factor", "interpolation" and the
-    keys in attribute "keys".
-
-    All keys in "keys" should have the same shape. "test_trans" is used to
-    record the test transformation to align the input's shape.
+    Required keys in results are "imgs" if "img_shape" not in results,
+    otherwise, Required keys in results are "img_shape", add or modified keys
+    are "img_shape", "lazy".
+    Add or modified keys in "lazy" are "original_shape", "crop_bbox", "flip",
+    "flip_direction", "interpolation".
 
     Args:
-        keys (list[str]): The images to be resized.
-        scale (float | Tuple[int]): If scale is Tuple(int), target spatial
-            size (h, w). Otherwise, target spatial size is scaled by input
-            size.
-            Note that when it is used, `size_factor` and `max_size` are
-            useless. Default: None
-        keep_ratio (bool): If set to True, images will be resized without
-            changing the aspect ratio. Otherwise, it will resize images to a
-            given size. Default: False.
-            Note that it is used togher with `scale`.
-        size_factor (int): Let the output shape be a multiple of size_factor.
-            Default:None.
-            Note that when it is used, `scale` should be set to None and
-            `keep_ratio` should be set to False.
-        max_size (int): The maximum size of the longest side of the output.
-            Default:None.
-            Note that it is used togher with `size_factor`.
-        interpolation (str): Algorithm used for interpolation:
-            "nearest" | "bilinear" | "bicubic" | "area" | "lanczos".
-            Default: "bilinear".
-        backend (str | None): The image resize backend type. Options are `cv2`,
-            `pillow`, `None`. If backend is None, the global imread_backend
-            specified by ``mmcv.use_backend()`` will be used.
-            Default: None.
-        output_keys (list[str] | None): The resized images. Default: None
-            Note that if it is not `None`, its length shuld be equal to keys.
+        results (dict): A dict stores data pipeline result.
+        lazy (bool): Determine whether to apply lazy operation. Default: False.
+    """
+
+    if 'img_shape' not in results:
+        results['img_shape'] = results['imgs'][0].shape[:2]
+    if lazy:
+        if 'lazy' not in results:
+            img_h, img_w = results['img_shape']
+            lazyop = dict()
+            lazyop['original_shape'] = results['img_shape']
+            lazyop['crop_bbox'] = np.array([0, 0, img_w, img_h],
+                                           dtype=np.float32)
+            lazyop['flip'] = False
+            lazyop['flip_direction'] = None
+            lazyop['interpolation'] = None
+            results['lazy'] = lazyop
+    else:
+        assert 'lazy' not in results, 'Use Fuse after lazy operations'
+
+
+@PIPELINES.register_module()
+class Fuse(object):
+    """Fuse lazy operations.
+
+    Fusion order:
+        crop -> resize -> flip
+
+    Required keys are "imgs", "img_shape" and "lazy", added or modified keys
+    are "imgs", "lazy".
+    Required keys in "lazy" are "crop_bbox", "interpolation", "flip_direction".
+    """
+
+    def __call__(self, results):
+        if 'lazy' not in results:
+            raise ValueError('No lazy operation detected')
+        lazyop = results['lazy']
+        imgs = results['imgs']
+
+        # crop
+        left, top, right, bottom = lazyop['crop_bbox'].round().astype(int)
+        imgs = [img[top:bottom, left:right] for img in imgs]
+
+        # resize
+        img_h, img_w = results['img_shape']
+        if lazyop['interpolation'] is None:
+            interpolation = 'bilinear'
+        else:
+            interpolation = lazyop['interpolation']
+        imgs = [
+            mmcv.imresize(img, (img_w, img_h), interpolation=interpolation)
+            for img in imgs
+        ]
+
+        # flip
+        if lazyop['flip']:
+            for img in imgs:
+                mmcv.imflip_(img, lazyop['flip_direction'])
+
+        results['imgs'] = imgs
+        del results['lazy']
+
+        return results
+
+
+@PIPELINES.register_module()
+class RandomCrop(object):
+    """Vanilla square random crop that specifics the output size.
+
+    Required keys in results are "imgs" and "img_shape", added or
+    modified keys are "imgs", "lazy"; Required keys in "lazy" are "flip",
+    "crop_bbox", added or modified key is "crop_bbox".
+
+    Args:
+        size (int): The output size of the images.
+        lazy (bool): Determine whether to apply lazy operation. Default: False.
+    """
+
+    def __init__(self, size, lazy=False):
+        if not isinstance(size, int):
+            raise TypeError(f'Size must be an int, but got {type(size)}')
+        self.size = size
+        self.lazy = lazy
+
+    def __call__(self, results):
+        """Performs the RandomCrop augmentation.
+
+        Args:
+            results (dict): The resulting dict to be modified and passed
+                to the next transform in pipeline.
+        """
+        _init_lazy_if_proper(results, self.lazy)
+
+        img_h, img_w = results['img_shape']
+        assert self.size <= img_h and self.size <= img_w
+
+        y_offset = 0
+        x_offset = 0
+        if img_h > self.size:
+            y_offset = int(np.random.randint(0, img_h - self.size))
+        if img_w > self.size:
+            x_offset = int(np.random.randint(0, img_w - self.size))
+
+        new_h, new_w = self.size, self.size
+
+        results['crop_bbox'] = np.array(
+            [x_offset, y_offset, x_offset + new_w, y_offset + new_h])
+        results['img_shape'] = (new_h, new_w)
+
+        if not self.lazy:
+            results['imgs'] = [
+                img[y_offset:y_offset + new_h, x_offset:x_offset + new_w]
+                for img in results['imgs']
+            ]
+        else:
+            lazyop = results['lazy']
+            if lazyop['flip']:
+                raise NotImplementedError('Put Flip at last for now')
+
+            # record crop_bbox in lazyop dict to ensure only crop once in Fuse
+            lazy_left, lazy_top, lazy_right, lazy_bottom = lazyop['crop_bbox']
+            left = x_offset * (lazy_right - lazy_left) / img_w
+            right = (x_offset + new_w) * (lazy_right - lazy_left) / img_w
+            top = y_offset * (lazy_bottom - lazy_top) / img_h
+            bottom = (y_offset + new_h) * (lazy_bottom - lazy_top) / img_h
+            lazyop['crop_bbox'] = np.array([(lazy_left + left),
+                                            (lazy_top + top),
+                                            (lazy_left + right),
+                                            (lazy_top + bottom)],
+                                           dtype=np.float32)
+
+        return results
+
+    def __repr__(self):
+        repr_str = (f'{self.__class__.__name__}(size={self.size}, '
+                    f'lazy={self.lazy})')
+        return repr_str
+
+
+@PIPELINES.register_module()
+class RandomResizedCrop(object):
+    """Random crop that specifics the area and height-weight ratio range.
+
+    Required keys in results are "imgs", "img_shape", "crop_bbox" and "lazy",
+    added or modified keys are "imgs", "crop_bbox" and "lazy"; Required keys
+    in "lazy" are "flip", "crop_bbox", added or modified key is "crop_bbox".
+
+    Args:
+        area_range (Tuple[float]): The candidate area scales range of
+            output cropped images. Default: (0.08, 1.0).
+        aspect_ratio_range (Tuple[float]): The candidate aspect ratio range of
+            output cropped images. Default: (3 / 4, 4 / 3).
+        lazy (bool): Determine whether to apply lazy operation. Default: False.
     """
 
     def __init__(self,
-                 keys,
-                 scale=None,
-                 keep_ratio=False,
-                 size_factor=None,
-                 max_size=None,
-                 interpolation='bilinear',
-                 backend=None,
-                 output_keys=None):
-        assert keys, 'Keys should not be empty.'
-        if output_keys:
-            assert len(output_keys) == len(keys)
+                 area_range=(0.08, 1.0),
+                 aspect_ratio_range=(3 / 4, 4 / 3),
+                 same_on_clip=True,
+                 same_across_clip=True,
+                 same_clip_indices=None,
+                 same_frame_indices=None,
+                 lazy=False):
+        self.area_range = area_range
+        self.aspect_ratio_range = aspect_ratio_range
+        self.lazy = lazy
+        if not mmcv.is_tuple_of(self.area_range, float):
+            raise TypeError(f'Area_range must be a tuple of float, '
+                            f'but got {type(area_range)}')
+        if not mmcv.is_tuple_of(self.aspect_ratio_range, float):
+            raise TypeError(f'Aspect_ratio_range must be a tuple of float, '
+                            f'but got {type(aspect_ratio_range)}')
+        self.same_on_clip = same_on_clip
+        self.same_across_clip = same_across_clip
+        if same_clip_indices is not None:
+            assert isinstance(same_clip_indices, Sequence)
+        self.same_clip_indices = same_clip_indices
+        if same_frame_indices is not None:
+            assert isinstance(same_frame_indices, Sequence)
+        self.same_frame_indices = same_frame_indices
+
+    @staticmethod
+    def get_crop_bbox(img_shape,
+                      area_range,
+                      aspect_ratio_range,
+                      max_attempts=10):
+        """Get a crop bbox given the area range and aspect ratio range.
+
+        Args:
+            img_shape (Tuple[int]): Image shape
+            area_range (Tuple[float]): The candidate area scales range of
+                output cropped images. Default: (0.08, 1.0).
+            aspect_ratio_range (Tuple[float]): The candidate aspect
+                ratio range of output cropped images. Default: (3 / 4, 4 / 3).
+                max_attempts (int): The maximum of attempts. Default: 10.
+            max_attempts (int): Max attempts times to generate random candidate
+                bounding box. If it doesn't qualified one, the center bounding
+                box will be used.
+        Returns:
+            (list[int]) A random crop bbox within the area range and aspect
+            ratio range.
+        """
+        assert 0 < area_range[0] <= area_range[1] <= 1
+        assert 0 < aspect_ratio_range[0] <= aspect_ratio_range[1]
+
+        img_h, img_w = img_shape
+        area = img_h * img_w
+
+        min_ar, max_ar = aspect_ratio_range
+        aspect_ratios = np.exp(
+            np.random.uniform(
+                np.log(min_ar), np.log(max_ar), size=max_attempts))
+        target_areas = np.random.uniform(*area_range, size=max_attempts) * area
+        candidate_crop_w = np.round(np.sqrt(target_areas *
+                                            aspect_ratios)).astype(np.int32)
+        candidate_crop_h = np.round(np.sqrt(target_areas /
+                                            aspect_ratios)).astype(np.int32)
+
+        for i in range(max_attempts):
+            crop_w = candidate_crop_w[i]
+            crop_h = candidate_crop_h[i]
+            if crop_h <= img_h and crop_w <= img_w:
+                x_offset = random.randint(0, img_w - crop_w)
+                y_offset = random.randint(0, img_h - crop_h)
+                return x_offset, y_offset, x_offset + crop_w, y_offset + crop_h
+
+        # Fallback
+        crop_size = min(img_h, img_w)
+        x_offset = (img_w - crop_size) // 2
+        y_offset = (img_h - crop_size) // 2
+        return x_offset, y_offset, x_offset + crop_size, y_offset + crop_size
+
+    def __call__(self, results):
+        """Performs the RandomResizeCrop augmentation.
+
+        Args:
+            results (dict): The resulting dict to be modified and passed
+                to the next transform in pipeline.
+        """
+        _init_lazy_if_proper(results, self.lazy)
+
+        img_h, img_w = results['img_shape']
+
+        left, top, right, bottom = self.get_crop_bbox(
+            (img_h, img_w), self.area_range, self.aspect_ratio_range)
+        new_h, new_w = bottom - top, right - left
+
+        results['crop_bbox'] = np.array([left, top, right, bottom])
+        results['img_shape'] = (new_h, new_w)
+
+        if not self.lazy:
+            for i, img in enumerate(results['imgs']):
+                is_new_clip = not self.same_across_clip and i % results[
+                    'clip_len'] == 0 and i > 0
+                generate_new = not self.same_on_clip or is_new_clip
+                if self.same_clip_indices is not None:
+                    assert min(self.same_clip_indices) >= 0
+                    assert max(self.same_clip_indices) < results['num_clips']
+                    keep_same = i // results[
+                        'clip_len'] in self.same_clip_indices
+                    generate_new = generate_new and not keep_same
+                if self.same_frame_indices is not None:
+                    assert min(self.same_frame_indices) >= 0
+                    assert max(self.same_frame_indices) < results['clip_len']
+                    keep_same = i % results[
+                        'clip_len'] in self.same_frame_indices
+                    generate_new = generate_new and not keep_same
+                if generate_new:
+                    left, top, right, bottom = self.get_crop_bbox(
+                        (img_h, img_w), self.area_range,
+                        self.aspect_ratio_range)
+                    new_h, new_w = bottom - top, right - left
+
+                results['crop_bbox'] = np.array([left, top, right, bottom])
+                results['img_shape'] = (new_h, new_w)
+                results['imgs'][i] = img[top:bottom, left:right]
+                if 'grids' in results:
+                    grid = results['grids'][i]
+                    results['grids'][i] = grid[top:bottom, left:right]
         else:
-            output_keys = keys
-        if size_factor:
-            assert scale is None, ('When size_factor is used, scale should ',
-                                   f'be None. But received {scale}.')
-            assert keep_ratio is False, ('When size_factor is used, '
-                                         'keep_ratio should be False.')
-        if max_size:
-            assert size_factor is not None, (
-                'When max_size is used, '
-                f'size_factor should also be set. But received {size_factor}.')
+            lazyop = results['lazy']
+            if lazyop['flip']:
+                raise NotImplementedError('Put Flip at last for now')
+
+            # record crop_bbox in lazyop dict to ensure only crop once in Fuse
+            lazy_left, lazy_top, lazy_right, lazy_bottom = lazyop['crop_bbox']
+            left = left * (lazy_right - lazy_left) / img_w
+            right = right * (lazy_right - lazy_left) / img_w
+            top = top * (lazy_bottom - lazy_top) / img_h
+            bottom = bottom * (lazy_bottom - lazy_top) / img_h
+            lazyop['crop_bbox'] = np.array([(lazy_left + left),
+                                            (lazy_top + top),
+                                            (lazy_left + right),
+                                            (lazy_top + bottom)],
+                                           dtype=np.float32)
+
+        return results
+
+    def __repr__(self):
+        repr_str = (f'{self.__class__.__name__}('
+                    f'area_range={self.area_range}, '
+                    f'aspect_ratio_range={self.aspect_ratio_range}, '
+                    f'lazy={self.lazy})')
+        return repr_str
+
+
+@PIPELINES.register_module()
+class MultiScaleCrop(object):
+    """Crop images with a list of randomly selected scales.
+
+    Randomly select the w and h scales from a list of scales. Scale of 1 means
+    the base size, which is the minimal of image weight and height. The scale
+    level of w and h is controlled to be smaller than a certain value to
+    prevent too large or small aspect ratio.
+    Required keys are "imgs", "img_shape", added or modified keys are "imgs",
+    "crop_bbox", "img_shape", "lazy" and "scales". Required keys in "lazy" are
+    "crop_bbox", added or modified key is "crop_bbox".
+
+    Args:
+        input_size (int | tuple[int]): (w, h) of network input.
+        scales (tuple[float]): Weight and height scales to be selected.
+        max_wh_scale_gap (int): Maximum gap of w and h scale levels.
+            Default: 1.
+        random_crop (bool): If set to True, the cropping bbox will be randomly
+            sampled, otherwise it will be sampler from fixed regions.
+            Default: False.
+        num_fixed_crops (int): If set to 5, the cropping bbox will keep 5
+            basic fixed regions: "upper left", "upper right", "lower left",
+            "lower right", "center".If set to 13, the cropping bbox will append
+            another 8 fix regions: "center left", "center right",
+            "lower center", "upper center", "upper left quarter",
+            "upper right quarter", "lower left quarter", "lower right quarter".
+            Default: 5.
+        lazy (bool): Determine whether to apply lazy operation. Default: False.
+    """
+
+    def __init__(self,
+                 input_size,
+                 scales=(1, ),
+                 max_wh_scale_gap=1,
+                 random_crop=False,
+                 num_fixed_crops=5,
+                 lazy=False):
+        self.input_size = _pair(input_size)
+        if not mmcv.is_tuple_of(self.input_size, int):
+            raise TypeError(f'Input_size must be int or tuple of int, '
+                            f'but got {type(input_size)}')
+
+        if not isinstance(scales, tuple):
+            raise TypeError(f'Scales must be tuple, but got {type(scales)}')
+
+        if num_fixed_crops not in [5, 13]:
+            raise ValueError(f'Num_fix_crops must be in {[5, 13]}, '
+                             f'but got {num_fixed_crops}')
+
+        self.scales = scales
+        self.max_wh_scale_gap = max_wh_scale_gap
+        self.random_crop = random_crop
+        self.num_fixed_crops = num_fixed_crops
+        self.lazy = lazy
+
+    def __call__(self, results):
+        """Performs the MultiScaleCrop augmentation.
+
+        Args:
+            results (dict): The resulting dict to be modified and passed
+                to the next transform in pipeline.
+        """
+        _init_lazy_if_proper(results, self.lazy)
+
+        img_h, img_w = results['img_shape']
+        base_size = min(img_h, img_w)
+        crop_sizes = [int(base_size * s) for s in self.scales]
+
+        candidate_sizes = []
+        for i, h in enumerate(crop_sizes):
+            for j, w in enumerate(crop_sizes):
+                if abs(i - j) <= self.max_wh_scale_gap:
+                    candidate_sizes.append([w, h])
+
+        crop_size = random.choice(candidate_sizes)
+        for i in range(2):
+            if abs(crop_size[i] - self.input_size[i]) < 3:
+                crop_size[i] = self.input_size[i]
+
+        crop_w, crop_h = crop_size
+
+        if self.random_crop:
+            x_offset = random.randint(0, img_w - crop_w)
+            y_offset = random.randint(0, img_h - crop_h)
+        else:
+            w_step = (img_w - crop_w) // 4
+            h_step = (img_h - crop_h) // 4
+            candidate_offsets = [
+                (0, 0),  # upper left
+                (4 * w_step, 0),  # upper right
+                (0, 4 * h_step),  # lower left
+                (4 * w_step, 4 * h_step),  # lower right
+                (2 * w_step, 2 * h_step),  # center
+            ]
+            if self.num_fixed_crops == 13:
+                extra_candidate_offsets = [
+                    (0, 2 * h_step),  # center left
+                    (4 * w_step, 2 * h_step),  # center right
+                    (2 * w_step, 4 * h_step),  # lower center
+                    (2 * w_step, 0 * h_step),  # upper center
+                    (1 * w_step, 1 * h_step),  # upper left quarter
+                    (3 * w_step, 1 * h_step),  # upper right quarter
+                    (1 * w_step, 3 * h_step),  # lower left quarter
+                    (3 * w_step, 3 * h_step)  # lower right quarter
+                ]
+                candidate_offsets.extend(extra_candidate_offsets)
+            x_offset, y_offset = random.choice(candidate_offsets)
+
+        new_h, new_w = crop_h, crop_w
+
+        results['crop_bbox'] = np.array(
+            [x_offset, y_offset, x_offset + new_w, y_offset + new_h])
+        results['img_shape'] = (new_h, new_w)
+        results['scales'] = self.scales
+
+        if not self.lazy:
+            results['imgs'] = [
+                img[y_offset:y_offset + new_h, x_offset:x_offset + new_w]
+                for img in results['imgs']
+            ]
+        else:
+            lazyop = results['lazy']
+            if lazyop['flip']:
+                raise NotImplementedError('Put Flip at last for now')
+
+            # record crop_bbox in lazyop dict to ensure only crop once in Fuse
+            lazy_left, lazy_top, lazy_right, lazy_bottom = lazyop['crop_bbox']
+            left = x_offset * (lazy_right - lazy_left) / img_w
+            right = (x_offset + new_w) * (lazy_right - lazy_left) / img_w
+            top = y_offset * (lazy_bottom - lazy_top) / img_h
+            bottom = (y_offset + new_h) * (lazy_bottom - lazy_top) / img_h
+            lazyop['crop_bbox'] = np.array([(lazy_left + left),
+                                            (lazy_top + top),
+                                            (lazy_left + right),
+                                            (lazy_top + bottom)],
+                                           dtype=np.float32)
+
+        return results
+
+    def __repr__(self):
+        repr_str = (f'{self.__class__.__name__}('
+                    f'input_size={self.input_size}, scales={self.scales}, '
+                    f'max_wh_scale_gap={self.max_wh_scale_gap}, '
+                    f'random_crop={self.random_crop}, '
+                    f'num_fixed_crops={self.num_fixed_crops}, '
+                    f'lazy={self.lazy})')
+        return repr_str
+
+
+@PIPELINES.register_module()
+class Resize(object):
+    """Resize images to a specific size.
+
+    Required keys are "imgs", "img_shape", "modality", added or modified
+    keys are "imgs", "img_shape", "keep_ratio", "scale_factor", "lazy",
+    "resize_size". Required keys in "lazy" is None, added or modified key is
+    "interpolation".
+
+    Args:
+        scale (float | Tuple[int]): If keep_ratio is True, it serves as scaling
+            factor or maximum size:
+            If it is a float number, the image will be rescaled by this
+            factor, else if it is a tuple of 2 integers, the image will
+            be rescaled as large as possible within the scale.
+            Otherwise, it serves as (w, h) of output size.
+        keep_ratio (bool): If set to True, Images will be resized without
+            changing the aspect ratio. Otherwise, it will resize images to a
+            given size. Default: True.
+        interpolation (str): Algorithm used for interpolation:
+            "nearest" | "bilinear". Default: "bilinear".
+        lazy (bool): Determine whether to apply lazy operation. Default: False.
+    """
+
+    def __init__(self,
+                 scale,
+                 keep_ratio=True,
+                 interpolation='bilinear',
+                 lazy=False):
         if isinstance(scale, float):
             if scale <= 0:
                 raise ValueError(f'Invalid scale {scale}, must be positive.')
-        elif mmcv.is_tuple_of(scale, int):
+        elif isinstance(scale, tuple):
             max_long_edge = max(scale)
             max_short_edge = min(scale)
             if max_short_edge == -1:
                 # assign np.inf to long edge for rescaling short edge later.
                 scale = (np.inf, max_long_edge)
-        elif scale is not None:
+        else:
             raise TypeError(
-                f'Scale must be None, float or tuple of int, but got '
-                f'{type(scale)}.')
-        self.keys = keys
-        self.output_keys = output_keys
+                f'Scale must be float or tuple of int, but got {type(scale)}')
         self.scale = scale
-        self.size_factor = size_factor
-        self.max_size = max_size
         self.keep_ratio = keep_ratio
         self.interpolation = interpolation
-        self.backend = backend
-
-    def _resize(self, img):
-        if self.keep_ratio:
-            img, self.scale_factor = mmcv.imrescale(
-                img,
-                self.scale,
-                return_scale=True,
-                interpolation=self.interpolation,
-                backend=self.backend)
-        else:
-            img, w_scale, h_scale = mmcv.imresize(
-                img,
-                self.scale,
-                return_scale=True,
-                interpolation=self.interpolation,
-                backend=self.backend)
-            self.scale_factor = np.array((w_scale, h_scale), dtype=np.float32)
-        return img
+        self.lazy = lazy
 
     def __call__(self, results):
-        """Call function.
+        """Performs the Resize augmentation.
 
         Args:
-            results (dict): A dict containing the necessary information and
-                data for augmentation.
-
-        Returns:
-            dict: A dict containing the processed data and information.
+            results (dict): The resulting dict to be modified and passed
+                to the next transform in pipeline.
         """
-        if self.size_factor:
-            h, w = results[self.keys[0]].shape[:2] if not isinstance(results[self.keys[0]], list) else results[self.keys[0]][0].shape[:2]
-            new_h = h - (h % self.size_factor)
-            new_w = w - (w % self.size_factor)
-            if self.max_size:
-                new_h = min(self.max_size - (self.max_size % self.size_factor),
-                            new_h)
-                new_w = min(self.max_size - (self.max_size % self.size_factor),
-                            new_w)
-            self.scale = (new_w, new_h)
-        for key, out_key in zip(self.keys, self.output_keys):
-            # modify to support clip-wise resize
-            results[out_key] = self._resize(results[key]) if not isinstance(results[key], list) else [self._resize(x) for x in results[key]]
-            if len(results[out_key].shape) == 2:
-                results[out_key] = np.expand_dims(results[out_key], axis=2) if not isinstance(results[key], list) else [np.expand_dims(x, axis=2) for x in results[out_key]]
 
-        results['scale_factor'] = self.scale_factor
+        _init_lazy_if_proper(results, self.lazy)
+
+        if 'scale_factor' not in results:
+            results['scale_factor'] = np.array([1, 1], dtype=np.float32)
+        img_h, img_w = results['img_shape']
+
+        if self.keep_ratio:
+            new_w, new_h = mmcv.rescale_size((img_w, img_h), self.scale)
+        else:
+            new_w, new_h = self.scale
+
+        self.scale_factor = np.array([new_w / img_w, new_h / img_h],
+                                     dtype=np.float32)
+
+        results['img_shape'] = (new_h, new_w)
         results['keep_ratio'] = self.keep_ratio
-        results['interpolation'] = self.interpolation
-        results['backend'] = self.backend
+        results['scale_factor'] = results['scale_factor'] * self.scale_factor
+
+        if not self.lazy:
+            results['imgs'] = [
+                mmcv.imresize(
+                    img, (new_w, new_h), interpolation=self.interpolation)
+                for img in results['imgs']
+            ]
+            if 'grids' in results:
+                results['grids'] = [
+                    mmcv.imresize(
+                        grid, (new_w, new_h), interpolation=self.interpolation)
+                    for grid in results['grids']
+                ]
+
+        else:
+            lazyop = results['lazy']
+            if lazyop['flip']:
+                raise NotImplementedError('Put Flip at last for now')
+            lazyop['interpolation'] = self.interpolation
+
+        if 'ref_seg_map' in results:
+            if results['ref_seg_map'].dtype == np.uint8:
+                results['ref_seg_map'] = mmcv.imresize(
+                    results['ref_seg_map'], (new_w, new_h),
+                    interpolation='nearest',
+                    backend='pillow')
+            else:
+                results['ref_seg_map'] = mmcv.imresize(
+                    results['ref_seg_map'], (new_w, new_h),
+                    interpolation='bilinear',
+                    backend='cv2')
 
         return results
 
     def __repr__(self):
-        repr_str = self.__class__.__name__
-        repr_str += (
-            f'(keys={self.keys}, output_keys={self.output_keys}, '
-            f'scale={self.scale}, '
-            f'keep_ratio={self.keep_ratio}, size_factor={self.size_factor}, '
-            f'max_size={self.max_size},interpolation={self.interpolation})')
+        repr_str = (f'{self.__class__.__name__}('
+                    f'scale={self.scale}, keep_ratio={self.keep_ratio}, '
+                    f'interpolation={self.interpolation}, '
+                    f'lazy={self.lazy})')
         return repr_str
 
 
 @PIPELINES.register_module()
-class Flip:
-    """Flip the input data with a probability.
+class Flip(object):
+    """Flip the input images with a probability.
 
-    Reverse the order of elements in the given data with a specific direction.
-    The shape of the data is preserved, but the elements are reordered.
-    Required keys are the keys in attributes "keys", added or modified keys are
-    "flip", "flip_direction" and the keys in attributes "keys".
-    It also supports flipping a list of images with the same flip.
+    Reverse the order of elements in the given imgs with a specific direction.
+    The shape of the imgs is preserved, but the elements are reordered.
+    Required keys are "imgs", "img_shape", "modality", added or modified
+    keys are "imgs", "lazy" and "flip_direction". Required keys in "lazy" is
+    None, added or modified key are "flip" and "flip_direction".
 
     Args:
-        keys (list[str]): The images to be flipped.
-        flip_ratio (float): The propability to flip the images.
-        direction (str): Flip images horizontally or vertically. Options are
+        flip_ratio (float): Probability of implementing flip. Default: 0.5.
+        direction (str): Flip imgs horizontally or vertically. Options are
             "horizontal" | "vertical". Default: "horizontal".
+        lazy (bool): Determine whether to apply lazy operation. Default: False.
     """
     _directions = ['horizontal', 'vertical']
 
-    def __init__(self, keys, flip_ratio=0.5, direction='horizontal'):
+    def __init__(self,
+                 flip_ratio=0.5,
+                 direction='horizontal',
+                 lazy=False,
+                 same_on_clip=True,
+                 same_across_clip=True,
+                 same_clip_indices=None,
+                 same_frame_indices=None):
         if direction not in self._directions:
-            raise ValueError(f'Direction {direction} is not supported.'
+            raise ValueError(f'Direction {direction} is not supported. '
                              f'Currently support ones are {self._directions}')
-        self.keys = keys
         self.flip_ratio = flip_ratio
         self.direction = direction
+        self.lazy = lazy
+        self.same_on_clip = same_on_clip
+        self.same_across_clip = same_across_clip
+        if same_clip_indices is not None:
+            assert isinstance(same_clip_indices, Sequence)
+        self.same_clip_indices = same_clip_indices
+        if same_frame_indices is not None:
+            assert isinstance(same_frame_indices, Sequence)
+        self.same_frame_indices = same_frame_indices
 
     def __call__(self, results):
-        """Call function.
+        """Performs the Flip augmentation.
 
         Args:
-            results (dict): A dict containing the necessary information and
-                data for augmentation.
-
-        Returns:
-            dict: A dict containing the processed data and information.
+            results (dict): The resulting dict to be modified and passed
+                to the next transform in pipeline.
         """
-        flip = np.random.random() < self.flip_ratio
+        _init_lazy_if_proper(results, self.lazy)
+        modality = results['modality']
+        if modality == 'Flow':
+            assert self.direction == 'horizontal'
 
-        if flip:
-            for key in self.keys:
-                if isinstance(results[key], list):
-                    for v in results[key]:
-                        mmcv.imflip_(v, self.direction)
-                else:
-                    mmcv.imflip_(results[key], self.direction)
+        if np.random.rand() < self.flip_ratio:
+            flip = True
+        else:
+            flip = False
 
         results['flip'] = flip
         results['flip_direction'] = self.direction
 
+        if not self.lazy:
+            for i, img in enumerate(results['imgs']):
+                is_new_clip = not self.same_across_clip and i % results[
+                    'clip_len'] == 0 and i > 0
+                generate_new = not self.same_on_clip or is_new_clip
+                if self.same_clip_indices is not None:
+                    assert min(self.same_clip_indices) >= 0
+                    assert max(self.same_clip_indices) < results['num_clips']
+                    keep_same = i % results[
+                        'num_clips'] in self.same_clip_indices
+                    generate_new = generate_new and not keep_same
+                if self.same_frame_indices is not None:
+                    assert min(self.same_frame_indices) >= 0
+                    assert max(self.same_frame_indices) < results['clip_len']
+                    keep_same = i % results[
+                        'clip_len'] in self.same_frame_indices
+                    generate_new = generate_new and not keep_same
+                if generate_new:
+                    flip = npr.rand() < self.flip_ratio
+                if flip:
+                    mmcv.imflip_(img, self.direction)
+                    if 'grids' in results:
+                        mmcv.imflip_(results['grids'][i], self.direction)
+            if flip:
+                lt = len(results['imgs'])
+                for i in range(0, lt, 2):
+                    # flow with even indexes are x_flow, which need to be
+                    # inverted when doing horizontal flip
+                    if modality == 'Flow':
+                        results['imgs'][i] = mmcv.iminvert(results['imgs'][i])
+
+            else:
+                results['imgs'] = list(results['imgs'])
+        else:
+            lazyop = results['lazy']
+            if lazyop['flip']:
+                raise NotImplementedError('Use one Flip please')
+            lazyop['flip'] = flip
+            lazyop['flip_direction'] = self.direction
+
         return results
 
     def __repr__(self):
-        repr_str = self.__class__.__name__
-        repr_str += (f'(keys={self.keys}, flip_ratio={self.flip_ratio}, '
-                     f'direction={self.direction})')
+        repr_str = (
+            f'{self.__class__.__name__}('
+            f'flip_ratio={self.flip_ratio}, direction={self.direction}, '
+            f'lazy={self.lazy})')
         return repr_str
 
 
 @PIPELINES.register_module()
-class Pad:
-    """Pad the images to align with network downsample factor for testing.
+class Normalize(object):
+    """Normalize images with the given mean and std value.
 
-    See `Reshape` for more explanation. `numpy.pad` is used for the pad
-    operation.
-    Required keys are the keys in attribute "keys", added or
-    modified keys are "test_trans" and the keys in attribute
-    "keys". All keys in "keys" should have the same shape. "test_trans" is used
-    to record the test transformation to align the input's shape.
+    Required keys are "imgs", "img_shape", "modality", added or modified
+    keys are "imgs" and "img_norm_cfg". If modality is 'Flow', additional
+    keys "scale_factor" is required
 
     Args:
-        keys (list[str]): The images to be padded.
-        ds_factor (int): Downsample factor of the network. The height and
-            weight will be padded to a multiple of ds_factor. Default: 32.
-        kwargs (option): any keyword arguments to be passed to `numpy.pad`.
+        mean (Sequence[float]): Mean values of different channels.
+        std (Sequence[float]): Std values of different channels.
+        to_bgr (bool): Whether to convert channels from RGB to BGR.
+            Default: False.
+        adjust_magnitude (bool): Indicate whether to adjust the flow magnitude
+            on 'scale_factor' when modality is 'Flow'. Default: False.
     """
 
-    def __init__(self, keys, ds_factor=32, **kwargs):
-        self.keys = keys
-        self.ds_factor = ds_factor
-        self.kwargs = kwargs
+    def __init__(self, mean, std, to_bgr=False, adjust_magnitude=False):
+        if not isinstance(mean, Sequence):
+            raise TypeError(
+                f'Mean must be list, tuple or np.ndarray, but got {type(mean)}'
+            )
+
+        if not isinstance(std, Sequence):
+            raise TypeError(
+                f'Std must be list, tuple or np.ndarray, but got {type(std)}')
+
+        self.mean = np.array(mean, dtype=np.float32)
+        self.std = np.array(std, dtype=np.float32)
+        self.to_bgr = to_bgr
+        self.adjust_magnitude = adjust_magnitude
 
     def __call__(self, results):
-        """Call function.
+        modality = results['modality']
 
-        Args:
-            results (dict): A dict containing the necessary information and
-                data for augmentation.
+        if modality == 'RGB':
+            n = len(results['imgs'])
+            h, w, c = results['imgs'][0].shape
+            imgs = np.empty((n, h, w, c), dtype=np.float32)
+            for i, img in enumerate(results['imgs']):
+                imgs[i] = img
 
-        Returns:
-            dict: A dict containing the processed data and information.
-        """
-        h, w = results[self.keys[0]].shape[:2]
+            for img in imgs:
+                mmcv.imnormalize_(img, self.mean, self.std, self.to_bgr)
 
-        new_h = self.ds_factor * ((h - 1) // self.ds_factor + 1)
-        new_w = self.ds_factor * ((w - 1) // self.ds_factor + 1)
-
-        pad_h = new_h - h
-        pad_w = new_w - w
-        if new_h != h or new_w != w:
-            pad_width = ((0, pad_h), (0, pad_w), (0, 0))
-            for key in self.keys:
-                results[key] = np.pad(results[key],
-                                      pad_width[:results[key].ndim],
-                                      **self.kwargs)
-        results['pad'] = (pad_h, pad_w)
-        return results
+            results['imgs'] = imgs
+            results['img_norm_cfg'] = dict(
+                mean=self.mean, std=self.std, to_bgr=self.to_bgr)
+            return results
+        elif modality == 'Flow':
+            num_imgs = len(results['imgs'])
+            assert num_imgs % 2 == 0
+            assert self.mean.shape[0] == 2
+            assert self.std.shape[0] == 2
+            n = num_imgs // 2
+            h, w = results['imgs'][0].shape
+            x_flow = np.empty((n, h, w), dtype=np.float32)
+            y_flow = np.empty((n, h, w), dtype=np.float32)
+            for i in range(n):
+                x_flow[i] = results['imgs'][2 * i]
+                y_flow[i] = results['imgs'][2 * i + 1]
+            x_flow = (x_flow - self.mean[0]) / self.std[0]
+            y_flow = (y_flow - self.mean[1]) / self.std[1]
+            if self.adjust_magnitude:
+                x_flow = x_flow * results['scale_factor'][0]
+                y_flow = y_flow * results['scale_factor'][1]
+            imgs = np.stack([x_flow, y_flow], axis=-1)
+            results['imgs'] = imgs
+            args = dict(
+                mean=self.mean,
+                std=self.std,
+                to_bgr=self.to_bgr,
+                adjust_magnitude=self.adjust_magnitude)
+            results['img_norm_cfg'] = args
+            return results
+        else:
+            raise NotImplementedError
 
     def __repr__(self):
-        repr_str = self.__class__.__name__
-        kwargs_str = ', '.join(
-            [f'{key}={val}' for key, val in self.kwargs.items()])
-        repr_str += (f'(keys={self.keys}, ds_factor={self.ds_factor}, '
-                     f'{kwargs_str})')
+        repr_str = (f'{self.__class__.__name__}('
+                    f'mean={self.mean}, '
+                    f'std={self.std}, '
+                    f'to_bgr={self.to_bgr}, '
+                    f'adjust_magnitude={self.adjust_magnitude})')
         return repr_str
 
 
 @PIPELINES.register_module()
-class RandomAffine:
-    """Apply random affine to input images.
+class CenterCrop(object):
+    """Crop the center area from images.
 
-    This class is adopted from
-    https://github.com/pytorch/vision/blob/v0.5.0/torchvision/transforms/
-    transforms.py#L1015
-    It should be noted that in
-    https://github.com/Yaoyi-Li/GCA-Matting/blob/master/dataloader/
-    data_generator.py#L70
-    random flip is added. See explanation of `flip_ratio` below.
-    Required keys are the keys in attribute "keys", modified keys
-    are keys in attribute "keys".
+    Required keys are "imgs", "img_shape", added or modified keys are "imgs",
+    "crop_bbox", "lazy" and "img_shape". Required keys in "lazy" is
+    "crop_bbox", added or modified key is "crop_bbox".
 
     Args:
-        keys (Sequence[str]): The images to be affined.
-        degrees (float | tuple[float]): Range of degrees to select from. If it
-            is a float instead of a tuple like (min, max), the range of degrees
-            will be (-degrees, +degrees). Set to 0 to deactivate rotations.
-        translate (tuple, optional): Tuple of maximum absolute fraction for
-            horizontal and vertical translations. For example translate=(a, b),
-            then horizontal shift is randomly sampled in the range
-            -img_width * a < dx < img_width * a and vertical shift is randomly
-            sampled in the range -img_height * b < dy < img_height * b.
-            Default: None.
-        scale (tuple, optional): Scaling factor interval, e.g (a, b), then
-            scale is randomly sampled from the range a <= scale <= b.
-            Default: None.
-        shear (float | tuple[float], optional): Range of shear degrees to
-            select from. If shear is a float, a shear parallel to the x axis
-            and a shear parallel to the y axis in the range (-shear, +shear)
-            will be applied. Else if shear is a tuple of 2 values, a x-axis
-            shear and a y-axis shear in (shear[0], shear[1]) will be applied.
-            Default: None.
-        flip_ratio (float, optional): Probability of the image being flipped.
-            The flips in horizontal direction and vertical direction are
-            independent. The image may be flipped in both directions.
-            Default: None.
+        crop_size (int | tuple[int]): (w, h) of crop size.
+        lazy (bool): Determine whether to apply lazy operation. Default: False.
+    """
+
+    def __init__(self, crop_size, lazy=False):
+        self.crop_size = _pair(crop_size)
+        self.lazy = lazy
+        if not mmcv.is_tuple_of(self.crop_size, int):
+            raise TypeError(f'Crop_size must be int or tuple of int, '
+                            f'but got {type(crop_size)}')
+
+    def __call__(self, results):
+        """Performs the CenterCrop augmentation.
+
+        Args:
+            results (dict): The resulting dict to be modified and passed
+                to the next transform in pipeline.
+        """
+        _init_lazy_if_proper(results, self.lazy)
+
+        img_h, img_w = results['img_shape']
+        crop_w, crop_h = self.crop_size
+
+        left = (img_w - crop_w) // 2
+        top = (img_h - crop_h) // 2
+        right = left + crop_w
+        bottom = top + crop_h
+        new_h, new_w = bottom - top, right - left
+
+        results['crop_bbox'] = np.array([left, top, right, bottom])
+        results['img_shape'] = (new_h, new_w)
+
+        if not self.lazy:
+            results['imgs'] = [
+                img[top:bottom, left:right] for img in results['imgs']
+            ]
+        else:
+            lazyop = results['lazy']
+            if lazyop['flip']:
+                raise NotImplementedError('Put Flip at last for now')
+
+            # record crop_bbox in lazyop dict to ensure only crop once in Fuse
+            lazy_left, lazy_top, lazy_right, lazy_bottom = lazyop['crop_bbox']
+            left = left * (lazy_right - lazy_left) / img_w
+            right = right * (lazy_right - lazy_left) / img_w
+            top = top * (lazy_bottom - lazy_top) / img_h
+            bottom = bottom * (lazy_bottom - lazy_top) / img_h
+            lazyop['crop_bbox'] = np.array([(lazy_left + left),
+                                            (lazy_top + top),
+                                            (lazy_left + right),
+                                            (lazy_top + bottom)],
+                                           dtype=np.float32)
+
+        return results
+
+    def __repr__(self):
+        repr_str = (f'{self.__class__.__name__}(crop_size={self.crop_size}, '
+                    f'lazy={self.lazy})')
+        return repr_str
+
+
+@PIPELINES.register_module()
+class ThreeCrop(object):
+    """Crop images into three crops.
+
+    Crop the images equally into three crops with equal intervals along the
+    shorter side.
+    Required keys are "imgs", "img_shape", added or modified keys are "imgs",
+    "crop_bbox" and "img_shape".
+
+    Args:
+        crop_size(int | tuple[int]): (w, h) of crop size.
+    """
+
+    def __init__(self, crop_size):
+        self.crop_size = _pair(crop_size)
+        if not mmcv.is_tuple_of(self.crop_size, int):
+            raise TypeError(f'Crop_size must be int or tuple of int, '
+                            f'but got {type(crop_size)}')
+
+    def __call__(self, results):
+        """Performs the ThreeCrop augmentation.
+
+        Args:
+            results (dict): The resulting dict to be modified and passed
+                to the next transform in pipeline.
+        """
+        _init_lazy_if_proper(results, False)
+
+        imgs = results['imgs']
+        img_h, img_w = results['imgs'][0].shape[:2]
+        crop_w, crop_h = self.crop_size
+        assert crop_h == img_h or crop_w == img_w
+
+        if crop_h == img_h:
+            w_step = (img_w - crop_w) // 2
+            offsets = [
+                (0, 0),  # left
+                (2 * w_step, 0),  # right
+                (w_step, 0),  # middle
+            ]
+        elif crop_w == img_w:
+            h_step = (img_h - crop_h) // 2
+            offsets = [
+                (0, 0),  # top
+                (0, 2 * h_step),  # down
+                (0, h_step),  # middle
+            ]
+
+        cropped = []
+        crop_bboxes = []
+        for x_offset, y_offset in offsets:
+            bbox = [x_offset, y_offset, x_offset + crop_w, y_offset + crop_h]
+            crop = [
+                img[y_offset:y_offset + crop_h, x_offset:x_offset + crop_w]
+                for img in imgs
+            ]
+            cropped.extend(crop)
+            crop_bboxes.extend([bbox for _ in range(len(imgs))])
+
+        crop_bboxes = np.array(crop_bboxes)
+        results['imgs'] = cropped
+        results['crop_bbox'] = crop_bboxes
+        results['img_shape'] = results['imgs'][0].shape[:2]
+
+        return results
+
+    def __repr__(self):
+        repr_str = f'{self.__class__.__name__}(crop_size={self.crop_size})'
+        return repr_str
+
+
+@PIPELINES.register_module()
+class TenCrop(object):
+    """Crop the images into 10 crops (corner + center + flip).
+
+    Crop the four corners and the center part of the image with the same
+    given crop_size, and flip it horizontally.
+    Required keys are "imgs", "img_shape", added or modified keys are "imgs",
+    "crop_bbox" and "img_shape".
+
+    Args:
+        crop_size(int | tuple[int]): (w, h) of crop size.
+    """
+
+    def __init__(self, crop_size):
+        self.crop_size = _pair(crop_size)
+        if not mmcv.is_tuple_of(self.crop_size, int):
+            raise TypeError(f'Crop_size must be int or tuple of int, '
+                            f'but got {type(crop_size)}')
+
+    def __call__(self, results):
+        """Performs the TenCrop augmentation.
+
+        Args:
+            results (dict): The resulting dict to be modified and passed
+                to the next transform in pipeline.
+        """
+        _init_lazy_if_proper(results, False)
+
+        imgs = results['imgs']
+
+        img_h, img_w = results['imgs'][0].shape[:2]
+        crop_w, crop_h = self.crop_size
+
+        w_step = (img_w - crop_w) // 4
+        h_step = (img_h - crop_h) // 4
+
+        offsets = [
+            (0, 0),  # upper left
+            (4 * w_step, 0),  # upper right
+            (0, 4 * h_step),  # lower left
+            (4 * w_step, 4 * h_step),  # lower right
+            (2 * w_step, 2 * h_step),  # center
+        ]
+
+        img_crops = list()
+        crop_bboxes = list()
+        for x_offset, y_offsets in offsets:
+            crop = [
+                img[y_offsets:y_offsets + crop_h, x_offset:x_offset + crop_w]
+                for img in imgs
+            ]
+            flip_crop = [np.flip(c, axis=1).copy() for c in crop]
+            bbox = [x_offset, y_offsets, x_offset + crop_w, y_offsets + crop_h]
+            img_crops.extend(crop)
+            img_crops.extend(flip_crop)
+            crop_bboxes.extend([bbox for _ in range(len(imgs) * 2)])
+
+        crop_bboxes = np.array(crop_bboxes)
+        results['imgs'] = img_crops
+        results['crop_bbox'] = crop_bboxes
+        results['img_shape'] = results['imgs'][0].shape[:2]
+
+        return results
+
+    def __repr__(self):
+        repr_str = f'{self.__class__.__name__}(crop_size={self.crop_size})'
+        return repr_str
+
+
+@PIPELINES.register_module()
+class MultiGroupCrop(object):
+    """Randomly crop the images into several groups.
+
+    Crop the random region with the same given crop_size and bounding box
+    into several groups.
+    Required keys are "imgs", added or modified keys are "imgs", "crop_bbox"
+    and "img_shape".
+
+    Args:
+        crop_size(int | tuple[int]): (w, h) of crop size.
+        groups(int): Number of groups.
+    """
+
+    def __init__(self, crop_size, groups):
+        self.crop_size = _pair(crop_size)
+        self.groups = groups
+        if not mmcv.is_tuple_of(self.crop_size, int):
+            raise TypeError(
+                'Crop size must be int or tuple of int, but got {}'.format(
+                    type(crop_size)))
+
+        if not isinstance(groups, int):
+            raise TypeError(f'Groups must be int, but got {type(groups)}.')
+
+        if groups <= 0:
+            raise ValueError('Groups must be positive.')
+
+    def __call__(self, results):
+        """Performs the MultiGroupCrop augmentation.
+
+        Args:
+            results (dict): The resulting dict to be modified and passed
+                to the next transform in pipeline.
+        """
+        imgs = results['imgs']
+        img_h, img_w = imgs[0].shape[:2]
+        crop_w, crop_h = self.crop_size
+
+        img_crops = []
+        crop_bboxes = []
+        for _ in range(self.groups):
+            x_offset = random.randint(0, img_w - crop_w)
+            y_offset = random.randint(0, img_h - crop_h)
+
+            bbox = [x_offset, y_offset, x_offset + crop_w, y_offset + crop_h]
+            crop = [
+                img[y_offset:y_offset + crop_h, x_offset:x_offset + crop_w]
+                for img in imgs
+            ]
+            img_crops.extend(crop)
+            crop_bboxes.extend([bbox for _ in range(len(imgs))])
+
+        crop_bboxes = np.array(crop_bboxes)
+        results['imgs'] = img_crops
+        results['crop_bbox'] = crop_bboxes
+        results['img_shape'] = results['imgs'][0].shape[:2]
+
+        return results
+
+    def __repr__(self):
+        repr_str = (f'{self.__class__.__name__}'
+                    f'(crop_size={self.crop_size}, '
+                    f'groups={self.groups})')
+        return repr_str
+
+
+@PIPELINES.register_module()
+class RGB2LAB(object):
+
+    def __init__(self):
+        pass
+
+    def __call__(self, results):
+        for i, img in enumerate(results['imgs']):
+            results['imgs'][i] = mmcv.imconvert(img, 'rgb', 'lab')
+        return results
+
+
+@PIPELINES.register_module()
+class PhotoMetricDistortion(object):
+    """Apply photometric distortion to image sequentially, every transformation
+    is applied with a probability of 0.5. The position of random contrast is in
+    second or second to last.
+
+    1. random brightness
+    2. random contrast (mode 0)
+    3. convert color from BGR to HSV
+    4. random saturation
+    5. random hue
+    6. convert color from HSV to BGR
+    7. random contrast (mode 1)
+    8. randomly swap channels
+
+    Args:
+        brightness_delta (int): delta of brightness.
+        contrast_range (tuple): range of contrast.
+        saturation_range (tuple): range of saturation.
+        hue_delta (int): delta of hue.
     """
 
     def __init__(self,
-                 keys,
-                 degrees,
-                 translate=None,
-                 scale=None,
-                 shear=None,
-                 flip_ratio=None):
-        self.keys = keys
-        if isinstance(degrees, numbers.Number):
-            assert degrees >= 0, ('If degrees is a single number, '
-                                  'it must be positive.')
-            self.degrees = (-degrees, degrees)
-        else:
-            assert isinstance(degrees, tuple) and len(degrees) == 2, \
-                'degrees should be a tuple and it must be of length 2.'
-            self.degrees = degrees
+                 brightness_delta=32,
+                 contrast_range=(0.5, 1.5),
+                 saturation_range=(0.5, 1.5),
+                 hue_delta=18,
+                 p=0.5,
+                 same_on_clip=True,
+                 same_across_clip=True):
+        self.brightness_delta = brightness_delta
+        self.contrast_lower, self.contrast_upper = contrast_range
+        self.saturation_lower, self.saturation_upper = saturation_range
+        self.hue_delta = hue_delta
+        self.p = p
+        self.same_on_clip = same_on_clip
+        self.same_across_clip = same_across_clip
 
-        if translate is not None:
-            assert isinstance(translate, tuple) and len(translate) == 2, \
-                'translate should be a tuple and it must be of length 2.'
-            for t in translate:
-                assert 0.0 <= t <= 1.0, ('translation values should be '
-                                         'between 0 and 1.')
-        self.translate = translate
+    def convert(self, img, alpha=1, beta=0):
+        """Multiple with alpha and add beat with clip."""
+        img = img.astype(np.float32) * alpha + beta
+        img = np.clip(img, 0, 255)
+        return img.astype(np.uint8)
 
-        if scale is not None:
-            assert isinstance(scale, tuple) and len(scale) == 2, \
-                'scale should be a tuple and it must be of length 2.'
-            for s in scale:
-                assert s > 0, 'scale values should be positive.'
-        self.scale = scale
+    def brightness(self, img, beta):
+        """Brightness distortion."""
+        return self.convert(img, beta=beta)
 
-        if shear is not None:
-            if isinstance(shear, numbers.Number):
-                assert shear >= 0, ('If shear is a single number, '
-                                    'it must be positive.')
-                self.shear = (-shear, shear)
-            else:
-                assert isinstance(shear, tuple) and len(shear) == 2, \
-                    'shear should be a tuple and it must be of length 2.'
-                # X-Axis and Y-Axis shear with (min, max)
-                self.shear = shear
-        else:
-            self.shear = shear
+    def contrast(self, img, alpha):
+        """Contrast distortion."""
+        return self.convert(img, alpha=alpha)
 
-        if flip_ratio is not None:
-            assert isinstance(flip_ratio,
-                              float), 'flip_ratio should be a float.'
-            self.flip_ratio = flip_ratio
-        else:
-            self.flip_ratio = 0
+    def saturation(self, img, alpha):
+        """Saturation distortion."""
+        img = mmcv.bgr2hsv(img)
+        img[:, :, 1] = self.convert(img[:, :, 1], alpha=alpha)
+        img = mmcv.hsv2bgr(img)
+        return img
 
-    @staticmethod
-    def _get_params(degrees, translate, scale_ranges, shears, flip_ratio,
-                    img_size):
-        """Get parameters for affine transformation.
-
-        Returns:
-            paras (tuple): Params to be passed to the affine transformation.
-        """
-        angle = np.random.uniform(degrees[0], degrees[1])
-        if translate is not None:
-            max_dx = translate[0] * img_size[0]
-            max_dy = translate[1] * img_size[1]
-            translations = (np.round(np.random.uniform(-max_dx, max_dx)),
-                            np.round(np.random.uniform(-max_dy, max_dy)))
-        else:
-            translations = (0, 0)
-
-        if scale_ranges is not None:
-            scale = (np.random.uniform(scale_ranges[0], scale_ranges[1]),
-                     np.random.uniform(scale_ranges[0], scale_ranges[1]))
-        else:
-            scale = (1.0, 1.0)
-
-        if shears is not None:
-            shear = np.random.uniform(shears[0], shears[1])
-        else:
-            shear = 0.0
-
-        flip = (np.random.rand(2) < flip_ratio).astype(np.int) * 2 - 1
-
-        return angle, translations, scale, shear, flip
-
-    @staticmethod
-    def _get_inverse_affine_matrix(center, angle, translate, scale, shear,
-                                   flip):
-        """Helper method to compute inverse matrix for affine transformation.
-
-        As it is explained in PIL.Image.rotate, we need compute INVERSE of
-        affine transformation matrix: M = T * C * RSS * C^-1 where
-        T is translation matrix:
-            [1, 0, tx | 0, 1, ty | 0, 0, 1];
-        C is translation matrix to keep center:
-            [1, 0, cx | 0, 1, cy | 0, 0, 1];
-        RSS is rotation with scale and shear matrix.
-
-        It is different from the original function in torchvision.
-        1. The order are changed to flip -> scale -> rotation -> shear.
-        2. x and y have different scale factors.
-        RSS(shear, a, scale, f) =
-            [ cos(a + shear)*scale_x*f -sin(a + shear)*scale_y     0]
-            [ sin(a)*scale_x*f          cos(a)*scale_y             0]
-            [     0                       0                        1]
-        Thus, the inverse is M^-1 = C * RSS^-1 * C^-1 * T^-1.
-        """
-
-        angle = math.radians(angle)
-        shear = math.radians(shear)
-        scale_x = 1.0 / scale[0] * flip[0]
-        scale_y = 1.0 / scale[1] * flip[1]
-
-        # Inverted rotation matrix with scale and shear
-        d = math.cos(angle + shear) * math.cos(angle) + math.sin(
-            angle + shear) * math.sin(angle)
-        matrix = [
-            math.cos(angle) * scale_x,
-            math.sin(angle + shear) * scale_x, 0, -math.sin(angle) * scale_y,
-            math.cos(angle + shear) * scale_y, 0
-        ]
-        matrix = [m / d for m in matrix]
-
-        # Apply inverse of translation and of center translation:
-        # RSS^-1 * C^-1 * T^-1
-        matrix[2] += matrix[0] * (-center[0] - translate[0]) + matrix[1] * (
-            -center[1] - translate[1])
-        matrix[5] += matrix[3] * (-center[0] - translate[0]) + matrix[4] * (
-            -center[1] - translate[1])
-
-        # Apply center translation: C * RSS^-1 * C^-1 * T^-1
-        matrix[2] += center[0]
-        matrix[5] += center[1]
-
-        return matrix
+    def hue(self, img, delta):
+        """Hue distortion."""
+        img = mmcv.bgr2hsv(img)
+        img[:, :, 0] = (img[:, :, 0].astype(int) + delta) % 180
+        img = mmcv.hsv2bgr(img)
+        return img
 
     def __call__(self, results):
-        """Call function.
+        """Call function to perform photometric distortion on images.
 
         Args:
-            results (dict): A dict containing the necessary information and
-                data for augmentation.
+            results (dict): Result dict from loading pipeline.
 
         Returns:
-            dict: A dict containing the processed data and information.
+            dict: Result dict with images distorted.
         """
-        h, w = results[self.keys[0]].shape[:2]
-        # if image is too small, set degree to 0 to reduce introduced dark area
-        if np.maximum(h, w) < 1024:
-            params = self._get_params((0, 0), self.translate, self.scale,
-                                      self.shear, self.flip_ratio, (h, w))
-        else:
-            params = self._get_params(self.degrees, self.translate, self.scale,
-                                      self.shear, self.flip_ratio, (h, w))
 
-        center = (w * 0.5 + 0.5, h * 0.5 + 0.5)
-        M = self._get_inverse_affine_matrix(center, *params)
-        M = np.array(M).reshape((2, 3))
+        apply_bright = npr.rand() < self.p
+        bright_beta = npr.uniform(-self.brightness_delta,
+                                  self.brightness_delta)
+        apply_contrast = npr.rand() < self.p
+        contrast_alpha = npr.uniform(self.contrast_lower, self.contrast_upper)
+        apply_saturation = npr.rand() < self.p
+        saturation_alpha = npr.uniform(self.saturation_lower,
+                                       self.saturation_upper)
+        apply_hue = npr.rand() < self.p
+        hue_delta = npr.randint(-self.hue_delta, self.hue_delta)
+        apply_mode = npr.rand() < self.p
 
-        for key in self.keys:
-            results[key] = cv2.warpAffine(
-                results[key],
-                M, (w, h),
-                flags=cv2.INTER_NEAREST + cv2.WARP_INVERSE_MAP)
+        for i, img in enumerate(results['imgs']):
+            is_new_clip = not self.same_across_clip and i % results[
+                'clip_len'] == 0 and i > 0
+            if not self.same_on_clip or is_new_clip:
+                apply_bright = npr.rand() < self.p
+                bright_beta = npr.uniform(-self.brightness_delta,
+                                          self.brightness_delta)
+                apply_contrast = npr.rand() < self.p
+                contrast_alpha = npr.uniform(self.contrast_lower,
+                                             self.contrast_upper)
+                apply_saturation = npr.rand() < self.p
+                saturation_alpha = npr.uniform(self.saturation_lower,
+                                               self.saturation_upper)
+                apply_hue = npr.rand() < self.p
+                hue_delta = npr.randint(-self.hue_delta, self.hue_delta)
+                apply_mode = npr.rand() < self.p
+            # random brightness
+            if apply_bright:
+                img = self.brightness(img, beta=bright_beta)
 
+            if apply_mode and apply_contrast:
+                img = self.contrast(img, alpha=contrast_alpha)
+
+            # random saturation
+            if apply_saturation:
+                img = self.saturation(img, alpha=saturation_alpha)
+
+            # random hue
+            if apply_hue:
+                img = self.hue(img, delta=hue_delta)
+
+            # random contrast
+            if not apply_mode and apply_contrast:
+                img = self.contrast(img, alpha=saturation_alpha)
+
+            results['imgs'][i] = img
         return results
 
     def __repr__(self):
         repr_str = self.__class__.__name__
-        repr_str += (f'(keys={self.keys}, degrees={self.degrees}, '
-                     f'translate={self.translate}, scale={self.scale}, '
-                     f'shear={self.shear}, flip_ratio={self.flip_ratio})')
+        repr_str += (f'(brightness_delta={self.brightness_delta}, '
+                     f'contrast_range=({self.contrast_lower}, '
+                     f'{self.contrast_upper}), '
+                     f'saturation_range=({self.saturation_lower}, '
+                     f'{self.saturation_upper}), '
+                     f'hue_delta={self.hue_delta})')
         return repr_str
 
 
 @PIPELINES.register_module()
-class RandomJitter:
-    """Randomly jitter the foreground in hsv space.
+class RandomGaussianBlur(object):
 
-    The jitter range of hue is adjustable while the jitter ranges of saturation
-    and value are adaptive to the images. Side effect: the "fg" image will be
-    converted to `np.float32`.
-    Required keys are "fg" and "alpha", modified key is "fg".
-
-    Args:
-        hue_range (float | tuple[float]): Range of hue jittering. If it is a
-            float instead of a tuple like (min, max), the range of hue
-            jittering will be (-hue_range, +hue_range). Default: 40.
-    """
-
-    def __init__(self, hue_range=40):
-        if isinstance(hue_range, numbers.Number):
-            assert hue_range >= 0, ('If hue_range is a single number, '
-                                    'it must be positive.')
-            self.hue_range = (-hue_range, hue_range)
-        else:
-            assert isinstance(hue_range, tuple) and len(hue_range) == 2, \
-                'hue_range should be a tuple and it must be of length 2.'
-            self.hue_range = hue_range
+    def __init__(self,
+                 sigma_range=(0.1, 0.2),
+                 p=0.5,
+                 same_on_clip=True,
+                 same_across_clip=True):
+        self.sigma_range = sigma_range
+        self.p = p
+        self.same_on_clip = same_on_clip
+        self.same_across_clip = same_across_clip
 
     def __call__(self, results):
-        """Call function.
-
-        Args:
-            results (dict): A dict containing the necessary information and
-                data for augmentation.
-
-        Returns:
-            dict: A dict containing the processed data and information.
-        """
-        fg, alpha = results['fg'], results['alpha']
-
-        # convert to HSV space;
-        # convert to float32 image to keep precision during space conversion.
-        fg = mmcv.bgr2hsv(fg.astype(np.float32) / 255)
-        # Hue noise
-        hue_jitter = np.random.randint(self.hue_range[0], self.hue_range[1])
-        fg[:, :, 0] = np.remainder(fg[:, :, 0] + hue_jitter, 360)
-
-        # Saturation noise
-        sat_mean = fg[:, :, 1][alpha > 0].mean()
-        # jitter saturation within range (1.1 - sat_mean) * [-0.1, 0.1]
-        sat_jitter = (1.1 - sat_mean) * (np.random.rand() * 0.2 - 0.1)
-        sat = fg[:, :, 1]
-        sat = np.abs(sat + sat_jitter)
-        sat[sat > 1] = 2 - sat[sat > 1]
-        fg[:, :, 1] = sat
-
-        # Value noise
-        val_mean = fg[:, :, 2][alpha > 0].mean()
-        # jitter value within range (1.1 - val_mean) * [-0.1, 0.1]
-        val_jitter = (1.1 - val_mean) * (np.random.rand() * 0.2 - 0.1)
-        val = fg[:, :, 2]
-        val = np.abs(val + val_jitter)
-        val[val > 1] = 2 - val[val > 1]
-        fg[:, :, 2] = val
-        # convert back to BGR space
-        fg = mmcv.hsv2bgr(fg)
-        results['fg'] = fg * 255
+        apply = npr.rand() < self.p
+        sigma = random.uniform(self.sigma_range[0], self.sigma_range[1])
+        for i, img in enumerate(results['imgs']):
+            is_new_clip = not self.same_across_clip and i % results[
+                'clip_len'] == 0 and i > 0
+            if not self.same_on_clip or is_new_clip:
+                apply = npr.rand() < self.p
+                sigma = random.uniform(self.sigma_range[0],
+                                       self.sigma_range[1])
+            if apply:
+                pil_image = Image.fromarray(img)
+                pil_image = pil_image.filter(
+                    ImageFilter.GaussianBlur(radius=sigma))
+                img = np.array(pil_image)
+                results['imgs'][i] = img
 
         return results
 
-    def __repr__(self):
-        return self.__class__.__name__ + f'hue_range={self.hue_range}'
+
+@PIPELINES.register_module()
+class RandomGrayScale(object):
+
+    def __init__(self, p=0.5, same_on_clip=True, same_across_clip=True):
+        self.p = p
+        self.same_on_clip = same_on_clip
+        self.same_across_clip = same_across_clip
+
+    def __call__(self, results):
+        apply = npr.rand() < self.p
+        for i, img in enumerate(results['imgs']):
+            is_new_clip = not self.same_across_clip and i % results[
+                'clip_len'] == 0 and i > 0
+            if not self.same_on_clip or is_new_clip:
+                apply = npr.rand() < self.p
+            if apply:
+                img = mmcv.rgb2gray(img, keepdim=True)
+                img = np.repeat(img, 3, axis=-1)
+                results['imgs'][i] = img
+
+        return results
 
 
-class BinarizeImage:
-    """Binarize image.
+@PIPELINES.register_module()
+class ColorJitter(object):
 
+    def __init__(self,
+                 p=0.5,
+                 same_on_clip=True,
+                 same_across_clip=True,
+                 brightness=0,
+                 contrast=0,
+                 saturation=0,
+                 hue=0):
+        trans = _ColorJitter(
+            brightness=brightness,
+            contrast=contrast,
+            saturation=saturation,
+            hue=hue)
+        self.brightness = trans.brightness
+        self.contrast = trans.contrast
+        self.saturation = trans.saturation
+        self.hue = trans.hue
+        self.p = p
+        self.same_on_clip = same_on_clip
+        self.same_across_clip = same_across_clip
+
+    def __call__(self, results):
+        apply = npr.rand() < self.p
+        trans = _ColorJitter.get_params(self.brightness, self.contrast,
+                                        self.saturation, self.hue)
+        for i, img in enumerate(results['imgs']):
+            is_new_clip = not self.same_across_clip and i % results[
+                'clip_len'] == 0 and i > 0
+            if not self.same_on_clip or is_new_clip:
+                apply = npr.rand() < self.p
+                trans = _ColorJitter.get_params(self.brightness, self.contrast,
+                                                self.saturation, self.hue)
+            if apply:
+                img = np.array(trans(Image.fromarray(img)))
+                results['imgs'][i] = img
+
+        return results
+
+
+@PIPELINES.register_module()
+class Grid(object):
+
+    def __init__(self, normalize=False):
+        self.normalize = normalize
+
+    def __call__(self, results):
+        h, w = results['original_shape']
+        y_grid, x_grid = np.meshgrid(
+            range(h), range(w), indexing='ij', sparse=False)
+        if self.normalize:
+            y_grid = 2 * y_grid / h - 1
+            x_grid = 2 * x_grid / w - 1
+        grids = [
+            np.stack((y_grid, x_grid), axis=-1).astype(np.float)
+            for _ in range(len(results['imgs']))
+        ]
+
+        results['grids'] = grids
+
+        return results
+
+
+# TODO not tested
+@PIPELINES.register_module()
+class Image2Patch(object):
+
+    def __init__(self, patch_size, stride, scale_jitter=(0.7, 0.9)):
+        self.patch_size = patch_size
+        self.stride = stride
+        self.crop_trans = _RandomResizedCrop(patch_size, scale=scale_jitter)
+
+    def __call__(self, results):
+
+        patches = []
+        for img in results['imgs']:
+            patch = view_as_windows(img, self.patch_size, self.stride)
+            patches.extend(list(patch.view(-1, *patch.shape[2:])))
+        for i in range(len(patches)):
+            patches[i] = self.crop_trans(patches[i])
+        results['imgs'] = patches
+
+        return results
+
+
+@PIPELINES.register_module()
+class HidePatch(object):
+    """after normalization."""
+
+    def __init__(self, patch_size, hide_prob):
+        if not isinstance(patch_size, (list, tuple)):
+            patch_size = [patch_size]
+        self.patch_size = patch_size
+        self.hide_prob = hide_prob
+
+    def __call__(self, results):
+        patch_size = np.random.choice(self.patch_size)
+        h, w = results['imgs'][0].shape[:2]
+        for i, img in enumerate(results['imgs']):
+            for y in range(0, h, patch_size):
+                for x in range(0, w, patch_size):
+                    apply = npr.rand() < self.hide_prob
+                    if apply:
+                        results['imgs'][i][y:y + patch_size,
+                                           x:x + patch_size] = 0
+
+        return results
+
+
+@PIPELINES.register_module()
+class RandomAffine(object):
+
+    def __init__(self,
+                 degrees,
+                 p=0.5,
+                 same_on_clip=True,
+                 same_across_clip=True,
+                 translate=None,
+                 scale=None,
+                 shear=None,
+                 resample=2,
+                 fillcolor=0):
+        trans = _RandomAffine(
+            degrees=degrees,
+            translate=translate,
+            scale=scale,
+            shear=shear,
+            resample=resample,
+            fillcolor=fillcolor)
+        self.degrees = trans.degrees
+        self.translate = trans.translate
+        self.scale = trans.scale
+        self.shear = trans.shear
+        self.resample = trans.resample
+        self.fillcolor = trans.fillcolor
+        self.p = p
+        self.same_on_clip = same_on_clip
+        self.same_across_clip = same_across_clip
+
+    def __call__(self, results):
+        apply = npr.rand() < self.p
+        h, w = results['imgs'][0].shape[:2]
+        ret = _RandomAffine.get_params(self.degrees, self.translate,
+                                       self.scale, self.shear, (w, h))
+        for i, img in enumerate(results['imgs']):
+            is_new_clip = not self.same_across_clip and i % results[
+                'clip_len'] == 0 and i > 0
+            if not self.same_on_clip or is_new_clip:
+                apply = npr.rand() < self.p
+                ret = _RandomAffine.get_params(self.degrees, self.translate,
+                                               self.scale, self.shear, (w, h))
+            if apply:
+                img = np.array(
+                    F.affine(
+                        Image.fromarray(img),
+                        *ret,
+                        resample=self.resample,
+                        fillcolor=self.fillcolor))
+                results['imgs'][i] = img
+
+        return results
+
+
+@PIPELINES.register_module()
+class RandomChoiceRotate(object):
+
+    def __init__(self, p, degrees, same_on_clip=True, same_across_clip=True):
+        self.p = p
+        if not isinstance(degrees, (list, tuple)):
+            degrees = [degrees]
+        self.degrees = degrees
+        self.label_map = {d: i for i, d in enumerate(degrees)}
+        self.same_on_clip = same_on_clip
+        self.same_across_clip = same_across_clip
+
+    def __call__(self, results):
+        apply = npr.rand() < self.p
+        degree = np.random.choice(self.degrees)
+        labels = []
+        for i, img in enumerate(results['imgs']):
+            is_new_clip = not self.same_across_clip and i % results[
+                'clip_len'] == 0 and i > 0
+            if not self.same_on_clip or is_new_clip:
+                apply = npr.rand() < self.p
+                degree = np.random.choice(self.degrees)
+            if apply:
+                img = np.array(mmcv.imrotate(img, angle=degree))
+                results['imgs'][i] = img
+                labels.append(self.label_map[degree])
+            else:
+                labels.append(0)
+        results['rotation_labels'] = np.array(labels)
+
+        return results
+
+
+@PIPELINES.register_module()
+class RandomErasing(object):
+    """ Randomly selects a rectangle region in an image and erases its pixels.
+        'Random Erasing Data Augmentation' by Zhong et al.
+        See https://arxiv.org/pdf/1708.04896.pdf
+        This variant of RandomErasing is intended to be applied to either a
+        batch or single image tensor after it has been normalized by dataset
+        mean and std.
     Args:
-        keys (Sequence[str]): The images to be binarized.
-        binary_thr (float): Threshold for binarization.
-        to_int (bool): If True, return image as int32, otherwise
-            return image as float32.
+         p: Probability that the Random Erasing operation will be performed.
+         min_area: Minimum percentage of erased area wrt input image area.
+         max_area: Maximum percentage of erased area wrt input image area.
+         min_aspect: Minimum aspect ratio of erased area.
+         mode: pixel color mode, one of 'const', 'rand', or 'pixel'
+            'const' - erase block is constant color of 0 for all channels
+            'rand'  - erase block is same per-channel random (normal) color
+            'pixel' - erase block is per-pixel random (normal) color
+        max_count: maximum number of erasing blocks per image, area per box is
+            scaled by count. per-image count is randomly chosen between 1 and
+            this value.
     """
 
-    def __init__(self, keys, binary_thr, to_int=False):
-        self.keys = keys
-        self.binary_thr = binary_thr
-        self.to_int = to_int
+    def __init__(self,
+                 p=0.5,
+                 area_range=(0.02, 1 / 3),
+                 aspect_ratio_range=(1 / 3, 3),
+                 count_range=(1, 1),
+                 mode='const'):
+        self.p = p
+        self.area_range = area_range
+        self.aspect_ratio_range = aspect_ratio_range
+        self.count_range = count_range
+        assert mode in ['rand', 'pixel', 'const']
+        self.mode = mode
 
-    def _binarize(self, img):
-        type_ = np.float32 if not self.to_int else np.int32
-        img = (img[..., :] > self.binary_thr).astype(type_)
+    @staticmethod
+    def get_crop_bbox(img_shape,
+                      area_range,
+                      aspect_ratio_range,
+                      max_attempts=10):
+        """Get a crop bbox given the area range and aspect ratio range.
+
+        Args:
+            img_shape (Tuple[int]): Image shape
+            area_range (Tuple[float]): The candidate area scales range of
+                output cropped images. Default: (0.08, 1.0).
+            aspect_ratio_range (Tuple[float]): The candidate aspect
+                ratio range of output cropped images. Default: (3 / 4, 4 / 3).
+                max_attempts (int): The maximum of attempts. Default: 10.
+            max_attempts (int): Max attempts times to generate random candidate
+                bounding box. If it doesn't qualified one, the center bounding
+                box will be used.
+        Returns:
+            (list[int]) A random crop bbox within the area range and aspect
+            ratio range.
+        """
+        assert 0 < area_range[0] <= area_range[1] <= 1
+        assert 0 < aspect_ratio_range[0] <= aspect_ratio_range[1]
+
+        img_h, img_w = img_shape
+        area = img_h * img_w
+
+        min_ar, max_ar = aspect_ratio_range
+        aspect_ratios = np.exp(
+            np.random.uniform(
+                np.log(min_ar), np.log(max_ar), size=max_attempts))
+        target_areas = np.random.uniform(*area_range, size=max_attempts) * area
+        candidate_crop_w = np.round(np.sqrt(target_areas *
+                                            aspect_ratios)).astype(np.int32)
+        candidate_crop_h = np.round(np.sqrt(target_areas /
+                                            aspect_ratios)).astype(np.int32)
+
+        for i in range(max_attempts):
+            crop_w = candidate_crop_w[i]
+            crop_h = candidate_crop_h[i]
+            if crop_h <= img_h and crop_w <= img_w:
+                x_offset = random.randint(0, img_w - crop_w)
+                y_offset = random.randint(0, img_h - crop_h)
+                return x_offset, y_offset, x_offset + crop_w, y_offset + crop_h
+
+        # Fallback
+        crop_size = min(img_h, img_w)
+        x_offset = (img_w - crop_size) // 2
+        y_offset = (img_h - crop_size) // 2
+        return x_offset, y_offset, x_offset + crop_size, y_offset + crop_size
+
+    def get_pixels(self, patch_shape):
+        if self.mode == 'pixel':
+            return np.random.randn(*patch_shape)
+        elif self.mode == 'rand':
+            return np.random.randn(1, 1, patch_shape[-1])
+        else:
+            return np.zeros(patch_shape, dtype=np.float)
+
+    def erase(self, img):
+        count = random.randint(*self.count_range)
+        img_h, img_w = img.shape[:2]
+        for _ in range(count):
+            left, top, right, bottom = self.get_crop_bbox(
+                (img_h, img_w),
+                (self.area_range[0] / count, self.area_range[1] / count),
+                self.aspect_ratio_range)
+            new_h, new_w = bottom - top, right - left
+            img[top:bottom, left:right] = self.get_pixels(
+                (new_h, new_w, img.shape[2]))
 
         return img
 
     def __call__(self, results):
-        """Call function.
-
-        Args:
-            results (dict): A dict containing the necessary information and
-                data for augmentation.
-
-        Returns:
-            dict: A dict containing the processed data and information.
-        """
-        for k in self.keys:
-            results[k] = self._binarize(results[k])
+        for i, img in enumerate(results['imgs']):
+            apply = npr.rand() < self.p
+            if apply:
+                results['imgs'][i] = self.erase(img)
 
         return results
-
-    def __repr__(self):
-        repr_str = self.__class__.__name__
-        repr_str += (f'(keys={self.keys}, binary_thr={self.binary_thr}, '
-                     f'to_int={self.to_int})')
-
-        return repr_str
-
-
-@PIPELINES.register_module()
-class RandomMaskDilation:
-    """Randomly dilate binary masks.
-
-    Args:
-        keys (Sequence[str]): The images to be resized.
-        get_binary (bool): If True, according to binary_thr, reset final
-            output as binary mask. Otherwise, return masks directly.
-        binary_thr (float): Threshold for obtaining binary mask.
-        kernel_min (int): Min size of dilation kernel.
-        kernel_max (int): Max size of dilation kernel.
-    """
-
-    def __init__(self, keys, binary_thr=0., kernel_min=9, kernel_max=49):
-        self.keys = keys
-        self.kernel_min = kernel_min
-        self.kernel_max = kernel_max
-        self.binary_thr = binary_thr
-
-    def _random_dilate(self, img):
-        kernel_size = np.random.randint(self.kernel_min, self.kernel_max + 1)
-        kernel = np.ones((kernel_size, kernel_size), dtype=np.uint8)
-        dilate_kernel_size = kernel_size
-        img_ = cv2.dilate(img, kernel, iterations=1)
-
-        img_ = (img_ > self.binary_thr).astype(np.float32)
-
-        return img_, dilate_kernel_size
-
-    def __call__(self, results):
-        """Call function.
-
-        Args:
-            results (dict): A dict containing the necessary information and
-                data for augmentation.
-
-        Returns:
-            dict: A dict containing the processed data and information.
-        """
-        for k in self.keys:
-            results[k], d_kernel = self._random_dilate(results[k])
-            if len(results[k].shape) == 2:
-                results[k] = np.expand_dims(results[k], axis=2)
-            results[k + '_dilate_kernel_size'] = d_kernel
-
-        return results
-
-    def __repr__(self):
-        repr_str = self.__class__.__name__
-        repr_str += (f'(keys={self.keys}, kernel_min={self.kernel_min}, '
-                     f'kernel_max={self.kernel_max})')
-
-        return repr_str
-
-
-@PIPELINES.register_module()
-class RandomTransposeHW:
-    """Randomly transpose images in H and W dimensions with a probability.
-
-    (TransposeHW = horizontal flip + anti-clockwise rotatation by 90 degrees)
-    When used with horizontal/vertical flips, it serves as a way of rotation
-    augmentation.
-    It also supports randomly transposing a list of images.
-
-    Required keys are the keys in attributes "keys", added or modified keys are
-    "transpose" and the keys in attributes "keys".
-
-    Args:
-        keys (list[str]): The images to be transposed.
-        transpose_ratio (float): The propability to transpose the images.
-    """
-
-    def __init__(self, keys, transpose_ratio=0.5):
-        self.keys = keys
-        self.transpose_ratio = transpose_ratio
-
-    def __call__(self, results):
-        """Call function.
-
-        Args:
-            results (dict): A dict containing the necessary information and
-                data for augmentation.
-
-        Returns:
-            dict: A dict containing the processed data and information.
-        """
-        transpose = np.random.random() < self.transpose_ratio
-
-        if transpose:
-            for key in self.keys:
-                if isinstance(results[key], list):
-                    results[key] = [v.transpose(1, 0, 2) for v in results[key]]
-                else:
-                    results[key] = results[key].transpose(1, 0, 2)
-
-        results['transpose'] = transpose
-
-        return results
-
-    def __repr__(self):
-        repr_str = self.__class__.__name__
-        repr_str += (
-            f'(keys={self.keys}, transpose_ratio={self.transpose_ratio})')
-        return repr_str
-
-
-@PIPELINES.register_module()
-class GenerateFrameIndiceswithPadding:
-    """Generate frame index with padding for REDS dataset and Vid4 dataset
-    during testing.
-
-    Required keys: lq_path, gt_path, key, num_input_frames, max_frame_num
-    Added or modified keys: lq_path, gt_path
-
-    Args:
-         padding (str): padding mode, one of
-            'replicate' | 'reflection' | 'reflection_circle' | 'circle'.
-
-            Examples: current_idx = 0, num_input_frames = 5
-            The generated frame indices under different padding mode:
-
-                replicate: [0, 0, 0, 1, 2]
-                reflection: [2, 1, 0, 1, 2]
-                reflection_circle: [4, 3, 0, 1, 2]
-                circle: [3, 4, 0, 1, 2]
-
-        filename_tmpl (str): Template for file name. Default: '{:08d}'.
-    """
-
-    def __init__(self, padding, filename_tmpl='{:08d}'):
-        if padding not in ('replicate', 'reflection', 'reflection_circle',
-                           'circle'):
-            raise ValueError(f'Wrong padding mode {padding}.'
-                             'Should be "replicate", "reflection", '
-                             '"reflection_circle",  "circle"')
-        self.padding = padding
-        self.filename_tmpl = filename_tmpl
-
-    def __call__(self, results):
-        """Call function.
-
-        Args:
-            results (dict): A dict containing the necessary information and
-                data for augmentation.
-
-        Returns:
-            dict: A dict containing the processed data and information.
-        """
-        clip_name, frame_name = results['key'].split('/')
-        current_idx = int(frame_name)
-        max_frame_num = results['max_frame_num'] - 1  # start from 0
-        num_input_frames = results['num_input_frames']
-        num_pad = num_input_frames // 2
-
-        frame_list = []
-        for i in range(current_idx - num_pad, current_idx + num_pad + 1):
-            if i < 0:
-                if self.padding == 'replicate':
-                    pad_idx = 0
-                elif self.padding == 'reflection':
-                    pad_idx = -i
-                elif self.padding == 'reflection_circle':
-                    pad_idx = current_idx + num_pad - i
-                else:
-                    pad_idx = num_input_frames + i
-            elif i > max_frame_num:
-                if self.padding == 'replicate':
-                    pad_idx = max_frame_num
-                elif self.padding == 'reflection':
-                    pad_idx = max_frame_num * 2 - i
-                elif self.padding == 'reflection_circle':
-                    pad_idx = (current_idx - num_pad) - (i - max_frame_num)
-                else:
-                    pad_idx = i - num_input_frames
-            else:
-                pad_idx = i
-            frame_list.append(pad_idx)
-
-        lq_path_root = results['lq_path']
-        gt_path_root = results['gt_path']
-        lq_paths = [
-            osp.join(lq_path_root, clip_name,
-                     f'{self.filename_tmpl.format(idx)}.png')
-            for idx in frame_list
-        ]
-        gt_paths = [osp.join(gt_path_root, clip_name, f'{frame_name}.png')]
-        results['lq_path'] = lq_paths
-        results['gt_path'] = gt_paths
-
-        return results
-
-    def __repr__(self):
-        repr_str = self.__class__.__name__ + f"(padding='{self.padding}')"
-        return repr_str
-
-
-@PIPELINES.register_module()
-class GenerateFrameIndices:
-    """Generate frame index for REDS datasets. It also performs
-    temporal augmention with random interval.
-
-    Required keys: lq_path, gt_path, key, num_input_frames
-    Added or modified keys:  lq_path, gt_path, interval, reverse
-
-    Args:
-        interval_list (list[int]): Interval list for temporal augmentation.
-            It will randomly pick an interval from interval_list and sample
-            frame index with the interval.
-        frames_per_clip(int): Number of frames per clips. Default: 99 for
-            REDS dataset.
-    """
-
-    def __init__(self, interval_list, frames_per_clip=99):
-        self.interval_list = interval_list
-        self.frames_per_clip = frames_per_clip
-
-    def __call__(self, results):
-        """Call function.
-
-        Args:
-            results (dict): A dict containing the necessary information and
-                data for augmentation.
-
-        Returns:
-            dict: A dict containing the processed data and information.
-        """
-        clip_name, frame_name = results['key'].split(
-            '/')  # key example: 000/00000000
-        center_frame_idx = int(frame_name)
-        num_half_frames = results['num_input_frames'] // 2
-
-        max_frame_num = results.get('max_frame_num', self.frames_per_clip + 1)
-        frames_per_clip = min(self.frames_per_clip, max_frame_num - 1)
-
-        interval = np.random.choice(self.interval_list)
-        # ensure not exceeding the borders
-        start_frame_idx = center_frame_idx - num_half_frames * interval
-        end_frame_idx = center_frame_idx + num_half_frames * interval
-        while (start_frame_idx < 0) or (end_frame_idx > frames_per_clip):
-            center_frame_idx = np.random.randint(0, frames_per_clip + 1)
-            start_frame_idx = center_frame_idx - num_half_frames * interval
-            end_frame_idx = center_frame_idx + num_half_frames * interval
-        frame_name = f'{center_frame_idx:08d}'
-        neighbor_list = list(
-            range(center_frame_idx - num_half_frames * interval,
-                  center_frame_idx + num_half_frames * interval + 1, interval))
-
-        lq_path_root = results['lq_path']
-        gt_path_root = results['gt_path']
-        lq_path = [
-            osp.join(lq_path_root, clip_name, f'{v:08d}.png')
-            for v in neighbor_list
-        ]
-        gt_path = [osp.join(gt_path_root, clip_name, f'{frame_name}.png')]
-        results['lq_path'] = lq_path
-        results['gt_path'] = gt_path
-        results['interval'] = interval
-
-        return results
-
-    def __repr__(self):
-        repr_str = self.__class__.__name__
-        repr_str += (f'(interval_list={self.interval_list}, '
-                     f'frames_per_clip={self.frames_per_clip})')
-        return repr_str
-
-
-@PIPELINES.register_module()
-class TemporalReverse:
-    """Reverse frame lists for temporal augmentation.
-
-    Required keys are the keys in attributes "lq" and "gt",
-    added or modified keys are "lq", "gt" and "reverse".
-
-    Args:
-        keys (list[str]): The frame lists to be reversed.
-        reverse_ratio (float): The propability to reverse the frame lists.
-            Default: 0.5.
-    """
-
-    def __init__(self, keys, reverse_ratio=0.5):
-        self.keys = keys
-        self.reverse_ratio = reverse_ratio
-
-    def __call__(self, results):
-        """Call function.
-
-        Args:
-            results (dict): A dict containing the necessary information and
-                data for augmentation.
-
-        Returns:
-            dict: A dict containing the processed data and information.
-        """
-        reverse = np.random.random() < self.reverse_ratio
-
-        if reverse:
-            for key in self.keys:
-                results[key].reverse()
-
-        results['reverse'] = reverse
-
-        return results
-
-    def __repr__(self):
-        repr_str = self.__class__.__name__
-        repr_str += f'(keys={self.keys}, reverse_ratio={self.reverse_ratio})'
-        return repr_str
-
-
-@PIPELINES.register_module()
-class GenerateSegmentIndices:
-    """Generate frame indices for a segment. It also performs temporal
-    augmention with random interval.
-
-    Required keys: lq_path, gt_path, key, num_input_frames, sequence_length
-    Added or modified keys:  lq_path, gt_path, interval, reverse
-
-    Args:
-        interval_list (list[int]): Interval list for temporal augmentation.
-            It will randomly pick an interval from interval_list and sample
-            frame index with the interval.
-        start_idx (int): The index corresponds to the first frame in the
-            sequence. Default: 0.
-        filename_tmpl (str): Template for file name. Default: '{:08d}.png'.
-    """
-
-    def __init__(self, interval_list, start_idx=0, filename_tmpl='{:08d}.png'):
-        self.interval_list = interval_list
-        self.filename_tmpl = filename_tmpl
-        self.start_idx = start_idx
-
-    def __call__(self, results):
-        """Call function.
-
-        Args:
-            results (dict): A dict containing the necessary information and
-                data for augmentation.
-
-        Returns:
-            dict: A dict containing the processed data and information.
-        """
-        # key example: '000', 'calendar' (sequence name)
-        clip_name = results['key']
-        interval = np.random.choice(self.interval_list)
-
-        self.sequence_length = results['sequence_length']
-        num_input_frames = results.get('num_input_frames',
-                                       self.sequence_length)
-
-        # randomly select a frame as start
-        if self.sequence_length - num_input_frames * interval < 0:
-            raise ValueError('The input sequence is not long enough to '
-                             'support the current choice of [interval] or '
-                             '[num_input_frames].')
-        start_frame_idx = np.random.randint(
-            0, self.sequence_length - num_input_frames * interval + 1)
-        end_frame_idx = start_frame_idx + num_input_frames * interval
-        neighbor_list = list(range(start_frame_idx, end_frame_idx, interval))
-        neighbor_list = [v + self.start_idx for v in neighbor_list]
-
-        # add the corresponding file paths
-        lq_path_root = results['lq_path']
-        gt_path_root = results['gt_path']
-        lq_path = [
-            osp.join(lq_path_root, clip_name, self.filename_tmpl.format(v))
-            for v in neighbor_list
-        ]
-        gt_path = [
-            osp.join(gt_path_root, clip_name, self.filename_tmpl.format(v))
-            for v in neighbor_list
-        ]
-
-        results['lq_path'] = lq_path
-        results['gt_path'] = gt_path
-        results['interval'] = interval
-
-        return results
-
-    def __repr__(self):
-        repr_str = self.__class__.__name__
-        repr_str += (f'(interval_list={self.interval_list})')
-        return repr_str
-
-
-@PIPELINES.register_module()
-class MirrorSequence:
-    """Extend short sequences (e.g. Vimeo-90K) by mirroring the sequences
-
-    Given a sequence with N frames (x1, ..., xN), extend the sequence to
-    (x1, ..., xN, xN, ..., x1).
-
-    Args:
-        keys (list[str]): The frame lists to be extended.
-    """
-
-    def __init__(self, keys):
-        self.keys = keys
-
-    def __call__(self, results):
-        """Call function.
-
-        Args:
-            results (dict): A dict containing the necessary information and
-                data for augmentation.
-
-        Returns:
-            dict: A dict containing the processed data and information.
-        """
-        for key in self.keys:
-            if isinstance(results[key], list):
-                results[key] = results[key] + results[key][::-1]
-            else:
-                raise TypeError('The input must be of class list[nparray]. '
-                                f'Got {type(results[key])}.')
-
-        return results
-
-    def __repr__(self):
-        repr_str = self.__class__.__name__
-        repr_str += (f'(keys={self.keys})')
-        return repr_str
-
-
-@PIPELINES.register_module()
-class CopyValues:
-    """Copy the value of a source key to a destination key.
-
-
-    It does the following: results[dst_key] = results[src_key] for
-    (src_key, dst_key) in zip(src_keys, dst_keys).
-
-    Added keys are the keys in the attribute "dst_keys".
-
-    Args:
-        src_keys (list[str]): The source keys.
-        dst_keys (list[str]): The destination keys.
-    """
-
-    def __init__(self, src_keys, dst_keys):
-
-        if not isinstance(src_keys, list) or not isinstance(dst_keys, list):
-            raise AssertionError('"src_keys" and "dst_keys" must be lists.')
-
-        if len(src_keys) != len(dst_keys):
-            raise ValueError('"src_keys" and "dst_keys" should have the same'
-                             'number of elements.')
-
-        self.src_keys = src_keys
-        self.dst_keys = dst_keys
-
-    def __call__(self, results):
-        """Call function.
-
-        Args:
-            results (dict): A dict containing the necessary information and
-                data for augmentation.
-
-        Returns:
-            dict: A dict with a key added/modified.
-        """
-        for (src_key, dst_key) in zip(self.src_keys, self.dst_keys):
-            results[dst_key] = copy.deepcopy(results[src_key])
-
-        return results
-
-    def __repr__(self):
-        repr_str = self.__class__.__name__
-        repr_str += (f'(src_keys={self.src_keys})')
-        repr_str += (f'(dst_keys={self.dst_keys})')
-        return repr_str
-
-
-@PIPELINES.register_module()
-class Quantize:
-    """Quantize and clip the image to [0, 1].
-
-    It is assumed that the the input has range [0, 1].
-
-    Modified keys are the attributes specified in "keys".
-
-    Args:
-        keys (list[str]): The keys whose values are clipped.
-    """
-
-    def __init__(self, keys):
-        self.keys = keys
-
-    def _quantize_clip(self, input_):
-        is_single_image = False
-        if isinstance(input_, np.ndarray):
-            is_single_image = True
-            input_ = [input_]
-
-        # quantize and clip
-        input_ = [np.clip((v * 255.0).round(), 0, 255) / 255. for v in input_]
-
-        if is_single_image:
-            input_ = input_[0]
-
-        return input_
-
-    def __call__(self, results):
-        """Call function.
-
-        Args:
-            results (dict): A dict containing the necessary information and
-                data for augmentation.
-
-        Returns:
-            dict: A dict with the values of the specified keys are rounded
-                and clipped.
-        """
-
-        for key in self.keys:
-            results[key] = self._quantize_clip(results[key])
-
-        return results
-
-    def __repr__(self):
-        return self.__class__.__name__

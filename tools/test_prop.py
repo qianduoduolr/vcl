@@ -16,8 +16,8 @@ from vcl.models import build_model
 
 def parse_args():
     parser = argparse.ArgumentParser(description='mmediting tester')
-    parser.add_argument('--config', help='test config file path', default='/home/lr/project/base/configs/supervised/stm_shared_resnet50_iters200k.py')
-    parser.add_argument('--checkpoint', help='checkpoint file', default='/home/lr/models/segmentation/coco_pretrained_resnet50_679999_169.pth')
+    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/label_propagation.py')
+    parser.add_argument('--checkpoint', help='checkpoint file', default='/home/lr/models/ssl/vcl/vfs_pretrain/r18_nc_sgd_cos_100e_r2_1xNx8_k400-db1a4c0d.pth')
     parser.add_argument('--seed', type=int, default=None, help='random seed')
     parser.add_argument(
         '--deterministic',
@@ -93,12 +93,11 @@ def main():
     model.backbone.strides = cfg.test_cfg.strides
     model.backbone.pretrained = args.checkpoint
     model = build_model(model, train_cfg=None, test_cfg=cfg.test_cfg)
-    print(cfg.test_cfg)
 
     args.save_image = args.save_path is not None
     empty_cache = cfg.get('empty_cache', False)
     if not distributed:
-        _ = load_checkpoint(model, args.checkpoint, map_location='cpu')
+
         model = MMDataParallel(model, device_ids=[0])
         outputs = single_gpu_test(
             model,
@@ -114,10 +113,7 @@ def main():
             find_unused_parameters=find_unused_parameters)
 
         device_id = torch.cuda.current_device()
-        _ = load_checkpoint(
-            model,
-            args.checkpoint,
-            map_location=lambda storage, loc: storage.cuda(device_id))
+
         outputs = multi_gpu_test(
             model,
             data_loader,
@@ -127,17 +123,16 @@ def main():
             save_image=args.save_image,
             empty_cache=empty_cache)
 
-    if rank == 0 and 'eval_result' in outputs[0].keys():
-        # print metrics
-        stats = dataset.evaluate(outputs)
-        for stat in stats:
-            print('Eval-{}: {}'.format(stat, stats[stat]))
-
-        # save result pickle
-        if args.out:
-            print('writing results to {}'.format(args.out))
-            mmcv.dump(outputs, args.out)
-
+    rank, _ = get_dist_info()
+    if rank == 0:
+        if output_config:
+            out = output_config['out']
+            print(f'\nwriting results to {out}')
+            dataset.dump_results(outputs, **output_config)
+        if eval_config:
+            eval_res = dataset.evaluate(outputs, **eval_config)
+            for name, val in eval_res.items():
+                print(f'{name}: {val:.04f}')
 
 if __name__ == '__main__':
     main()

@@ -13,7 +13,7 @@ from collections import *
 
 
 from ..base import BaseModel
-from ..builder import build_backbone, build_loss, bulid_component, bulid_component
+from ..builder import build_backbone, build_loss, build_components
 from ..registry import MODELS
 
 import math

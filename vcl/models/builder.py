@@ -50,6 +50,6 @@ def build_loss(cfg):
     """
     return build(cfg, LOSSES)
 
-def build_component(cfg):
+def build_components(cfg):
 
     return build(cfg. COMPONENTS)

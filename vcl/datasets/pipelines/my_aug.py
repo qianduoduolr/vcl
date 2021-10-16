@@ -325,7 +325,7 @@ class ClipOrganize():
             results['images'] = torch.cat(results['images'],0)
         return results
 
-'''
+
 class aug_heavy(object):
     def __init__(self):
         self.affinity = iaa.Sequential([
@@ -360,4 +360,3 @@ class aug_heavy(object):
         images,labels = self.crop(images,labels, obj_num)
         # images, labels = self.resize(images,labels, (384,384))
         return images,labels
-'''

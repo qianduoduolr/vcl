@@ -42,7 +42,7 @@ class BaseModel(nn.Module, metaclass=ABCMeta):
         All subclass should overwrite it.
         """
 
-    def forward(self, imgs, labels, test_mode, **kwargs):
+    def forward(self, test_mode, **kwargs):
         """Forward function for base model.
 
         Args:
@@ -56,9 +56,9 @@ class BaseModel(nn.Module, metaclass=ABCMeta):
         """
 
         if test_mode:
-            return self.forward_test(imgs, **kwargs)
+            return self.forward_test(**kwargs)
 
-        return self.forward_train(imgs, labels, **kwargs)
+        return self.forward_train(**kwargs)
 
     def train_step(self, data_batch, optimizer):
         """Abstract method for one training step.
