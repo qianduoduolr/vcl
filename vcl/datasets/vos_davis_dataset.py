@@ -12,6 +12,9 @@ import random
 import glob
 from collections import *
 import pdb
+from mmcv.utils import print_log
+import mmcv
+from vcl.utils import add_prefix, terminal_is_available
 
 from davis2017.evaluation import DAVISEvaluation
 
@@ -28,12 +31,16 @@ class VOS_dataset_base(BaseDataset):
     def __init__(self, root,  
                        list_path, 
                        pipeline=None, 
-                       test_mode=False
+                       test_mode=False,
+                       filename_tmpl='{:05d}.jpg',
+                       split='train'
                        ):
         super().__init__(pipeline, test_mode)
 
         self.list_path = list_path
         self.root = root
+        self.filename_tmpl = filename_tmpl
+        self.split = split
 
     def To_onehot(self, mask):
         M = np.zeros((self.K, mask.shape[0], mask.shape[1]), dtype=np.uint8)
@@ -62,73 +69,59 @@ class VOS_dataset_base(BaseDataset):
             mask_[mask == l] = i + 1
         return mask_,n,ob_list
 
-    def _parser_rgb_jpg_cv(self, offsets, frames_path):
+    def _parser_rgb_rawframe(self, offsets, frames_path, clip_length, step=1, backend='cv2'):
         """read frame"""
         frame_list_all = []
-        for idx, offset in enumerate(offsets):
-            frame_path = frames_path[offset]
-            frame = cv2.imread(frame_path)
-            frame_list_all.append(frame)
-        return frame_list_all
-
-    def _parser_rgb_jpg_pillow(self, offsets, frames_path):
-        """read frame"""
-        frame_list_all = []
-        for idx, offset in enumerate(offsets):
-            frame_path = frames_path[offset]
-            frame = Image.open(frame_path)
-            frame_list_all.append(frame)
-        return frame_list_all
-    
-    def _parser_mask(self, offsets, masks_path):
-        """read mask"""
-        mask_list_all = []
-        for idx, offset in enumerate(offsets):
-            mask_path = masks_path[offset]
-            mask = np.array(Image.open(mask_path).convert('P'), dtype=np.uint8)
-            mask_list_all.append(mask)
-        return mask_list_all
+        for offset in offsets:
+            frame_list = []
+            for idx in range(clip_length):
+                frame_path = frames_path[offset + idx]
+                frame = mmcv.imread(frame_path, backend=backend, channel_order='rgb')
+                frame_list.append(frame)
+            frame_list_all.append(frame_list)
+        return frame_list_all if len(frame_list_all) >= 2 else frame_list_all[0]
 
 @DATASETS.register_module()
 class VOS_davis_dataset_test(VOS_dataset_base):
+    PALETTE = [[0, 0, 0], [128, 0, 0], [0, 128, 0], [128, 128, 0], [0, 0, 128],
+               [128, 0, 128], [0, 128, 128], [128, 128, 128], [64, 0, 0],
+               [191, 0, 0], [64, 128, 0], [191, 128, 0], [64, 0, 128],
+               [191, 0, 128], [64, 128, 128], [191, 128, 128], [0, 64, 0],
+               [128, 64, 0], [0, 191, 0], [128, 191, 0], [0, 64, 128],
+               [128, 64, 128]]
     
     def __init__(self, root,  
                        list_path, 
-                       resolution, 
-                       year, 
+                       data_prefix, 
                        pipeline=None, 
-                       test_mode=False
+                       test_mode=False,
+                       task='semi-supervised',
+                       split='val'
                        ):
-        super().__init__(root, list_path, pipeline, test_mode)
-        
-        self.resolution = resolution
-        self.year = year
+        super().__init__(root, list_path, pipeline, test_mode, split)
+
+        self.task = task
 
         self.list_path = list_path
         self.root = root
+        self.data_prefix = data_prefix
 
         self.load_annotations()
 
     def load_annotations(self):
         
         self.samples = []
-
-        mask_dir = osp.join(self.root, 'Annotations', self.resolution)
-        video_dir = osp.join(self.root, 'JPEGImages', self.resolution)
-        list_path = osp.join(self.list_path, f'davis{self.year}_val_list.txt')
+        self.mask_dir = osp.join(self.root, self.data_prefix, 'Annotations', '480p')
+        self.video_dir = osp.join(self.root, self.data_prefix, 'JPEGImages', '480p')
+        list_path = osp.join(self.list_path, f'davis2017_{self.split}_list.txt')
 
         with open(list_path, 'r') as f:
-            for line in f.readlines():
+            for idx, line in enumerate(f.readlines()):
                 sample = dict()
                 vname, num_frames = line.strip('\n').split()
-                sample['frames_path'] = sorted(glob.glob(osp.join(video_dir, vname, '*.jpg')))
-                sample['masks_path'] = sorted(glob.glob(osp.join(mask_dir, vname, '*.png')))
-                sample['video_path'] = osp.join(mask_dir, vname)
-
+                sample['masks_path'] = sorted(glob.glob(osp.join(self.mask_dir, vname, '*.png')))
+                sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
                 sample['num_frames'] = int(num_frames)
-
-                _mask = np.array(Image.open(sample['masks_path'][0]).convert('P'), dtype=np.uint8)
-                sample['num_objects'] = np.max(_mask)
                 self.samples.append(sample)
 
     def __len__(self):
@@ -138,11 +131,11 @@ class VOS_davis_dataset_test(VOS_dataset_base):
         sample = self.samples[index]
         num_frames = sample['num_frames']
         masks_path = sample['masks_path']
-        frames_path = sample['frames_path']
+        frames_path = sample['video_path']
         
         # load frames and masks
-        frames = self._parser_rgb_jpg_cv(range(num_frames), frames_path)
-        ref = np.array(self._parser_rgb_jpg_pillow([0], masks_path)[0])
+        frames = self._parser_rgb_rawframe([0], frames_path, num_frames)
+        ref = np.array(self._parser_rgb_rawframe([0], masks_path, 1, backend='pillow')[0])
         original_shape = frames[0].shape[:2]
 
         data = {
@@ -159,7 +152,7 @@ class VOS_davis_dataset_test(VOS_dataset_base):
 
     def davis_evaluate(self, results, output_dir, logger=None):
         dataset_eval = DAVISEvaluation(
-            davis_root=self.data_root, task=self.task, gt_set=self.split)
+            davis_root=self.root, task=self.task, gt_set='val')
         if isinstance(results, str):
             metrics_res = dataset_eval.evaluate(results)
         else:
@@ -190,12 +183,19 @@ class VOS_davis_dataset_test(VOS_dataset_base):
                     img.putpalette(
                         np.asarray(self.PALETTE, dtype=np.uint8).ravel())
                     video_path = self.samples[vid_idx]['video_path']
+                    raw_img = Image.open(osp.join(video_path, self.filename_tmpl.format(img_idx)))
+
+                    # blend
+                    img = img.convert('RGBA')
+                    raw_img = raw_img.convert('RGBA')
+                    blend_image = Image.blend(raw_img, img, 0.3)
+
                     save_path = osp.join(
-                        output_dir, osp.relpath(video_path, self.data_prefix),
-                        self.filename_tmpl.format(img_idx).replace(
-                            'jpg', 'png'))
+                    output_dir, osp.relpath(video_path, self.video_dir),
+                    self.filename_tmpl.format(img_idx).replace('.jpg', '_blend.png'))
                     mmcv.mkdir_or_exist(osp.dirname(save_path))
-                    img.save(save_path)
+                    blend_image.save(save_path)
+
                 if terminal_is_available():
                     prog_bar.update()
             metrics_res = dataset_eval.evaluate(output_dir)
@@ -271,6 +271,8 @@ class VOS_davis_dataset_test(VOS_dataset_base):
                 copypaste.append(f'{float(v)*100:.2f}')
         print_log(f'Results copypaste  {",".join(copypaste)}', logger=logger)
         return eval_results
+
+
 
 @DATASETS.register_module()
 class VOS_davis_dataset_stm(VOS_dataset_base):

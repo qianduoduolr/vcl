@@ -262,3 +262,67 @@ class VOS_youtube_dataset_pixel(VOS_dataset_base):
         data_sampler = getattr(self, f'prepare_train_data_{self.sample_type}')
 
         return data_sampler(idx)
+
+
+@DATASETS.register_module()
+class VOS_youtube_dataset_mlm(VOS_dataset_base):
+    def __init__(self, root,  
+                       list_path, 
+                       data_prefix, 
+                       clip_length=3,
+                       vq_size=32,
+                       pipeline=None, 
+                       test_mode=False,
+                       split='train'
+                       ):
+        super().__init__(root, list_path, pipeline, test_mode, split)
+
+        self.task = task
+
+        self.list_path = list_path
+        self.root = root
+        self.data_prefix = data_prefix
+
+        self.load_annotations()
+        self.clip_length = clip_length
+        self.vq_res = vq_size
+
+
+    def load_annotations(self):
+        
+        self.samples = []
+        self.video_dir = osp.join(self.root, self.data_prefix, 'train/JPEGImages')
+        list_path = osp.join(self.list_path, f'youtube{self.data_prefix}_train_list.txt')
+
+        with open(list_path, 'r') as f:
+            for idx, line in enumerate(f.readlines()):
+                sample = dict()
+                vname, num_frames = line.strip('\n').split()
+                sample['video_path'] = osp.join(self.video_dir, vname)
+                sample['num_frames'] = int(num_frames)
+                self.samples.append(sample)
+    
+    def prepare_test_data(self, idx):
+        pass
+
+    def prepare_train_data(self, idx):
+        
+        sample = self.samples[idx]
+        video_path = sample['video_path']
+        num_frames = sample['num_frames']
+
+        offset = [ random.randint(0, num_frames-1)]
+        frames = self._parser_rgb_rawframe(offset, video_path, self.clip_length, step=5)
+
+        mask_idx = random.randint(1, self.vq_res ** 2)
+
+        data = {
+            'imgs': frames,
+            'mask_idx': mask_idx,
+            'video_path': sample['video_path'],
+            'modality': 'RGB',
+            'num_clips': 1,
+            'clip_len': self.clip_length
+        }
+
+        return self.pipeline(data)

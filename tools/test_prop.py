@@ -25,6 +25,14 @@ def parse_args():
         help='whether to set deterministic options for CUDNN backend.')
     parser.add_argument('--out', help='output result pickle file', default='')
     parser.add_argument(
+        '--eval',
+        type=str,
+        default='davis',
+        nargs='+',
+        help='evaluation metrics, which depends on the dataset, e.g.,'
+        ' "top_k_accuracy", "mean_class_accuracy" for video dataset')
+
+    parser.add_argument(
         '--gpu-collect',
         action='store_true',
         help='whether to use gpu to collect results')
@@ -45,6 +53,15 @@ def parse_args():
         os.environ['LOCAL_RANK'] = str(args.local_rank)
     return args
 
+def merge_configs(cfg1, cfg2):
+    # Merge cfg2 into cfg1
+    # Overwrite cfg1 if repeated, ignore if value is None.
+    cfg1 = {} if cfg1 is None else cfg1.copy()
+    cfg2 = {} if cfg2 is None else cfg2
+    for k, v in cfg2.items():
+        if v:
+            cfg1[k] = v
+    return cfg1
 
 def main():
     args = parse_args()
@@ -56,6 +73,18 @@ def main():
 
     cfg.model.pretrained = None
 
+    # Load output_config from cfg
+    output_config = cfg.get('output_config', {})
+    # Overwrite output_config from args.out
+    output_config = merge_configs(output_config, dict(out=args.out))
+
+    # Load eval_config from cfg
+    eval_config = cfg.get('eval_config', {})
+    # Overwrite eval_config from args.eval
+    eval_config = merge_configs(eval_config, dict(metrics=args.eval))
+    # Add options from args.option
+    # eval_config = merge_configs(eval_config, args.eval_options)
+
     # init distributed env first, since logger depends on the dist info.
     if args.launcher == 'none':
         distributed = False
@@ -63,7 +92,6 @@ def main():
         distributed = True
         init_dist(args.launcher, **cfg.dist_params)
 
-    rank, _ = get_dist_info()
 
     # set random seeds
     if args.seed is not None:
