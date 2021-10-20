@@ -59,7 +59,7 @@ def main():
     parser.add_argument("--img_size", type=int, default=256)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--learning_rate", type=float, default=3e-4)
-    parser.add_argument("--train_epoch", type=int, default=1)
+    parser.add_argument("--train_epoch", type=int, default=2)
     parser.add_argument("--downsample", type=int, default=1)
     parser.add_argument("--n_embed", type=int, default=4096)
     parser.add_argument("--save_path", type=str, default="/gdata/lirui/models/vqvae/vqvae_d1_n4096.pth")
