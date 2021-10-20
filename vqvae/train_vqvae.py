@@ -63,6 +63,7 @@ def main():
     parser.add_argument("--downsample", type=int, default=1)
     parser.add_argument("--n_embed", type=int, default=4096)
     parser.add_argument("--save_path", type=str, default="/gdata/lirui/models/vqvae/vqvae_d1_n4096.pth")
+    parser.add_argument("--pretrained_model", type=str, default="")
 
     args = parser.parse_args()
     print("input args:\n", json.dumps(vars(args), indent=4, separators=(",", ":")))
@@ -73,6 +74,10 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     model = VQVAE(downsample=args.downsample, n_embed=args.n_embed)
+
+    if args.pretrained_model:
+        model.load_state_dict(torch.load(args.pretrained_model))
+
     model = model.cuda()
 
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)

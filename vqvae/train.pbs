@@ -1,4 +1,4 @@
-#PBS -N vqvae_downsample4_k2048
+#PBS -N vqvae_downsample2_k4096
 #PBS -o /gdata/lirui/pbs/pbs_out/train_vqvae_downsample4_k2048.out
 #PBS -e /gdata/lirui/pbs/pbs_out/train_vqvae_downsample4_k2048.err
 #PBS -l nodes=1:gpus=2:d
@@ -15,4 +15,4 @@ echo $PBS_NODEFILE
 echo $PBS_GPUFILE
 cat $PBS_GPUFILE
 
-startdocker -P /gdata/lirui -D /gdata2/pengjl -u "--shm-size 64G" -c "python /gdata/lirui/project/vcl/vqvae/train_vqvae.py --downsample 4 --n_embed 2048 --save_path /gdata/lirui/models/vqvae/vqvae_d4_n2048.pth" bit:5000/lirui_torch1.5_cuda10.1
+startdocker -P /gdata/lirui -D /gdata2/pengjl -u "--shm-size 64G" -c "python /gdata/lirui/project/vcl/vqvae/train_vqvae.py --downsample 2 --n_embed 4096 --save_path /gdata/lirui/models/vqvae/vqvae_d4_n2048.pth --pretrained_model /gdata/lirui/models/vqvae/vqvae_d2_n4096.pth --train_epoch 1" bit:5000/lirui_torch1.5_cuda10.1
