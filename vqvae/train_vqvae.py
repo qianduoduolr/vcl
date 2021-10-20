@@ -73,7 +73,6 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
     model = VQVAE(downsample=args.downsample, n_embed=args.n_embed)
-    model = nn.DataParallel(model)
     model = model.cuda()
 
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
