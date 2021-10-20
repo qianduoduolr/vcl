@@ -59,7 +59,7 @@ def main():
     parser.add_argument("--img_size", type=int, default=256)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--learning_rate", type=float, default=3e-4)
-    parser.add_argument("--train_epoch", type=int, default=6)
+    parser.add_argument("--train_epoch", type=int, default=1)
     parser.add_argument("--downsample", type=int, default=1)
     parser.add_argument("--n_embed", type=int, default=4096)
     parser.add_argument("--save_path", type=str, default="/gdata/lirui/models/vqvae/vqvae_d1_n4096.pth")
@@ -72,7 +72,9 @@ def main():
     train_dataset = ImageFolderLMDB(args.data_path, args.img_size)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
-    model = VQVAE(downsample=args.downsample, n_embed=args.n_embed).to(device)
+    model = VQVAE(downsample=args.downsample, n_embed=args.n_embed)
+    model = nn.DataParallel(model)
+    model = model.cuda()
 
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
     scheduler = None
@@ -84,8 +86,8 @@ def main():
         avg_commit_loss, avg_recon_loss = train(i, train_loader, model, optimizer, scheduler, device)
         print(f"Training epoch {i + 1}; commit: {avg_commit_loss:.5f}; recon: {avg_recon_loss:.5f}")
         
-    # Save model
-    torch.save(model.state_dict(), args.save_path)
+        # Save model
+        torch.save(model.state_dict(), args.save_path)
 
 
 if __name__ == "__main__":
