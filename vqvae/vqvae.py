@@ -122,6 +122,14 @@ class Encoder(nn.Module):
                 nn.ELU(),
                 nn.Conv2d(channel//2, channel, 4, stride=2, padding=1)
             ]
+        elif downsample == 4:
+            blocks = [
+                nn.Conv2d(in_channel, channel//2, 4, stride=2, padding=1),
+                nn.ELU(),
+                nn.Conv2d(channel//2, channel//2, 4, stride=2, padding=1),
+                nn.ELU(),
+                nn.Conv2d(channel//2, channel, 4, stride=2, padding=1)
+            ]
 
         blocks.append(nn.ELU())
         blocks.append(nn.Conv2d(channel, channel, 3, padding=1))
@@ -165,6 +173,12 @@ class Decoder(nn.Module):
 
         elif upsample == 2:
             blocks.append(nn.ConvTranspose2d(channel, channel//2, 4, stride=2, padding=1))
+            blocks.append(nn.ELU())
+            blocks.append(nn.ConvTranspose2d(channel//2, out_channel, 4, stride=2, padding=1))
+        elif upsample == 4:
+            blocks.append(nn.ConvTranspose2d(channel, channel//2, 4, stride=2, padding=1))
+            blocks.append(nn.ELU())
+            blocks.append(nn.ConvTranspose2d(channel//2, channel//2, 4, stride=2, padding=1))
             blocks.append(nn.ELU())
             blocks.append(nn.ConvTranspose2d(channel//2, out_channel, 4, stride=2, padding=1))
 
