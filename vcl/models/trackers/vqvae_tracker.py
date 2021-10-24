@@ -49,6 +49,7 @@ class Vqvae_Tracker(BaseModel):
 
         self.backbone = build_backbone(backbone)
         self.vqvae = build_components(vqvae).cuda()
+        self.vq_enc = self.vqvae.encode
 
         # loss
         self.ce_loss = build_loss(ce_loss)
@@ -86,7 +87,7 @@ class Vqvae_Tracker(BaseModel):
 
         # vqvae tokenize for query frame
         with torch.no_grad():
-            _, quant, diff, ind, embed = self.vqvae.encode(imgs[:, 0, -1])
+            _, quant, diff, ind, embed = self.vq_enc(imgs[:, 0, -1])
             ind = ind.reshape(-1, 1).long()
 
         refs = list([ fs[:,idx] for idx in range(t-1)])
