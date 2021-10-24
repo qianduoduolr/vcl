@@ -82,7 +82,7 @@ class Vqvae_Tracker(BaseModel):
         mask_query_idx = mask_query_idx.bool()
 
         fs = self.backbone(imgs.reshape(bsz * t, c, h, w))
-        fs = fs.reshape(bsz, t, self.backbone.feat_dim, fs.shape[-1], fs.shape[-1])
+        fs = fs.reshape(bsz, t, -1, fs.shape[-1], fs.shape[-1])
 
         # vqvae tokenize for query frame
         with torch.no_grad():
