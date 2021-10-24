@@ -84,9 +84,9 @@ def main():
     mmcv.mkdir_or_exist(osp.abspath(cfg.work_dir))
 
     # cp code to work_dir
-    if distributed:
-        file_path = osp.dirname(osp.dirname(osp.abspath(__file__)))
-        os.system(f'cp -r {file_path} {cfg.work_dir}')
+    # if distributed:
+    #     file_path = osp.dirname(osp.dirname(osp.abspath(__file__)))
+    #     os.system(f'cp -r {file_path} {cfg.work_dir}')
 
     # init the logger before other steps
     timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())

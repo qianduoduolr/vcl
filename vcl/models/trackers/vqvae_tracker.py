@@ -76,7 +76,6 @@ class Vqvae_Tracker(BaseModel):
     def init_weights(self, pretrained):
         ckpt = torch.load(pretrained)
         self.vqvae.load_state_dict(ckpt)
-        print('load pretrained VQVAE Successfully!')
 
     def forward_train(self, imgs, mask_query_idx):
         bsz, num_clips, t, c, w, h = imgs.shape
