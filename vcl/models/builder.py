@@ -52,4 +52,4 @@ def build_loss(cfg):
 
 def build_components(cfg):
 
-    return build(cfg. COMPONENTS)
+    return build(cfg, COMPONENTS)

@@ -47,7 +47,7 @@ val_pipeline = [
 
 # demo_pipeline = None
 data = dict(
-    workers_per_gpu=1,
+    workers_per_gpu=2,
     train_dataloader=dict(samples_per_gpu=1, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
@@ -56,18 +56,17 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            root='/Users/lr/Desktop/mount/9.99/gdata/dataset/YouTube-VOS/train',
+            root='/home/lr/dataset/YouTube-VOS/train',
             sample_type='pair',
-            list_path='/Users/lr/Desktop/mount/9.99/gdata/dataset/YouTube-VOS/train',
+            list_path='/home/lr/dataset/YouTube-VOS/train',
             pipeline=train_pipeline,
             test_mode=False),
 
     test =  dict(
             type=test_dataset_type,
-            root='/Users/lr/Desktop/mount/9.99/gdata/dataset/DAVIS/data',
-            list_path='/Users/lr/Desktop/mount/9.99/gdata/dataset/DAVIS/data/ImageSets',
-            year='2017',
-            resolution='480p',
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
+            data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
             ),
@@ -103,6 +102,7 @@ log_config = dict(
     ])
 
 visual_config = None
+eval_config= dict(output_dir='output/')
 
 
 # runtime settings

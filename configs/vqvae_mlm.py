@@ -2,7 +2,13 @@ exp_name = 'vqvae_mlm'
 
 # model settings
 model = dict(
-    backbone=dict(depth=18, strides=(1, 2, 1, 1), out_indices=(2, ),)
+    type='Vqvae_Tracker',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
+    vqvae=dict(type='VQVAE',downsample=4, n_embed=2048),
+    ce_loss=dict(type='Ce_Loss',reduction='none'),
+    patch_size=5,
+    fc=True,
+    pretrained='/home/lr/models/vqvae/vqvae_d4_n2048.pth'
 )
 
 # model training and testing settings
@@ -30,13 +36,13 @@ img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
 
 train_pipeline = [
-    dict(type='RandomCropResize', area_range=(0.2,1)),
+    dict(type='RandomResizedCrop', area_range=(0.6,1.0)),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
     dict(type='Flip', flip_ratio=0.5),
     dict(type='Normalize', **img_norm_cfg),
-    dict(type='FormatShape', input_format='NCTHW'),
-    dict(type='Collect', keys=['imgs', 'mask_idx'], meta_keys=[]),
-    dict(type='ToTensor', keys=['imgs', 'mask_idx'])
+    dict(type='FormatShape', input_format='NPTCHW'),
+    dict(type='Collect', keys=['imgs', 'mask_query_idx'], meta_keys=[]),
+    dict(type='ToTensor', keys=['imgs', 'mask_query_idx'])
 ]
 
 val_pipeline = [
@@ -53,8 +59,8 @@ val_pipeline = [
 
 # demo_pipeline = None
 data = dict(
-    workers_per_gpu=1,
-    train_dataloader=dict(samples_per_gpu=1, drop_last=True),  # 4 gpus
+    workers_per_gpu=2,
+    train_dataloader=dict(samples_per_gpu=4, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -62,16 +68,19 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            root='/gdata/dataset/YouTube-VOS/train',
-            sample_type='pair',
-            list_path='/gdata/dataset/YouTube-VOS/train',
+            root='/home/lr/dataset/YouTube-VOS',
+            list_path='/home/lr/dataset/YouTube-VOS/2018',
+            data_prefix='2018',
+            mask_ratio=0.15,
+            clip_length=3,
+            vq_size=32,
             pipeline=train_pipeline,
             test_mode=False),
 
     test =  dict(
             type=test_dataset_type,
-            root='/gdata/dataset/DAVIS/data',
-            list_path='/gdata/dataset/DAVIS/data/ImageSets',
+            root='/home/lr/dataset/DAVIS',
+            list_path='/home/lr/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -81,22 +90,21 @@ data = dict(
 # optimizer
 optimizers = dict(
         type='Adam',
-        lr=1e-5,
+        lr=0.001,
         betas=(0.9, 0.999),
-        eps=1e-8
         )
 
 # learning policy
 # total_iters = 200000
-ruuner_type='epoch'
-max_epoch=200
+runner_type='epoch'
+max_epoch=400
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.01,
     by_epoch=False
     )
 
-checkpoint_config = dict(interval=5000, save_optimizer=True, by_epoch=False)
+checkpoint_config = dict(interval=50, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(

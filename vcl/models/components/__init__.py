@@ -1,5 +1,2 @@
-from .head import DclHead
-
-__all__ = [
-    'DclHead'
-]
+from .head import *
+from .vqvae import *

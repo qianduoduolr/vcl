@@ -269,6 +269,7 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
     def __init__(self, root,  
                        list_path, 
                        data_prefix, 
+                       mask_ratio=0.15,
                        clip_length=3,
                        vq_size=32,
                        pipeline=None, 
@@ -277,7 +278,6 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
                        ):
         super().__init__(root, list_path, pipeline, test_mode, split)
 
-        self.task = task
 
         self.list_path = list_path
         self.root = root
@@ -286,19 +286,20 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
         self.load_annotations()
         self.clip_length = clip_length
         self.vq_res = vq_size
+        self.mask_ratio = mask_ratio
 
 
     def load_annotations(self):
         
         self.samples = []
-        self.video_dir = osp.join(self.root, self.data_prefix, 'train/JPEGImages')
+        self.video_dir = osp.join(self.root, self.data_prefix, self.split, 'JPEGImages')
         list_path = osp.join(self.list_path, f'youtube{self.data_prefix}_train_list.txt')
 
         with open(list_path, 'r') as f:
             for idx, line in enumerate(f.readlines()):
                 sample = dict()
                 vname, num_frames = line.strip('\n').split()
-                sample['video_path'] = osp.join(self.video_dir, vname)
+                sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
                 sample['num_frames'] = int(num_frames)
                 self.samples.append(sample)
     
@@ -308,20 +309,30 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
     def prepare_train_data(self, idx):
         
         sample = self.samples[idx]
-        video_path = sample['video_path']
+        frames_path = sample['frames_path']
         num_frames = sample['num_frames']
 
-        offset = [ random.randint(0, num_frames-1)]
-        frames = self._parser_rgb_rawframe(offset, video_path, self.clip_length, step=5)
+        offset = [ random.randint(0, num_frames-3)]
+        frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
 
-        mask_idx = random.randint(1, self.vq_res ** 2)
+        mask_num = int(self.vq_res * self.vq_res * self.mask_ratio)
+        mask_query_idx = np.zeros(self.vq_res * self.vq_res)
+        sample_idx = np.array(random.sample(range(self.vq_res * self.vq_res), mask_num))
+        mask_query_idx[sample_idx] = 1
+        # x_ = idx // self.vq_res
+        # y_ = idx % self.vq_res
+
+        # mask_query_idx, mask_keys_idx = np.zeros((self.vq_res, self.vq_res)), np.zeros((self.vq_res, self.vq_res))
+        # mask_query_idx[x_,y_] = 1
+
+        assert mask_query_idx.sum() == mask_num
 
         data = {
             'imgs': frames,
-            'mask_idx': mask_idx,
-            'video_path': sample['video_path'],
+            'mask_query_idx': mask_query_idx,
             'modality': 'RGB',
             'num_clips': 1,
+            'num_proposals':1,
             'clip_len': self.clip_length
         }
 

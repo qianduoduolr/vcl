@@ -16,7 +16,7 @@ from mmcv.utils import print_log
 import mmcv
 from vcl.utils import add_prefix, terminal_is_available
 
-from davis2017.evaluation import DAVISEvaluation
+from .davis2017.evaluation import DAVISEvaluation
 
 
 from .base_dataset import BaseDataset
@@ -69,17 +69,18 @@ class VOS_dataset_base(BaseDataset):
             mask_[mask == l] = i + 1
         return mask_,n,ob_list
 
-    def _parser_rgb_rawframe(self, offsets, frames_path, clip_length, step=1, backend='cv2'):
+    def _parser_rgb_rawframe(self, offsets, frames_path, clip_length, step=1, flag='color', backend='cv2'):
         """read frame"""
         frame_list_all = []
         for offset in offsets:
             frame_list = []
             for idx in range(clip_length):
                 frame_path = frames_path[offset + idx]
-                frame = mmcv.imread(frame_path, backend=backend, channel_order='rgb')
+                frame = mmcv.imread(frame_path, backend=backend, flag=flag, channel_order='rgb')
                 frame_list.append(frame)
             frame_list_all.append(frame_list)
         return frame_list_all if len(frame_list_all) >= 2 else frame_list_all[0]
+
 
 @DATASETS.register_module()
 class VOS_davis_dataset_test(VOS_dataset_base):
@@ -98,7 +99,7 @@ class VOS_davis_dataset_test(VOS_dataset_base):
                        task='semi-supervised',
                        split='val'
                        ):
-        super().__init__(root, list_path, pipeline, test_mode, split)
+        super().__init__(root, list_path, pipeline, test_mode=test_mode, split=split)
 
         self.task = task
 
@@ -111,16 +112,18 @@ class VOS_davis_dataset_test(VOS_dataset_base):
     def load_annotations(self):
         
         self.samples = []
-        self.mask_dir = osp.join(self.root, self.data_prefix, 'Annotations', '480p')
-        self.video_dir = osp.join(self.root, self.data_prefix, 'JPEGImages', '480p')
-        list_path = osp.join(self.list_path, f'davis2017_{self.split}_list.txt')
+        self.mask_dir = osp.join(self.root, 'Annotations', '480p')
+        self.video_dir = osp.join(self.root, 'JPEGImages', '480p')
+        list_path = osp.join(self.list_path, f'davis{self.data_prefix}_{self.split}_list.txt')
 
         with open(list_path, 'r') as f:
             for idx, line in enumerate(f.readlines()):
+                if idx >= 1: break
                 sample = dict()
                 vname, num_frames = line.strip('\n').split()
                 sample['masks_path'] = sorted(glob.glob(osp.join(self.mask_dir, vname, '*.png')))
                 sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
+                sample['video_path'] = osp.join(self.video_dir, vname)
                 sample['num_frames'] = int(num_frames)
                 self.samples.append(sample)
 
@@ -131,11 +134,11 @@ class VOS_davis_dataset_test(VOS_dataset_base):
         sample = self.samples[index]
         num_frames = sample['num_frames']
         masks_path = sample['masks_path']
-        frames_path = sample['video_path']
+        frames_path = sample['frames_path']
         
         # load frames and masks
         frames = self._parser_rgb_rawframe([0], frames_path, num_frames)
-        ref = np.array(self._parser_rgb_rawframe([0], masks_path, 1, backend='pillow')[0])
+        ref = np.array(self._parser_rgb_rawframe([0], masks_path, 1, flag='unchanged', backend='pillow')[0])
         original_shape = frames[0].shape[:2]
 
         data = {
@@ -191,10 +194,19 @@ class VOS_davis_dataset_test(VOS_dataset_base):
                     blend_image = Image.blend(raw_img, img, 0.3)
 
                     save_path = osp.join(
-                    output_dir, osp.relpath(video_path, self.video_dir),
+                    output_dir, osp.relpath(video_path, self.video_dir), 'blend',
                     self.filename_tmpl.format(img_idx).replace('.jpg', '_blend.png'))
+
+                    save_path_mask = osp.join(
+                    output_dir, osp.relpath(video_path, self.video_dir),
+                    self.filename_tmpl.format(img_idx).replace(
+                        'jpg', 'png'))
+
                     mmcv.mkdir_or_exist(osp.dirname(save_path))
+                    mmcv.mkdir_or_exist(osp.dirname(save_path_mask))
+
                     blend_image.save(save_path)
+                    img.save(save_path_mask)
 
                 if terminal_is_available():
                     prog_bar.update()
