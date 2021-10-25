@@ -8,7 +8,7 @@ model = dict(
     ce_loss=dict(type='Ce_Loss',reduction='none'),
     patch_size=5,
     fc=True,
-    pretrained='/home/lr/models/vqvae/dalle/encoder.pkl'
+    pretrained='/gdata/lirui/models/vqvae/dalle/encoder.pkl'
 )
 
 # model training and testing settings
