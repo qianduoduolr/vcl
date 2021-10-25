@@ -1,4 +1,4 @@
-exp_name = 'vqvae_mlm_d4_nemd2048_ps5_fc_orivq'
+exp_name = 'vqvae_mlm_d4_nemd2048_ps5_nofc_orivq'
 
 # model settings
 model = dict(
