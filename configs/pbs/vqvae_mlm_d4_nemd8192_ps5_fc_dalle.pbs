@@ -1,7 +1,7 @@
 #PBS -N vqvae_mlm_d4_nemd8192_ps5_fc_dalle
 #PBS -o /gdata/lirui/pbs/pbs_out/vqvae_mlm_d4_nemd8192_ps5_fc_dalle.out
 #PBS -e /gdata/lirui/pbs/pbs_out/vqvae_mlm_d4_nemd8192_ps5_fc_dalle.err
-#PBS -l nodes=1:gpus=4:q
+#PBS -l nodes=1:gpus=4:Q
 #PBS -r y
 
 cd $PBS_O_WORKDIR
