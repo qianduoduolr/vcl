@@ -1,14 +1,14 @@
-exp_name = 'vqvae_mlm'
+exp_name = 'vqvae_mlm_d4_nemd2048_ps5_fc_dalle'
 
 # model settings
 model = dict(
     type='Vqvae_Tracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
-    vqvae=dict(type='VQVAE',downsample=4, n_embed=2048),
+    vqvae=dict(type='DALLE_Encoder'),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
     patch_size=5,
     fc=True,
-    pretrained='/home/lr/models/vqvae/vqvae_d4_n2048.pth'
+    pretrained='/home/lr/models/vqvae/dalle/encoder.pkl'
 )
 
 # model training and testing settings
@@ -59,8 +59,8 @@ val_pipeline = [
 
 # demo_pipeline = None
 data = dict(
-    workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=4, drop_last=True),  # 4 gpus
+    workers_per_gpu=4,
+    train_dataloader=dict(samples_per_gpu=16, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -68,8 +68,8 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            root='/home/lr/dataset/YouTube-VOS',
-            list_path='/home/lr/dataset/YouTube-VOS/2018',
+            root='/gdata/lirui/dataset/YouTube-VOS',
+            list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
             data_prefix='2018',
             mask_ratio=0.15,
             clip_length=3,
@@ -79,8 +79,8 @@ data = dict(
 
     test =  dict(
             type=test_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -97,10 +97,10 @@ optimizers = dict(
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=400
+max_epoch=200
 lr_config = dict(
     policy='CosineAnnealing',
-    min_lr_ratio=0.01,
+    min_lr_ratio=0.001,
     by_epoch=False
     )
 
@@ -108,7 +108,7 @@ checkpoint_config = dict(interval=50, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
-    interval=100,
+    interval=200,
     hooks=[
         dict(type='TextLoggerHook', by_epoch=False),
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
@@ -120,7 +120,7 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'./output/{exp_name}'
+work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
 load_from = None
 resume_from = None

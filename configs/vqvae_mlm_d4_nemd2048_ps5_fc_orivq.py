@@ -1,4 +1,4 @@
-exp_name = 'vqvae_mlm_d4_nemd2048_fc_ep200_lr0.001'
+exp_name = 'vqvae_mlm_d4_nemd2048_ps5_fc_orivq'
 
 # model settings
 model = dict(
@@ -7,7 +7,7 @@ model = dict(
     vqvae=dict(type='VQVAE',downsample=4, n_embed=2048),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
     patch_size=5,
-    fc=False,
+    fc=True,
     pretrained='/gdata/lirui/models/vqvae/vqvae_d4_n2048.pth'
 )
 
@@ -97,7 +97,7 @@ optimizers = dict(
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=400
+max_epoch=200
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,

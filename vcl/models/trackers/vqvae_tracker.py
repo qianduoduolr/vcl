@@ -6,6 +6,7 @@ from collections import *
 import mmcv
 from mmcv.runner import auto_fp16
 from spatial_correlation_sampler import SpatialCorrelationSampler
+from dall_e  import map_pixels, unmap_pixels, load_model
 
 from ..base import BaseModel
 from ..builder import build_backbone, build_loss, build_components
@@ -48,8 +49,19 @@ class Vqvae_Tracker(BaseModel):
         self.patch_size = patch_size
 
         self.backbone = build_backbone(backbone)
-        self.vqvae = build_components(vqvae).cuda()
-        self.vq_enc = self.vqvae.encode
+
+        self.vq_type = vqvae.type
+        if vqvae.type is not 'DALLE_Encoder':
+            self.vqvae = build_components(vqvae).cuda()
+            self.vq_enc = self.vqvae.encode
+            self.vq_emb = self.vqvae.quantize.embed
+            self.n_embed = vqvae.n_embed
+            if pretrained is not None:
+                self.init_weights(pretrained)
+        else:
+            self.vq_enc = load_model(pretrained).cuda()
+            self.n_embed = self.vq_enc.vocab_size
+            pass
 
         # loss
         self.ce_loss = build_loss(ce_loss)
@@ -64,14 +76,13 @@ class Vqvae_Tracker(BaseModel):
 
         # fc
         self.fc = fc
+
         if self.fc:
-            self.predictor = nn.Linear(self.backbone.feat_dim, vqvae.n_embed)
+            self.predictor = nn.Linear(self.backbone.feat_dim, self.n_embed)
         else:
-            self.vq_emb = self.vqvae.quantize.embed
             self.embedding_layer = nn.Linear(self.backbone.feat_dim, self.vq_emb.shape[0])
 
-        if pretrained is not None:
-            self.init_weights(pretrained)
+        
 
     def init_weights(self, pretrained):
         ckpt = torch.load(pretrained)
@@ -86,8 +97,12 @@ class Vqvae_Tracker(BaseModel):
 
         # vqvae tokenize for query frame
         with torch.no_grad():
-            _, quant, diff, ind, embed = self.vq_enc(imgs[:, 0, -1])
-            ind = ind.reshape(-1, 1).long()
+            if self.vq_type == 'VQVAE':
+                _, quant, diff, ind, embed = self.vq_enc(imgs[:, 0, -1])
+                ind = ind.reshape(-1, 1).long()
+            else:
+                ind = self.vq_enc(imgs[:, 0, -1])
+                ind = torch.argmax(ind, axis=1).reshape(-1, 1).long()
 
         refs = list([ fs[:,idx] for idx in range(t-1)])
         tar = fs[:, -1]
