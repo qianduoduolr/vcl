@@ -99,10 +99,10 @@ class Vqvae_Tracker(BaseModel):
         with torch.no_grad():
             if self.vq_type == 'VQVAE':
                 _, quant, diff, ind, embed = self.vq_enc(imgs[:, 0, -1])
-                ind = ind.reshape(-1, 1).long()
+                ind = ind.reshape(-1, 1).long().detach()
             else:
                 ind = self.vq_enc(imgs[:, 0, -1])
-                ind = torch.argmax(ind, axis=1).reshape(-1, 1).long()
+                ind = torch.argmax(ind, axis=1).reshape(-1, 1).long().detach()
 
         refs = list([ fs[:,idx] for idx in range(t-1)])
         tar = fs[:, -1]
