@@ -124,6 +124,7 @@ def main():
     model.backbone.strides = cfg.test_cfg.strides
     if 'torchvision_pretrained' in eval_config:
         model.backbone.pretrained = eval_config['torchvision_pretrained']
+        eval_config.pop('torchvision_pretrained')
     model = build_model(model, train_cfg=None, test_cfg=cfg.test_cfg)
 
     args.save_image = args.save_path is not None
