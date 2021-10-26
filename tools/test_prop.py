@@ -142,10 +142,10 @@ def main():
             find_unused_parameters=find_unused_parameters)
 
         device_id = torch.cuda.current_device()
-        _ = load_checkpoint(
-            model,
-            args.checkpoint,
-            map_location=lambda storage, loc: storage.cuda(device_id))
+        # _ = load_checkpoint(
+        #     model,
+        #     args.checkpoint,
+        #     map_location=lambda storage, loc: storage.cuda(device_id))
 
         outputs = multi_gpu_test(
             model,
