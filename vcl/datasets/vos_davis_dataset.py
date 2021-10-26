@@ -175,6 +175,7 @@ class VOS_davis_dataset_test(VOS_dataset_base):
             if terminal_is_available():
                 prog_bar = mmcv.ProgressBar(len(self))
             for vid_idx in range(len(results)):
+                break
                 cur_results = results[vid_idx]
                 if isinstance(cur_results, str):
                     file_path = cur_results
