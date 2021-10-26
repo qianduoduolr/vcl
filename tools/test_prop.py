@@ -159,8 +159,10 @@ def main():
     rank, _ = get_dist_info()
     if rank == 0:
         if eval_config:
-            # prediction
-            _ = dataset.evaluate(outputs, **eval_config)
+            # predict
+            eval_res = dataset.evaluate(outputs, **eval_config)
+            for name, val in eval_res.items():
+                print(f'{name}: {val:.04f}')
 
 if __name__ == '__main__':
     main()

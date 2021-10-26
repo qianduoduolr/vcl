@@ -4,6 +4,7 @@ import numpy as np
 from PIL import Image
 import cv2
 import pandas as pd
+import copy
 
 import torch
 import torchvision
@@ -192,9 +193,9 @@ class VOS_davis_dataset_test(VOS_dataset_base):
                     raw_img = Image.open(osp.join(video_path, self.filename_tmpl.format(img_idx)))
 
                     # blend
-                    img = img.convert('RGBA')
+                    img_ = copy.deepcopy(img).convert('RGBA')
                     raw_img = raw_img.convert('RGBA')
-                    blend_image = Image.blend(raw_img, img, 0.3)
+                    blend_image = Image.blend(raw_img, img_, 0.3)
 
                     save_path = osp.join(
                     output_dir, osp.relpath(video_path, self.video_dir), 'blend',
