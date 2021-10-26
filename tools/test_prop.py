@@ -156,6 +156,7 @@ def main():
             save_image=args.save_image,
             empty_cache=empty_cache)
 
+    eval_config['output_dir'] = '/gdata/lirui/expdir/VCL/group_vqvae_tracker/base_line_random_res18'
     rank, _ = get_dist_info()
     if rank == 0:
         if eval_config:
