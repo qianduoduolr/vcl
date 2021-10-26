@@ -61,7 +61,7 @@ def single_gpu_test(model,
 def multi_gpu_test(model,
                    data_loader,
                    tmpdir=None,
-                   gpu_collect=False,
+                   gpu_collect=True,
                    save_image=False,
                    save_path=None,
                    iteration=None,
@@ -152,8 +152,8 @@ def collect_results_cpu(result_part, size, tmpdir=None):
                                 dtype=torch.uint8,
                                 device='cuda')
         if rank == 0:
-            mmcv.mkdir_or_exist('.dist_test')
-            tmpdir = tempfile.mkdtemp(dir='.dist_test')
+            mmcv.mkdir_or_exist('dist_test')
+            tmpdir = tempfile.mkdtemp(dir='dist_test')
             tmpdir = torch.tensor(
                 bytearray(tmpdir.encode()), dtype=torch.uint8, device='cuda')
             dir_tensor[:len(tmpdir)] = tmpdir
