@@ -24,7 +24,7 @@ def parse_args():
         '--deterministic',
         action='store_true',
         help='whether to set deterministic options for CUDNN backend.')
-    parser.add_argument('--out', help='output result pickle file', default='')
+    parser.add_argument('--out', type=str, help='output result file', default='')
     parser.add_argument(
         '--eval',
         type=str,
@@ -80,6 +80,8 @@ def main():
     # Overwrite eval_config from args.eval
     eval_config = merge_configs(eval_config, dict(metrics=args.eval))
 
+    if args.out:
+        eval_config['output_dir'] = os.path.join(args.out, 'eval_output')
     if 'output_dir' in eval_config:
         args.tmpdir = eval_config['output_dir']
     if 'checkpoint_path' in eval_config:
