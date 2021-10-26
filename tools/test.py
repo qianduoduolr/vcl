@@ -104,35 +104,13 @@ def main():
     # TODO: support multiple images per gpu (only minor changes are needed)
     dataset = build_dataset(cfg.data.test)
 
-    loader_cfg = {
-        **dict((k, cfg.data[k]) for k in ['workers_per_gpu'] if k in cfg.data),
-        **dict(
-            samples_per_gpu=1,
-            drop_last=False,
-            shuffle=False,
-            dist=distributed),
-        **cfg.data.get('test_dataloader', {})
-    }
-
-    data_loader = build_dataloader(dataset, **loader_cfg)
-
-    # build the model and load checkpoint
-    model = mmcv.ConfigDict(type='VanillaTracker', backbone=cfg.model.backbone)
-    model.backbone.out_indices = cfg.test_cfg.out_indices
-    model.backbone.strides = cfg.test_cfg.strides
-    model.backbone.pretrained = args.checkpoint
-    model = build_model(model, train_cfg=None, test_cfg=cfg.test_cfg)
-
-    args.save_image = args.save_path is not None
-    empty_cache = cfg.get('empty_cache', False)
-
-    eval_config['output_dir'] = '/home/lr/expdir/VCL/eval_output'
-
     rank, _ = get_dist_info()
     if rank == 0:
         if eval_config:
             # test
-            _ = dataset.evaluate(None, **eval_config)
+            eval_res = dataset.evaluate(None, **eval_config)
+            for name, val in eval_res.items():
+                print(f'{name}: {val:.04f}')
 
 if __name__ == '__main__':
     main()
