@@ -110,7 +110,7 @@ work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/base_line_imagenet_res1
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output/',
-                  torchvision_pretrained='https://download.pytorch.org/models/resnet18-5c106cde.pth'
+                  torchvision_pretrained='/gdata/lirui/models/imagenet_resnet/resnet18-5c106cde.pth'
                 )
 
 load_from = None
