@@ -120,7 +120,6 @@ def main():
     model = mmcv.ConfigDict(type='VanillaTracker', backbone=cfg.model.backbone)
     model.backbone.out_indices = cfg.test_cfg.out_indices
     model.backbone.strides = cfg.test_cfg.strides
-    model.backbone.pretrained = args.checkpoint
     model = build_model(model, train_cfg=None, test_cfg=cfg.test_cfg)
 
     args.save_image = args.save_path is not None
@@ -142,10 +141,10 @@ def main():
             find_unused_parameters=find_unused_parameters)
 
         device_id = torch.cuda.current_device()
-        _ = load_checkpoint(
-            model,
-            args.checkpoint,
-            map_location=lambda storage, loc: storage.cuda(device_id))
+        # _ = load_checkpoint(
+        #     model,
+        #     args.checkpoint,
+        #     map_location=lambda storage, loc: storage.cuda(device_id))
 
         outputs = multi_gpu_test(
             model,
@@ -156,6 +155,7 @@ def main():
             save_image=args.save_image,
             empty_cache=empty_cache)
 
+    eval_config['output_dir'] = '/gdata/lirui/expdir/VCL/group_vqvae_tracker/base_line_random_res18'
     rank, _ = get_dist_info()
     if rank == 0:
         if eval_config:
