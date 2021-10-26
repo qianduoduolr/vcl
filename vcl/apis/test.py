@@ -106,7 +106,6 @@ def multi_gpu_test(model,
                 save_image=save_image,
                 save_path=save_path,
                 iteration=iteration,
-                dataset=dataset,
                 **data)
         results.append(result)
         if empty_cache:
