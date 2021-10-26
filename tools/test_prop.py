@@ -152,14 +152,15 @@ def main():
             args.checkpoint,
             map_location=lambda storage, loc: storage.cuda(device_id))
 
-        outputs = multi_gpu_test(
-            model,
-            data_loader,
-            args.tmpdir,
-            args.gpu_collect,
-            save_path=args.save_path,
-            save_image=args.save_image,
-            empty_cache=empty_cache)
+        # outputs = multi_gpu_test(
+        #     model,
+        #     data_loader,
+        #     args.tmpdir,
+        #     args.gpu_collect,
+        #     save_path=args.save_path,
+        #     save_image=args.save_image,
+        #     empty_cache=empty_cache)
+        outputs = None
 
     rank, _ = get_dist_info()
     if rank == 0:

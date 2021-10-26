@@ -159,6 +159,8 @@ class VOS_davis_dataset_test(VOS_dataset_base):
             davis_root=self.root, task=self.task, gt_set='val')
         if isinstance(results, str):
             metrics_res = dataset_eval.evaluate(results)
+        elif results == None:
+            metrics_res = dataset_eval.evaluate(output_dir)
         else:
             assert len(results) == len(self)
             for vid_idx in range(len(self)):
