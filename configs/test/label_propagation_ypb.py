@@ -56,16 +56,16 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            root='/home/lr/dataset/YouTube-VOS/train',
+            root='/gdata/lirui/dataset/YouTube-VOS/train',
             sample_type='pair',
-            list_path='/home/lr/dataset/YouTube-VOS/train',
+            list_path='/gdata/lirui/dataset/YouTube-VOS/train',
             pipeline=train_pipeline,
             test_mode=False),
 
     test =  dict(
             type=test_dataset_type,
             root='/gdata/lirui/dataset/DAVIS',
-            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
+            list_path='/home/lr/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -102,7 +102,7 @@ log_config = dict(
     ])
 
 visual_config = None
-eval_config= dict(output_dir='output/')
+eval_config= dict(output_dir='/gdata/lirui/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_ps5_fc_orivq/eval_output/')
 
 
 # runtime settings
