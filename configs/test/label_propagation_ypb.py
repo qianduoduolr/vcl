@@ -102,13 +102,16 @@ log_config = dict(
     ])
 
 visual_config = None
-eval_config= dict(output_dir='/gdata/lirui/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_ps5_fc_orivq/eval_output/')
-
 
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'./output/{exp_name}'
+work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/base_line_imagenet_res18'
+
+eval_config= dict(
+                  output_dir=f'{work_dir}/eval_output/',
+                  torchvision_pretrained='https://download.pytorch.org/models/resnet18-5c106cde.pth'
+                )
 
 load_from = None
 resume_from = None

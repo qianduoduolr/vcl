@@ -18,7 +18,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='mmediting tester')
     parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/test/label_propagation.py')
     # parser.add_argument('--checkpoint', help='checkpoint file', default='/home/lr/models/ssl/vcl/vfs_pretrain/r18_nc_sgd_cos_100e_r2_1xNx8_k400-db1a4c0d.pth')
-    parser.add_argument('--checkpoint', help='checkpoint file', default='/home/lr/models/epoch_400.pth')
+    parser.add_argument('--checkpoint', help='checkpoint file', default='')
     parser.add_argument('--seed', type=int, default=None, help='random seed')
     parser.add_argument(
         '--deterministic',
@@ -120,12 +120,15 @@ def main():
     model = mmcv.ConfigDict(type='VanillaTracker', backbone=cfg.model.backbone)
     model.backbone.out_indices = cfg.test_cfg.out_indices
     model.backbone.strides = cfg.test_cfg.strides
+    if 'torchvision_pretrained' in eval_config:
+        model.backbone.pretrained = eval_config['torchvision_pretrained']
     model = build_model(model, train_cfg=None, test_cfg=cfg.test_cfg)
 
     args.save_image = args.save_path is not None
     empty_cache = cfg.get('empty_cache', False)
     if not distributed:
-        _ = load_checkpoint(model, args.checkpoint, map_location='cpu')
+        if args.checkpoint:
+            _ = load_checkpoint(model, args.checkpoint, map_location='cpu')
         model = MMDataParallel(model, device_ids=[0])
         outputs = single_gpu_test(
             model,
@@ -141,10 +144,12 @@ def main():
             find_unused_parameters=find_unused_parameters)
 
         device_id = torch.cuda.current_device()
-        # _ = load_checkpoint(
-        #     model,
-        #     args.checkpoint,
-        #     map_location=lambda storage, loc: storage.cuda(device_id))
+
+        if args.checkpoint:
+            _ = load_checkpoint(
+                model,
+                args.checkpoint,
+                map_location=lambda storage, loc: storage.cuda(device_id))
 
         outputs = multi_gpu_test(
             model,
@@ -155,7 +160,6 @@ def main():
             save_image=args.save_image,
             empty_cache=empty_cache)
 
-    eval_config['output_dir'] = '/gdata/lirui/expdir/VCL/group_vqvae_tracker/base_line_random_res18'
     rank, _ = get_dist_info()
     if rank == 0:
         if eval_config:
