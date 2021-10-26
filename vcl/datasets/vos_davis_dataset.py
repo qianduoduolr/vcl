@@ -213,6 +213,9 @@ class VOS_davis_dataset_test(VOS_dataset_base):
 
                 if terminal_is_available():
                     prog_bar.update()
+
+                return None
+                
             metrics_res = dataset_eval.evaluate(output_dir)
             if tmp_dir is not None:
                 tmp_dir.cleanup()

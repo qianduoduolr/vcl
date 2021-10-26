@@ -75,11 +75,6 @@ def main():
 
     cfg.model.pretrained = None
 
-    # Load output_config from cfg
-    output_config = cfg.get('output_config', {})
-    # Overwrite output_config from args.out
-    output_config = merge_configs(output_config, dict(out=args.out))
-
     # Load eval_config from cfg
     eval_config = cfg.get('eval_config', {})
     # Overwrite eval_config from args.eval
@@ -152,26 +147,20 @@ def main():
             args.checkpoint,
             map_location=lambda storage, loc: storage.cuda(device_id))
 
-        # outputs = multi_gpu_test(
-        #     model,
-        #     data_loader,
-        #     args.tmpdir,
-        #     args.gpu_collect,
-        #     save_path=args.save_path,
-        #     save_image=args.save_image,
-        #     empty_cache=empty_cache)
-        outputs = None
+        outputs = multi_gpu_test(
+            model,
+            data_loader,
+            args.tmpdir,
+            args.gpu_collect,
+            save_path=args.save_path,
+            save_image=args.save_image,
+            empty_cache=empty_cache)
 
     rank, _ = get_dist_info()
     if rank == 0:
-        if output_config:
-            out = output_config['out']
-            print(f'\nwriting results to {out}')
-            dataset.dump_results(outputs, **output_config)
         if eval_config:
-            eval_res = dataset.evaluate(outputs, **eval_config)
-            for name, val in eval_res.items():
-                print(f'{name}: {val:.04f}')
+            # prediction
+            _ = dataset.evaluate(outputs, **eval_config)
 
 if __name__ == '__main__':
     main()
