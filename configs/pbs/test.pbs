@@ -13,4 +13,4 @@ echo $PBS_NODEFILE
 echo $PBS_GPUFILE
 cat $PBS_GPUFILE
 
-startdocker -P /gdata/lirui -D /gdata/lirui -u "--shm-size 64G" -c "bash /gdata/lirui/project/vcl/tools/single_test.sh /gdata/lirui/project/vcl/configs/test/label_propagation_ypb.py /gdata/lirui/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_ps5_fc_orivq/epoch_400.pth" bit:5000/lirui_torch1.5_cuda10.1_corr
+startdocker -P /gdata/lirui -D /gdata/lirui -u "--shm-size 64G" -c "bash /gdata/lirui/project/vcl/tools/single_test.sh" bit:5000/lirui_torch1.5_cuda10.1_corr

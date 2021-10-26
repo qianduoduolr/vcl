@@ -19,7 +19,6 @@ def parse_args():
     parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/test/label_propagation.py')
     # parser.add_argument('--checkpoint', help='checkpoint file', default='/home/lr/models/ssl/vcl/vfs_pretrain/r18_nc_sgd_cos_100e_r2_1xNx8_k400-db1a4c0d.pth')
     parser.add_argument('--checkpoint', help='checkpoint file', default='/home/lr/models/epoch_400.pth')
-
     parser.add_argument('--seed', type=int, default=None, help='random seed')
     parser.add_argument(
         '--deterministic',
@@ -67,6 +66,7 @@ def merge_configs(cfg1, cfg2):
 
 def main():
     args = parse_args()
+    rank, _ = get_dist_info()
 
     cfg = mmcv.Config.fromfile(args.config)
     # set cudnn_benchmark
@@ -86,6 +86,9 @@ def main():
     eval_config = merge_configs(eval_config, dict(metrics=args.eval))
     # Add options from args.option
     # eval_config = merge_configs(eval_config, args.eval_options)
+
+    if cfg.get('checkpoint_path', None):
+        args.checkpoint = cfg.checkpoint_path
 
     # init distributed env first, since logger depends on the dist info.
     if args.launcher == 'none':
@@ -157,7 +160,6 @@ def main():
             save_image=args.save_image,
             empty_cache=empty_cache)
 
-    rank, _ = get_dist_info()
     if rank == 0:
         if output_config:
             out = output_config['out']
