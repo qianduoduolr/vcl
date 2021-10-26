@@ -142,10 +142,10 @@ def main():
             find_unused_parameters=find_unused_parameters)
 
         device_id = torch.cuda.current_device()
-        _ = load_checkpoint(
-            model,
-            args.checkpoint,
-            map_location=lambda storage, loc: storage.cuda(device_id))
+        # _ = load_checkpoint(
+        #     model,
+        #     args.checkpoint,
+        #     map_location=lambda storage, loc: storage.cuda(device_id))
 
         outputs = multi_gpu_test(
             model,
@@ -156,6 +156,7 @@ def main():
             save_image=args.save_image,
             empty_cache=empty_cache)
 
+    eval_config['output_dir'] = '/gdata/lirui/expdir/VCL/group_vqvae_tracker/base_line_random_res18/eval_output'
     rank, _ = get_dist_info()
     if rank == 0:
         if eval_config:
