@@ -124,7 +124,6 @@ def multi_gpu_test(model,
     else:
         results = collect_results_cpu(results, len(dataset), tmpdir)
 
-    assert len(results) != 0
     return results
 
 

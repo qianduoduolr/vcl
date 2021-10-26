@@ -87,8 +87,10 @@ def main():
     # Add options from args.option
     # eval_config = merge_configs(eval_config, args.eval_options)
 
-    if cfg.get('checkpoint_path', None):
-        args.checkpoint = cfg.checkpoint_path
+    if 'output_dir' in eval_config:
+        args.tmpdir = os.path.join(eval_config.ouput_dir, 'saved_feats')
+    if 'checkpoint_path' in eval_config:
+        args.checkpoint = eval_config.checkpoint_path
 
     # init distributed env first, since logger depends on the dist info.
     if args.launcher == 'none':
@@ -160,6 +162,7 @@ def main():
             save_image=args.save_image,
             empty_cache=empty_cache)
 
+    rank, _ = get_dist_info()
     if rank == 0:
         if output_config:
             out = output_config['out']

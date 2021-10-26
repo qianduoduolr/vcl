@@ -120,9 +120,11 @@ visual_config = None
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
-checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
 
-eval_config= dict(output_dir=f'{work_dir}/eval_output/')
+eval_config= dict(
+                  output_dir=f'{work_dir}/eval_output/',
+                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
+                )
 
 
 load_from = None
