@@ -88,9 +88,9 @@ def main():
     # eval_config = merge_configs(eval_config, args.eval_options)
 
     if 'output_dir' in eval_config:
-        args.tmpdir = os.path.join(eval_config.ouput_dir, 'saved_feats')
+        args.tmpdir = os.path.join(eval_config['ouput_dir'], 'saved_feats')
     if 'checkpoint_path' in eval_config:
-        args.checkpoint = eval_config.checkpoint_path
+        args.checkpoint = eval_config['checkpoint_path']
 
     # init distributed env first, since logger depends on the dist info.
     if args.launcher == 'none':
