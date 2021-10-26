@@ -102,7 +102,7 @@ log_config = dict(
     ])
 
 visual_config = None
-eval_config= dict(output_dir='output/')
+eval_config= dict(output_dir='output/eval_output')
 
 
 # runtime settings

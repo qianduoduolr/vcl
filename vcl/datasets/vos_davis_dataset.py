@@ -16,7 +16,7 @@ from mmcv.utils import print_log
 import mmcv
 from vcl.utils import add_prefix, terminal_is_available
 
-from .davis2017.evaluation import DAVISEvaluation
+from davis2017.evaluation import DAVISEvaluation
 
 
 from .base_dataset import BaseDataset

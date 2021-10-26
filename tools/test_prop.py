@@ -16,8 +16,10 @@ from vcl.models import build_model
 
 def parse_args():
     parser = argparse.ArgumentParser(description='mmediting tester')
-    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/label_propagation.py')
-    parser.add_argument('--checkpoint', help='checkpoint file', default='/home/lr/models/ssl/vcl/vfs_pretrain/r18_nc_sgd_cos_100e_r2_1xNx8_k400-db1a4c0d.pth')
+    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/test/label_propagation.py')
+    # parser.add_argument('--checkpoint', help='checkpoint file', default='/home/lr/models/ssl/vcl/vfs_pretrain/r18_nc_sgd_cos_100e_r2_1xNx8_k400-db1a4c0d.pth')
+    parser.add_argument('--checkpoint', help='checkpoint file', default='/home/lr/models/epoch_400.pth')
+
     parser.add_argument('--seed', type=int, default=None, help='random seed')
     parser.add_argument(
         '--deterministic',
@@ -125,7 +127,7 @@ def main():
     args.save_image = args.save_path is not None
     empty_cache = cfg.get('empty_cache', False)
     if not distributed:
-
+        _ = load_checkpoint(model, args.checkpoint, map_location='cpu')
         model = MMDataParallel(model, device_ids=[0])
         outputs = single_gpu_test(
             model,
@@ -141,6 +143,10 @@ def main():
             find_unused_parameters=find_unused_parameters)
 
         device_id = torch.cuda.current_device()
+        _ = load_checkpoint(
+            model,
+            args.checkpoint,
+            map_location=lambda storage, loc: storage.cuda(device_id))
 
         outputs = multi_gpu_test(
             model,
