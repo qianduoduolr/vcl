@@ -17,7 +17,8 @@ test_cfg = dict(
     neighbor_range=24,
     with_first=True,
     with_first_neighbor=True,
-    output_dir='eval_results')
+    output_dir='eval_results',
+    save_np=True)
 
 # dataset settings
 train_dataset_type = 'VOS_youtube_dataset_pixel'

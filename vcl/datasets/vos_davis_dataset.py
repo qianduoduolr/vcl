@@ -3,6 +3,7 @@ import os.path as osp
 import numpy as np
 from PIL import Image
 import cv2
+import pandas as pd
 
 import torch
 import torchvision
@@ -118,7 +119,7 @@ class VOS_davis_dataset_test(VOS_dataset_base):
 
         with open(list_path, 'r') as f:
             for idx, line in enumerate(f.readlines()):
-                # if idx >= 1: break
+                # if idx >= 2: break
                 sample = dict()
                 vname, num_frames = line.strip('\n').split()
                 sample['masks_path'] = sorted(glob.glob(osp.join(self.mask_dir, vname, '*.png')))

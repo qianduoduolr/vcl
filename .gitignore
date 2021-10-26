@@ -2,4 +2,5 @@
 **.pyc
 *.pyc
 output
+.eval/
 **DS_Store
