@@ -241,7 +241,7 @@ class VOS_davis_dataset_test(VOS_dataset_base):
         print_log('\n' + table_g.to_string(index=False), logger=logger)
 
         with open(osp.join(output_dir, 'result.txt'), 'a') as f:
-            f.write(table_g + '\n')
+            f.write(table_g.to_string(index=False) + '\n')
 
         # Generate a dataframe for the per sequence results
         seq_names = list(J['M_per_object'].keys())
@@ -255,7 +255,7 @@ class VOS_davis_dataset_test(VOS_dataset_base):
         print_log('\n' + table_seq.to_string(index=False), logger=logger)
 
         with open(osp.join(output_dir, 'result.txt'), 'a') as f:
-            f.write(table_seq + '\n')
+            f.write(table_seq.to_string(index=False) + '\n')
 
         eval_results = table_g.to_dict('records')[0]
 
