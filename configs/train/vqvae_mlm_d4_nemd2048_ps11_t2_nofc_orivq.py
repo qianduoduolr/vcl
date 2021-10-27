@@ -1,4 +1,6 @@
-exp_name = 'vqvae_mlm_d4_nemd2048_ps13_nofc_orivq'
+import os
+exp_name = os.path.basename(__file__)[:-3]
+docker_name='bit:5000/lirui_torch1.5_cuda10.1_corr'
 
 # model settings
 model = dict(
@@ -132,3 +134,19 @@ eval_config= dict(
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
+
+
+def make_pbs():
+    pbs_data = ""
+    with open('configs/pbs/template.pbs', 'r') as f:
+        for line in f:
+            line = line.replace('exp_name',f'{exp_name}')
+            line = line.replace('docker_name', f'{docker_name}')
+            pbs_data += line
+
+    with open(f'configs/pbs/{exp_name}.pbs',"w") as f:
+        f.write(pbs_data)
+
+
+if __name__ == '__main__':
+    make_pbs()
