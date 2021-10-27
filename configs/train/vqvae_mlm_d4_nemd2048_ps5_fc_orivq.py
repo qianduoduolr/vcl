@@ -1,5 +1,5 @@
 import os
-exp_name = os.path.basename(__file__)[:-3]
+exp_name = 'vqvae_mlm_d4_nemd2048_ps5_fc_orivq'
 docker_name='bit:5000/lirui_torch1.5_cuda10.1_corr'
 
 # model settings
