@@ -6,13 +6,14 @@ model = dict(
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
     vqvae=dict(type='VQVAE',downsample=4, n_embed=2048),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
-    patch_size=13,
+    patch_size=11,
     fc=False,
     pretrained='/gdata/lirui/models/vqvae/vqvae_d4_n2048.pth'
 )
 
 # model training and testing settings
-train_cfg = None
+train_cfg = dict(syncbn=True)
+
 test_cfg = dict(
     precede_frames=20,
     topk=10,
@@ -72,7 +73,7 @@ data = dict(
             list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
             data_prefix='2018',
             mask_ratio=0.15,
-            clip_length=3,
+            clip_length=2,
             vq_size=32,
             pipeline=train_pipeline,
             test_mode=False),
