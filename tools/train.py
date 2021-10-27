@@ -115,7 +115,7 @@ def main():
         cfg.model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
     
     if cfg.train_cfg.get('syncbn', False):
-        model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model).to(device)
+        model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 
     datasets = [build_dataset(cfg.data.train)]
 
