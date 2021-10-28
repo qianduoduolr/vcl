@@ -7,7 +7,7 @@ model = dict(
     vqvae=dict(type='VQVAE', downsample=4, n_embed=2048),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
     patch_size=5,
-    fc=False,
+    fc=True,
     temperature=0.1,
     pretrained_vq='/home/lr/models/vqvae/vqvae_d4_n2048.pth',
     pretrained=None
@@ -91,14 +91,14 @@ data = dict(
 )
 
 # optimizer
-optimizers = dict(
-    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-    embedding_layer=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
-    )
 # optimizers = dict(
 #     backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-#     predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+#     embedding_layer=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
 #     )
+optimizers = dict(
+    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
+    predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    )
 
 # learning policy
 # total_iters = 200000

@@ -206,7 +206,7 @@ class Vqvae_Tracker(BaseModel):
 
         loss.backward()
         for k,opz in optimizer.items():
-            opz.zero_grad()
+            opz.step()
 
         log_vars.pop('loss')
         outputs = dict(
