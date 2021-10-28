@@ -11,7 +11,7 @@ model = dict(
     patch_size=11,
     fc=True,
     temperature=0.1,
-    pretrained_vq='/home/lr/models/vqvae/vqvae_d4_n2048.pth',
+    pretrained_vq='/gdata/lirui/models/vqvae/vqvae_d4_n2048.pth',
     pretrained=None
 )
 
