@@ -62,10 +62,11 @@ class Vqvae_Tracker(BaseModel):
             self.vq_emb = self.vqvae.quantize.embed
             self.n_embed = vqvae.n_embed
             self.vq_t = temperature
+            self.vq_enc = self.vqvae.encode
         else:
-            self.vqvae = load_model(pretrained_vq).cuda()
-            self.n_embed = self.vqvae.vocab_size
-            pass
+            self.vq_enc = load_model(pretrained_vq).cuda()
+            self.n_embed = self.vq_enc.vocab_size
+            logger.info('load pretrained VQVAE successfully')
 
         # loss
         self.ce_loss = build_loss(ce_loss)
@@ -100,10 +101,10 @@ class Vqvae_Tracker(BaseModel):
         # vqvae tokenize for query frame
         with torch.no_grad():
             if self.vq_type == 'VQVAE':
-                _, quant, diff, ind, embed = self.vqvae.encode(imgs[:, 0, -1])
+                _, quant, diff, ind, embed = self.vq_enc(imgs[:, 0, -1])
                 ind = ind.reshape(-1, 1).long().detach()
             else:
-                ind = self.vqvae(imgs[:, 0, -1])
+                ind = self.vq_enc(imgs[:, 0, -1])
                 ind = torch.argmax(ind, axis=1).reshape(-1, 1).long().detach()
 
         refs = list([ fs[:,idx] for idx in range(t-1)])
