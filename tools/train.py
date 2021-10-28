@@ -19,7 +19,7 @@ from vcl.utils import collect_env, get_root_logger
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train an editor')
-    parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/vqvae_mlm_orivq.py')
+    parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/vqvae_mlm_dalle.py')
     parser.add_argument('--work-dir', help='the dir to save logs and models')
     parser.add_argument(
         '--resume-from', help='the checkpoint file to resume from')
@@ -115,7 +115,7 @@ def main():
     model = build_model(
         cfg.model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
     
-    if cfg.train_cfg.get('syncbn', False):
+    if cfg.train_cfg.get('syncbn', False) and distributed:
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 
     datasets = [build_dataset(cfg.data.train)]

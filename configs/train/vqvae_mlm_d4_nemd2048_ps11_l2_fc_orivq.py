@@ -1,16 +1,18 @@
 import os
-exp_name = 'vqvae_mlm_d4_nemd2048_ps11_t2_nofc_orivq'
+exp_name = 'vqvae_mlm_d4_nemd2048_ps11_l2_fc_orivq'
 docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corr'
 
 # model settings
 model = dict(
     type='Vqvae_Tracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
-    vqvae=dict(type='VQVAE',downsample=4, n_embed=2048),
+    vqvae=dict(type='VQVAE', downsample=4, n_embed=2048),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
     patch_size=11,
-    fc=False,
-    pretrained='/gdata/lirui/models/vqvae/vqvae_d4_n2048.pth'
+    fc=True,
+    temperature=0.1,
+    pretrained_vq='/home/lr/models/vqvae/vqvae_d4_n2048.pth',
+    pretrained=None
 )
 
 # model training and testing settings
@@ -92,11 +94,9 @@ data = dict(
 
 # optimizer
 optimizers = dict(
-        type='Adam',
-        lr=0.001,
-        betas=(0.9, 0.999),
-        )
-
+    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
+    predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    )
 # learning policy
 # total_iters = 200000
 runner_type='epoch'

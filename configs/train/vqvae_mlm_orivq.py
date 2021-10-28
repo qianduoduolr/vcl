@@ -4,15 +4,17 @@ exp_name = 'vqvae_mlm'
 model = dict(
     type='Vqvae_Tracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
-    vqvae=dict(type='VQVAE', downsample=4, n_embed=4096),
+    vqvae=dict(type='VQVAE', downsample=4, n_embed=2048),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
     patch_size=5,
     fc=False,
-    pretrained='/home/lr/models/vqvae/vqvae_d4_n4096.pth'
+    temperature=0.1,
+    pretrained_vq='/home/lr/models/vqvae/vqvae_d4_n2048.pth',
+    pretrained=None
 )
 
 # model training and testing settings
-train_cfg = None
+train_cfg = dict(syncbn=False)
 test_cfg = dict(
     precede_frames=20,
     topk=10,
@@ -35,10 +37,11 @@ test_dataset_type = 'VOS_davis_dataset_test'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
 
+
 train_pipeline = [
-    dict(type='RandomResizedCrop', area_range=(0.6,1.0)),
+    dict(type='RandomResizedCrop', area_range=(1.0,1.0)),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
-    dict(type='Flip', flip_ratio=0.5),
+    dict(type='Flip', flip_ratio=0),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='FormatShape', input_format='NPTCHW'),
     dict(type='Collect', keys=['imgs', 'mask_query_idx'], meta_keys=[]),
@@ -72,7 +75,7 @@ data = dict(
             list_path='/home/lr/dataset/YouTube-VOS/2018',
             data_prefix='2018',
             mask_ratio=0.15,
-            clip_length=3,
+            clip_length=2,
             vq_size=32,
             pipeline=train_pipeline,
             test_mode=False),
@@ -89,10 +92,13 @@ data = dict(
 
 # optimizer
 optimizers = dict(
-        type='Adam',
-        lr=0.001,
-        betas=(0.9, 0.999),
-        )
+    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
+    embedding_layer=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    )
+# optimizers = dict(
+#     backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
+#     predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+#     )
 
 # learning policy
 # total_iters = 200000

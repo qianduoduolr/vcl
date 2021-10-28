@@ -319,11 +319,6 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
         mask_query_idx = np.zeros(self.vq_res * self.vq_res)
         sample_idx = np.array(random.sample(range(self.vq_res * self.vq_res), mask_num))
         mask_query_idx[sample_idx] = 1
-        # x_ = idx // self.vq_res
-        # y_ = idx % self.vq_res
-
-        # mask_query_idx, mask_keys_idx = np.zeros((self.vq_res, self.vq_res)), np.zeros((self.vq_res, self.vq_res))
-        # mask_query_idx[x_,y_] = 1
 
         assert mask_query_idx.sum() == mask_num
 

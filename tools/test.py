@@ -12,19 +12,21 @@ from vcl.apis import multi_gpu_test, set_random_seed, single_gpu_test
 from vcl.core.distributed_wrapper import DistributedDataParallelWrapper
 from vcl.datasets import build_dataloader, build_dataset
 from vcl.models import build_model
+from vcl.utils import get_root_logger
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='mmediting tester')
-    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/test/label_propagation.py')
-    # parser.add_argument('--checkpoint', help='checkpoint file', default='/home/lr/models/ssl/vcl/vfs_pretrain/r18_nc_sgd_cos_100e_r2_1xNx8_k400-db1a4c0d.pth')
-    parser.add_argument('--checkpoint', help='checkpoint file', default='/home/lr/models/epoch_400.pth')
+    parser = argparse.ArgumentParser(description='Train an editor')
+    parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/vqvae_mlm_orivq.py')
+    # parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='')
+    parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_ps11_t2_nofc_orivq/epoch_400.pth')
+
     parser.add_argument('--seed', type=int, default=None, help='random seed')
     parser.add_argument(
         '--deterministic',
         action='store_true',
         help='whether to set deterministic options for CUDNN backend.')
-    parser.add_argument('--out', help='output result pickle file', default='')
+    parser.add_argument('--out', type=str, help='output result file', default='')
     parser.add_argument(
         '--eval',
         type=str,
@@ -64,9 +66,12 @@ def merge_configs(cfg1, cfg2):
             cfg1[k] = v
     return cfg1
 
+
 def main():
     args = parse_args()
     rank, _ = get_dist_info()
+
+    logger = get_root_logger()
 
     cfg = mmcv.Config.fromfile(args.config)
     # set cudnn_benchmark
@@ -80,6 +85,8 @@ def main():
     # Overwrite eval_config from args.eval
     eval_config = merge_configs(eval_config, dict(metrics=args.eval))
 
+    if args.out:
+        eval_config['output_dir'] = os.path.join(args.out, 'eval_output')
     if 'output_dir' in eval_config:
         args.tmpdir = eval_config['output_dir']
     if 'checkpoint_path' in eval_config:
@@ -100,17 +107,78 @@ def main():
             print('set random seed to', args.seed)
         set_random_seed(args.seed, deterministic=args.deterministic)
 
-    # build the dataloader
-    # TODO: support multiple images per gpu (only minor changes are needed)
-    dataset = build_dataset(cfg.data.test)
+    model = build_model(
+        cfg.model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
 
-    rank, _ = get_dist_info()
-    if rank == 0:
-        if eval_config:
-            # test
-            eval_res = dataset.evaluate(None, **eval_config)
-            for name, val in eval_res.items():
-                print(f'{name}: {val:.04f}')
+    args.save_image = args.save_path is not None
+    empty_cache = cfg.get('empty_cache', False)
+
+    dataset = build_dataset(cfg.data.train)
+
+    loader_cfg = {
+        **dict((k, cfg.data[k]) for k in ['workers_per_gpu'] if k in cfg.data),
+        **dict(
+            samples_per_gpu=1,
+            drop_last=False,
+            shuffle=False,
+            dist=distributed),
+        **cfg.data.get('train_dataloader', {})
+    }
+
+    data_loader = build_dataloader(dataset, **loader_cfg)
+
+    if args.checkpoint:
+        _ = load_checkpoint(model, args.checkpoint, map_location='cpu')
+        logger.info('load pretrained model successfully')
+    
+    model = MMDataParallel(model, device_ids=[0])
+
+    outputs = single_gpu_test(
+            model,
+            data_loader,
+            save_path=args.save_path,
+            save_image=args.save_image)
+    
+    import numpy as np
+
+    predict = []
+    target = []
+    for out in outputs:
+        target.append(out[0])
+        predict.append(out[1])
+
+    predict = np.concatenate(predict,0).reshape(-1)
+    target = np.concatenate(target,0).reshape(-1)
+
+    #######################
+    import matplotlib.pyplot as plt
+
+    def vis_bar(inp, name):
+        plt.figure()
+
+        print('There are {} keys in {}'.format(len(np.unique(inp)), name) )
+
+        x = np.array(list([ (i==inp).astype(np.uint8).sum() for i in range(2048) ]))
+
+        # the histogram of the data
+        plt.bar(range(2048), x)
+
+        plt.xlabel('keys')
+        plt.ylabel('times')
+        plt.title('Histogram of times of each key ')
+
+        # Tweak spacing to prevent clipping of ylabel
+        plt.savefig(f'./test_{name}.jpg')
+        # plt.show()
+
+    vis_bar(predict, 'predict')
+    vis_bar(target, 'target')
+
+
+    ##########################
+    print('predict acc is {:4f}'.format((predict==target).astype(np.uint8).sum() / len(predict)))
+
+
 
 if __name__ == '__main__':
     main()

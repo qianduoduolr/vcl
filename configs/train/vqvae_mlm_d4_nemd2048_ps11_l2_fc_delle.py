@@ -1,4 +1,6 @@
-exp_name = 'vqvae_mlm'
+import os
+exp_name = 'vqvae_mlm_d4_nemd2048_ps11_l2_fc_delle'
+docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corr'
 
 # model settings
 model = dict(
@@ -6,15 +8,16 @@ model = dict(
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
     vqvae=dict(type='DALLE_Encoder'),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
-    patch_size=5,
+    patch_size=11,
     fc=True,
     temperature=0.1,
-    pretrained_vq='/home/lr/models/vqvae/dalle/encoder.pkl',
+    pretrained_vq='/gdata/lirui/models/vqvae/dalle/encoder.pkl',
     pretrained=None
 )
 
 # model training and testing settings
-train_cfg = dict(syncbn=False)
+train_cfg = dict(syncbn=True)
+
 test_cfg = dict(
     precede_frames=20,
     topk=10,
@@ -37,11 +40,10 @@ test_dataset_type = 'VOS_davis_dataset_test'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
 
-
 train_pipeline = [
-    dict(type='RandomResizedCrop', area_range=(1.0,1.0)),
+    dict(type='RandomResizedCrop', area_range=(0.6,1.0)),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
-    dict(type='Flip', flip_ratio=0),
+    dict(type='Flip', flip_ratio=0.5),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='FormatShape', input_format='NPTCHW'),
     dict(type='Collect', keys=['imgs', 'mask_query_idx'], meta_keys=[]),
@@ -62,8 +64,8 @@ val_pipeline = [
 
 # demo_pipeline = None
 data = dict(
-    workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=4, drop_last=True),  # 4 gpus
+    workers_per_gpu=4,
+    train_dataloader=dict(samples_per_gpu=10, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -71,8 +73,8 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            root='/home/lr/dataset/YouTube-VOS',
-            list_path='/home/lr/dataset/YouTube-VOS/2018',
+            root='/gdata/lirui/dataset/YouTube-VOS',
+            list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
             data_prefix='2018',
             mask_ratio=0.15,
             clip_length=2,
@@ -82,8 +84,8 @@ data = dict(
 
     test =  dict(
             type=test_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -95,14 +97,13 @@ optimizers = dict(
     backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
     predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
     )
-
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=200
+max_epoch=400
 lr_config = dict(
     policy='CosineAnnealing',
-    min_lr_ratio=0.01,
+    min_lr_ratio=0.001,
     by_epoch=False
     )
 
@@ -122,8 +123,30 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'./output/{exp_name}'
+work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
+
+eval_config= dict(
+                  output_dir=f'{work_dir}/eval_output/',
+                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
+                )
+
 
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
+
+
+def make_pbs():
+    pbs_data = ""
+    with open('configs/pbs/template.pbs', 'r') as f:
+        for line in f:
+            line = line.replace('exp_name',f'{exp_name}')
+            line = line.replace('docker_name', f'{docker_name}')
+            pbs_data += line
+
+    with open(f'configs/pbs/{exp_name}.pbs',"w") as f:
+        f.write(pbs_data)
+
+
+if __name__ == '__main__':
+    make_pbs()
