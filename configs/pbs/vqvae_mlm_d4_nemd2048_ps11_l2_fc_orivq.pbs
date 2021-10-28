@@ -1,7 +1,7 @@
 #PBS -N vqvae_mlm_d4_nemd2048_ps11_l2_fc_orivq
 #PBS -o /gdata/lirui/pbs/pbs_out/vqvae_mlm_d4_nemd2048_ps11_l2_fc_orivq.out
 #PBS -e /gdata/lirui/pbs/pbs_out/vqvae_mlm_d4_nemd2048_ps11_l2_fc_orivq.err
-#PBS -l nodes=1:gpus=2:D
+#PBS -l nodes=1:gpus=2:d
 #PBS -r y
 
 cd $PBS_O_WORKDIR
