@@ -97,7 +97,7 @@ data = dict(
 #     )
 optimizers = dict(
     backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-    predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
     )
 
 # learning policy

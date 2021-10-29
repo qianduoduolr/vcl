@@ -28,6 +28,7 @@ class Quantize(nn.Module):
         self.eps = eps
 
         embed = torch.randn(embedding_dim, n_embed)
+
         self.register_buffer("embed", embed)
         self.register_buffer("cluster_size", torch.zeros(n_embed))
         self.register_buffer("embed_avg", embed.clone())

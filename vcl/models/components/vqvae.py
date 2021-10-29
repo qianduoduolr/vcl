@@ -215,7 +215,7 @@ class VQVAE(nn.Module):
         embed_dim=64,
         n_embed=4096,
         commitment_cost=0.25,
-        decay=0.99,
+        decay=0.99
     ):
         """
         :param in_channel: input channels
