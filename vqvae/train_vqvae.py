@@ -5,12 +5,13 @@ import time
 import argparse
 import numpy as np
 from tqdm import tqdm
+import os.path as osp
 
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
-from dataset import ImageFolderLMDB
+from dataset import ImageFolderLMDB, VideoFolderRGB
 from vqvae import VQVAE
 
 
@@ -55,14 +56,19 @@ def train(epoch, loader, model, optimizer, scheduler, device):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_path", type=str, default="/gdata2/pengjl/imagenet-lmdb/train")
+    parser.add_argument("--data_path", type=str, default="/home/lr/dataset/YouTube-VOS")
+    parser.add_argument("--list_path", type=str, default="/home/lr/dataset/YouTube-VOS/2018")
+    parser.add_argument("--dataset", type=str, default="youtube")
     parser.add_argument("--img_size", type=int, default=256)
-    parser.add_argument("--batch_size", type=int, default=8)
+    parser.add_argument("--batch_size", type=int, default=2)
+    parser.add_argument("--in_c", type=int, default=128)
+    parser.add_argument("--res_c", type=int, default=64)
+    parser.add_argument("--emb_c", type=int, default=64)
     parser.add_argument("--learning_rate", type=float, default=3e-4)
     parser.add_argument("--train_epoch", type=int, default=2)
-    parser.add_argument("--downsample", type=int, default=1)
+    parser.add_argument("--downsample", type=int, default=2)
     parser.add_argument("--n_embed", type=int, default=4096)
-    parser.add_argument("--save_path", type=str, default="/gdata/lirui/models/vqvae/vqvae_d1_n4096.pth")
+    parser.add_argument("--save_path", type=str, default="/home/lr/models/vqvae")
     parser.add_argument("--pretrained_model", type=str, default="")
 
     args = parser.parse_args()
@@ -70,18 +76,25 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    train_dataset = ImageFolderLMDB(args.data_path, args.img_size)
+    if args.dataset == 'imagenet':
+        train_dataset = ImageFolderLMDB(args.data_path, args.img_size)
+    else:
+        train_dataset = VideoFolderRGB(args.data_path, args.list_path, '2018', im_size=args.img_size)
+
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
 
-    model = VQVAE(downsample=args.downsample, n_embed=args.n_embed)
+    model = VQVAE(downsample=args.downsample, n_embed=args.n_embed, channel=args.in_c, n_res_channel=args.res_c, embed_dim=args.emb_c)
 
     if args.pretrained_model:
         model.load_state_dict(torch.load(args.pretrained_model))
+        print('load pretrained model successfully!')
 
     model = model.cuda()
 
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
     scheduler = None
+
+    args.save_path = osp.join(args.save_path,f'vqvae_{args.dataset}_d{args.downsample}_n{args.n_embed}_c{args.in_c}_embc{args.emb_c}')
 
     # Start to train
     for i in range(args.train_epoch):

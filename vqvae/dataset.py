@@ -12,7 +12,7 @@ import mmcv
 import os.path as osp
 import glob
 
-from vcl.datasets.pipeline import RandomResizedCrop
+from vcl.datasets.pipelines import RandomResizedCrop, Normalize
 
 
 class ImageFolderLMDB(data.Dataset):
@@ -58,16 +58,21 @@ class VideoFolderRGB(data.Dataset):
     def __init__(self, root,  
                        list_path, 
                        data_prefix, 
-                       im_size=256
+                       im_size=256,
+                       split='train'
                        ):
 
         self.list_path = list_path
         self.root = root
         self.data_prefix = data_prefix
+        self.split = split
 
         self.load_annotations()
 
+        img_norm_cfg = dict(mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
         self.randcrop = RandomResizedCrop(area_range=(0.6, 1.0))
+        self.normalize = Normalize(**img_norm_cfg)
+
         self.im_size = im_size
 
     def __len__(self):
@@ -76,17 +81,14 @@ class VideoFolderRGB(data.Dataset):
     def load_annotations(self):
         
         self.samples = []
-        self.mask_dir = osp.join(self.root, 'Annotations', '480p')
-        self.video_dir = osp.join(self.root, 'JPEGImages', '480p')
-        list_path = osp.join(self.list_path, f'davis{self.data_prefix}_{self.split}_list.txt')
+        self.video_dir = osp.join(self.root, self.data_prefix, self.split, 'JPEGImages')
+        list_path = osp.join(self.list_path, f'youtube{self.data_prefix}_train_list.txt')
 
         with open(list_path, 'r') as f:
             for idx, line in enumerate(f.readlines()):
                 sample = dict()
                 vname, num_frames = line.strip('\n').split()
-                sample['masks_path'] = sorted(glob.glob(osp.join(self.mask_dir, vname, '*.png')))
                 sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
-                sample['video_path'] = osp.join(self.video_dir, vname)
                 sample['num_frames'] = int(num_frames)
                 self.samples.append(sample)
 
@@ -105,9 +107,8 @@ class VideoFolderRGB(data.Dataset):
     def __getitem__(self, index):
 
         sample = self.samples[index]
-        num_frames = sample['num_frames']
-        masks_path = sample['masks_path']
         frames_path = sample['frames_path']
+        num_frames = sample['num_frames']
 
         frame_idx = random.randint(0, num_frames-1)
 
@@ -115,10 +116,14 @@ class VideoFolderRGB(data.Dataset):
         frame = self._parser_rgb_rawframe([frame_idx], frames_path, 1)
         
         # frame aug
-        frame = self.randcrop(dict(imgs=frame))['imgs']
+        result = self.randcrop(dict(imgs=frame,modality='RGB'))
+        frame = self.normalize(result)['imgs'][0]
+        
         frame = cv2.resize(frame, (self.im_size,self.im_size))
 
-        frame = torch.from_numpy(frame.transpose(2, 0, 1))
+        # frame = frame.astype(np.float32) / 255.
+
+        frame = torch.from_numpy(frame.transpose(2, 0, 1)).float()
 
         return frame
 
