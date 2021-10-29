@@ -59,7 +59,7 @@ class Vqvae_Tracker(BaseModel):
             self.vqvae = build_components(vqvae).cuda()
             _ = load_checkpoint(self.vqvae, pretrained_vq, map_location='cpu')
             logger.info('load pretrained VQVAE successfully')
-
+            self.vq_emb = self.vqvae.quantize.embed
             self.n_embed = vqvae.n_embed
             self.vq_t = temperature
             self.vq_enc = self.vqvae.encode
