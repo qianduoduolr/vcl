@@ -22,6 +22,8 @@ class ImageFolderLMDB(data.Dataset):
                              readonly=True, lock=False,
                              readahead=False, meminit=False)
         self.im_size = im_size
+        img_norm_cfg = dict(mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
+        self.normalize = Normalize(**img_norm_cfg)
 
     def __getitem__(self, index):
         with self.env.begin(write=False) as txn:
@@ -30,7 +32,7 @@ class ImageFolderLMDB(data.Dataset):
         # load img
         img_np = np.frombuffer(byteflow, np.uint8)
         img = cv2.imdecode(img_np, cv2.IMREAD_COLOR)
-        img = img.astype(np.float32) / 255.
+        # img = img.astype(np.float32) / 255.
 
         # padding if image is too small
         h, w, _ = img.shape
@@ -47,6 +49,10 @@ class ImageFolderLMDB(data.Dataset):
 
         # BGR to RGB, HWC to CHW, numpy to tensor
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+        img = self.normalize(dict(imgs=[img], modality='RGB'))['imgs'][0]
+
+
         img = torch.from_numpy(img.transpose(2, 0, 1))
 
         return img
