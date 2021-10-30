@@ -169,8 +169,7 @@ class Vqvae_Tracker(BaseModel):
         corrs = torch.cat(corrs, 1)
         att = F.softmax(corrs, 1).unsqueeze(1)
 
-        if save_image:
-            visualize_att(imgs, att, random.randint(0,3400), w_)
+        visualize_att(imgs, att, random.randint(0,3400), w_)
 
         unfold_fs = list([ F.unfold(ref, kernel_size=self.patch_size, \
             padding=int((self.patch_size-1)/2)).reshape(bsz, feat_dim, -1, w_, h_) for ref in refs])

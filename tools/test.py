@@ -122,7 +122,6 @@ def main():
             drop_last=False,
             shuffle=False,
             dist=distributed),
-        **cfg.data.get('train_dataloader', {})
     }
 
     data_loader = build_dataloader(dataset, **loader_cfg)
