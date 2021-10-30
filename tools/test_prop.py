@@ -19,6 +19,7 @@ def parse_args():
     parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/test/label_propagation.py')
     # parser.add_argument('--checkpoint', help='checkpoint file', default='/home/lr/models/ssl/vcl/vfs_pretrain/r18_nc_sgd_cos_100e_r2_1xNx8_k400-db1a4c0d.pth')
     parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='')
+    parser.add_argument('--out-indices', type=tuple,  default=(3,))
     parser.add_argument('--seed', type=int, default=None, help='random seed')
     parser.add_argument(
         '--deterministic',
@@ -80,13 +81,20 @@ def main():
     # Overwrite eval_config from args.eval
     eval_config = merge_configs(eval_config, dict(metrics=args.eval))
 
-    if args.out:
-        eval_config['output_dir'] = os.path.join(args.out, 'eval_output')
-    if 'output_dir' in eval_config:
+    if 'output_dir' in eval_config and not args.out:
         args.tmpdir = eval_config['output_dir']
-    if 'checkpoint_path' in eval_config:
+        eval_config['output_dir'] = os.path.join(eval_config['output_dir'], f'indices{args.out_indices[0]}')
+    else:
+        args.tmpdir = args.out
+        eval_config['output_dir'] = os.path.join(args.out, f'indices{args.out_indices[0]}')
+
+    if 'checkpoint_path' in eval_config and not args.checkpoint:
         args.checkpoint = eval_config['checkpoint_path']
         eval_config.pop('checkpoint_path')
+    else:
+        pass
+
+    if args.checkpoint:
 
     # init distributed env first, since logger depends on the dist info.
     if args.launcher == 'none':
@@ -120,7 +128,7 @@ def main():
 
     # build the model and load checkpoint
     model = mmcv.ConfigDict(type='VanillaTracker', backbone=cfg.model.backbone)
-    model.backbone.out_indices = cfg.test_cfg.out_indices
+    model.backbone.out_indices = args.out_indices
     model.backbone.strides = cfg.test_cfg.strides
     if 'torchvision_pretrained' in eval_config:
         model.backbone.pretrained = eval_config['torchvision_pretrained']
