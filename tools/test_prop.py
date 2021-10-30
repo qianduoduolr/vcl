@@ -94,8 +94,6 @@ def main():
     else:
         pass
 
-    if args.checkpoint:
-
     # init distributed env first, since logger depends on the dist info.
     if args.launcher == 'none':
         distributed = False
