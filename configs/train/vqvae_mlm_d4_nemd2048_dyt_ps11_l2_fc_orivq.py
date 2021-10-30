@@ -6,7 +6,7 @@ docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corr'
 model = dict(
     type='Vqvae_Tracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
-    vqvae=dict(type='VQVAE', downsample=4, n_embed=2048),
+    vqvae=dict(type='VQVAE', downsample=4, n_embed=2048, channel=256, n_res_channel=128, embed_dim=128),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
     patch_size=11,
     fc=True,
@@ -109,7 +109,7 @@ lr_config = dict(
     by_epoch=False
     )
 
-checkpoint_config = dict(interval=50, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=200, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(

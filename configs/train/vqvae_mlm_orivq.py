@@ -6,8 +6,8 @@ model = dict(
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
     vqvae=dict(type='VQVAE', downsample=4, n_embed=2048),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
-    patch_size=5,
-    fc=False,
+    patch_size=21,
+    fc=True,
     temperature=0.1,
     pretrained_vq='/home/lr/models/vqvae/vqvae_d4_n2048.pth',
     pretrained=None
