@@ -111,7 +111,7 @@ class Vqvae_Tracker(BaseModel):
                 ind = torch.argmax(ind, axis=1).reshape(-1, 1).long().detach()
 
         if self.patch_size != -1:
-            out = self.local_attention(fs, bsz)
+            out = self.local_attention(fs, bsz, t)
         else:
             out = self.non_local_attention(fs, bsz)
 
@@ -206,7 +206,7 @@ class Vqvae_Tracker(BaseModel):
 
         return outputs
 
-    def local_attention(self, fs, bsz):
+    def local_attention(self, fs, bsz, t):
 
         refs = list([ fs[:,idx] for idx in range(t-1)])
         tar = fs[:, -1]
@@ -233,8 +233,8 @@ class Vqvae_Tracker(BaseModel):
         tar = fs[:, -1]
         _, feat_dim, w_, h_ = tar.shape
 
-        refs = refs.view(bsz, feat_dim, -1).permute(0, 2, 1)
-        tar = tar.view(bsz, feat_dim, -1).permute(0, 2, 1)
+        refs = refs.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
+        tar = tar.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
 
         att = torch.einsum("bic,bjc -> bij", (tar, refs))
         att = F.softmax(att, dim=-1)
