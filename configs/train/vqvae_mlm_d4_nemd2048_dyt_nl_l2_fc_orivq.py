@@ -1,5 +1,5 @@
 import os
-exp_name = 'vqvae_mlm_d4_nemd2048_dyt_nl_l3_fc_orivq'
+exp_name = 'vqvae_mlm_d4_nemd2048_dyt_nl_l2_fc_orivq'
 docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corr'
 
 # model settings
@@ -67,7 +67,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=4,
-    train_dataloader=dict(samples_per_gpu=10, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=64, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -79,7 +79,7 @@ data = dict(
             list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
             data_prefix='2018',
             mask_ratio=0.15,
-            clip_length=3,
+            clip_length=2,
             vq_size=32,
             pipeline=train_pipeline,
             test_mode=False),
@@ -96,17 +96,20 @@ data = dict(
 
 # optimizer
 optimizers = dict(
-    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-    predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    backbone=dict(type='Adam', lr=0.01, betas=(0.9, 0.999)),
+    predictor=dict(type='Adam', lr=0.01, betas=(0.9, 0.999))
     )
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=400
+max_epoch=800
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,
-    by_epoch=False
+    by_epoch=False,
+    warmup_iters=10,
+    warmup_ratio=0.1,
+    warmup_by_epoch=True
     )
 
 checkpoint_config = dict(interval=200, save_optimizer=True, by_epoch=True)
