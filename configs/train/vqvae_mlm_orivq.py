@@ -4,12 +4,12 @@ exp_name = 'vqvae_mlm'
 model = dict(
     type='Vqvae_Tracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 1, 1, 1), out_indices=(3, )),
-    vqvae=dict(type='VQVAE', downsample=2, n_embed=4096),
+    vqvae=dict(type='VQVAE', downsample=2, n_embed=4096, channel=256, n_res_channel=128, embed_dim=128),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
-    patch_size=21,
+    patch_size=5,
     fc=True,
     temperature=0.1,
-    pretrained_vq='/home/lr/models/vqvae/vqvae_d2_n4096.pth',
+    pretrained_vq='/home/lr/models/vqvae/vqvae_youtube_d2_n4096_c256_embc128.pth',
     pretrained=None
 )
 
@@ -33,12 +33,11 @@ val_dataset_type = None
 test_dataset_type = 'VOS_davis_dataset_test'
 
 
-# train_pipeline = None
-# img_norm_cfg = dict(
-#     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
-
 img_norm_cfg = dict(
-    mean=[0, 0, 0], std=[255, 255, 255], to_bgr=False)
+    mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
+
+# img_norm_cfg = dict(
+#     mean=[0, 0, 0], std=[255, 255, 255], to_bgr=False)
 
 
 train_pipeline = [
