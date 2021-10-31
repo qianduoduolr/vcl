@@ -50,6 +50,7 @@ class Vqvae_Tracker(BaseModel):
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
         self.patch_size = patch_size
+
         logger = get_root_logger()
 
         self.backbone = build_backbone(backbone)
@@ -109,22 +110,10 @@ class Vqvae_Tracker(BaseModel):
                 ind = self.vq_enc(imgs[:, 0, -1])
                 ind = torch.argmax(ind, axis=1).reshape(-1, 1).long().detach()
 
-        refs = list([ fs[:,idx] for idx in range(t-1)])
-        tar = fs[:, -1]
-        _, feat_dim, w_, h_ = tar.shape
-        corrs = []
-        for i in range(t-1):
-            corr = self.correlation_sampler(tar.contiguous(), refs[i].contiguous()).reshape(bsz, -1, w_, h_)
-            corrs.append(corr)
-
-        corrs = torch.cat(corrs, 1)
-        att = F.softmax(corrs, 1).unsqueeze(1)
-
-        unfold_fs = list([ F.unfold(ref, kernel_size=self.patch_size, \
-            padding=int((self.patch_size-1)/2)).reshape(bsz, feat_dim, -1, w_, h_) for ref in refs])
-        unfold_fs = torch.cat(unfold_fs, 2)
-
-        out = (unfold_fs * att).sum(2).reshape(bsz, feat_dim, -1).permute(0,2,1).reshape(-1, feat_dim)
+        if self.patch_size != -1:
+            out = self.local_attention(fs, bsz)
+        else:
+            out = self.non_local_attention(fs, bsz)
 
         if self.fc:
             predict = self.predictor(out)
@@ -216,3 +205,42 @@ class Vqvae_Tracker(BaseModel):
         )
 
         return outputs
+
+    def local_attention(self, fs, bsz):
+
+        refs = list([ fs[:,idx] for idx in range(t-1)])
+        tar = fs[:, -1]
+        _, feat_dim, w_, h_ = tar.shape
+        corrs = []
+        for i in range(t-1):
+            corr = self.correlation_sampler(tar.contiguous(), refs[i].contiguous()).reshape(bsz, -1, w_, h_)
+            corrs.append(corr)
+
+        corrs = torch.cat(corrs, 1)
+        att = F.softmax(corrs, 1).unsqueeze(1)
+
+        unfold_fs = list([ F.unfold(ref, kernel_size=self.patch_size, \
+            padding=int((self.patch_size-1)/2)).reshape(bsz, feat_dim, -1, w_, h_) for ref in refs])
+        unfold_fs = torch.cat(unfold_fs, 2)
+
+        out = (unfold_fs * att).sum(2).reshape(bsz, feat_dim, -1).permute(0,2,1).reshape(-1, feat_dim)
+
+        return out
+    
+    def non_local_attention(self, fs, bsz):
+
+        refs = fs[:, :-1].permute(0, 2, 1, 3, 4)
+        tar = fs[:, -1]
+        _, feat_dim, w_, h_ = tar.shape
+
+        refs = refs.view(bsz, feat_dim, -1).permute(0, 2, 1)
+        tar = tar.view(bsz, feat_dim, -1).permute(0, 2, 1)
+
+        att = torch.einsum("bic,bjc -> bij", (tar, refs))
+        att = F.softmax(att, dim=-1)
+
+        out = torch.matmul(att, refs).reshape(-1, feat_dim)
+
+        return out
+
+

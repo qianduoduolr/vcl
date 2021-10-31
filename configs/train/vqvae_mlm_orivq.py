@@ -3,13 +3,13 @@ exp_name = 'vqvae_mlm'
 # model settings
 model = dict(
     type='Vqvae_Tracker',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 1, 1, 1), out_indices=(3, )),
-    vqvae=dict(type='VQVAE', downsample=2, n_embed=4096, channel=256, n_res_channel=128, embed_dim=128),
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
+    vqvae=dict(type='VQVAE', downsample=4, n_embed=2048, channel=256, n_res_channel=128, embed_dim=128),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
-    patch_size=5,
+    patch_size=-1,
     fc=True,
     temperature=0.1,
-    pretrained_vq='/home/lr/models/vqvae/vqvae_youtube_d2_n4096_c256_embc128.pth',
+    pretrained_vq='/home/lr/models/vqvae/vqvae_youtube_d4_n2048_c256_embc128.pth',
     pretrained=None
 )
 
@@ -65,7 +65,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=1, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=4, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -78,7 +78,7 @@ data = dict(
             data_prefix='2018',
             mask_ratio=0.15,
             clip_length=2,
-            vq_size=64,
+            vq_size=32,
             pipeline=train_pipeline,
             test_mode=False),
 
