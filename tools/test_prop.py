@@ -18,14 +18,14 @@ def parse_args():
     parser = argparse.ArgumentParser(description='mmediting tester')
     parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/test/label_propagation.py')
     # parser.add_argument('--checkpoint', help='checkpoint file', default='/home/lr/models/ssl/vcl/vfs_pretrain/r18_nc_sgd_cos_100e_r2_1xNx8_k400-db1a4c0d.pth')
-    parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_ps11_l2_fc_orivq/epoch_400.pth')
+    parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='')
     parser.add_argument('--out-indices', nargs='+', type=int, default=[3])
     parser.add_argument('--seed', type=int, default=None, help='random seed')
     parser.add_argument(
         '--deterministic',
         action='store_true',
         help='whether to set deterministic options for CUDNN backend.')
-    parser.add_argument('--out', type=str, help='output result file', default='./output')
+    parser.add_argument('--out', type=str, help='output result file', default='')
     parser.add_argument(
         '--eval',
         type=str,
