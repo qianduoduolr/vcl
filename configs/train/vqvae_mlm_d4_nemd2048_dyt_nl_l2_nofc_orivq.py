@@ -1,6 +1,6 @@
 import os
 exp_name = 'vqvae_mlm_d4_nemd2048_dyt_nl_l2_fc_orivq'
-docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
+docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corr'
 
 # model settings
 model = dict(
@@ -9,7 +9,7 @@ model = dict(
     vqvae=dict(type='VQVAE', downsample=4, n_embed=2048, channel=256, n_res_channel=128, embed_dim=128),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
     patch_size=-1,
-    fc=True,
+    fc=False,
     temperature=0.1,
     pretrained_vq='/gdata/lirui/models/vqvae/vqvae_youtube_d4_n2048_c256_embc128',
     pretrained=None
@@ -97,7 +97,7 @@ data = dict(
 # optimizer
 optimizers = dict(
     backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-    predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    embedding_layer=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
     )
 # learning policy
 # total_iters = 200000
