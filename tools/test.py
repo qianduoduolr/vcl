@@ -19,8 +19,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train an editor')
     parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/vqvae_mlm_orivq.py')
     # parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='')
-    parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='')
-
+    parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_ps11_l2_fc_orivq/epoch_400.pth')
     parser.add_argument('--seed', type=int, default=None, help='random seed')
     parser.add_argument(
         '--deterministic',

@@ -94,7 +94,7 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
     scheduler = None
 
-    args.save_path = osp.join(args.save_path,f'vqvae_{args.dataset}_d{args.downsample}_n{args.n_embed}_c{args.in_c}_embc{args.emb_c}')
+    args.save_path = osp.join(args.save_path,f'vqvae_{args.dataset}_d{args.downsample}_n{args.n_embed}_c{args.in_c}_embc{args.emb_c}.pth')
 
     # Start to train
     for i in range(args.train_epoch):

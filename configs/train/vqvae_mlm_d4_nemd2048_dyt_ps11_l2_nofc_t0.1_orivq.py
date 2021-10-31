@@ -97,7 +97,7 @@ data = dict(
 # optimizer
 optimizers = dict(
     backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-    predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    embedding_layer=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
     )
 # learning policy
 # total_iters = 200000
