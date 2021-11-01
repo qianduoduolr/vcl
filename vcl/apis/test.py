@@ -39,13 +39,13 @@ def single_gpu_test(model,
     dataset = data_loader.dataset
     prog_bar = mmcv.ProgressBar(len(dataset))
     for idx, data in enumerate(data_loader):
-        if idx >= 100: break
+        if idx >= 300: break
         with torch.no_grad():
             result = model(
                 test_mode=True,
                 save_image=save_image,
                 save_path=save_path,
-                iteration=iteration,
+                iteration=idx,
                 **data)
         results.append(result)
 

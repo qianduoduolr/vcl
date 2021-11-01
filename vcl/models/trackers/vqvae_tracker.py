@@ -111,9 +111,9 @@ class Vqvae_Tracker(BaseModel):
                 ind = torch.argmax(ind, axis=1).reshape(-1, 1).long().detach()
 
         if self.patch_size != -1:
-            out = self.local_attention(fs, bsz, t)
+            out, _ = self.local_attention(fs, bsz, t)
         else:
-            out = self.non_local_attention(fs, bsz)
+            out, _ = self.non_local_attention(fs, bsz)
 
         if self.fc:
             predict = self.predictor(out)
@@ -133,7 +133,6 @@ class Vqvae_Tracker(BaseModel):
                     save_path=None,
                     iteration=None):
         bsz, num_clips, t, c, w, h = imgs.shape
-        mask_query_idx = mask_query_idx.bool()
 
         fs = self.backbone(imgs.reshape(bsz * t, c, h, w))
         fs = fs.reshape(bsz, t, -1, fs.shape[-1], fs.shape[-1])
@@ -147,24 +146,11 @@ class Vqvae_Tracker(BaseModel):
                 ind = self.vqvae(imgs[:, 0, -1])
                 ind = torch.argmax(ind, axis=1).reshape(-1, 1).long().detach()
 
-        refs = list([ fs[:,idx] for idx in range(t-1)])
-        tar = fs[:, -1]
-        _, feat_dim, w_, h_ = tar.shape
-        corrs = []
-        for i in range(t-1):
-            corr = self.correlation_sampler(tar.contiguous(), refs[i].contiguous()).reshape(bsz, -1, w_, h_)
-            corrs.append(corr)
 
-        corrs = torch.cat(corrs, 1)
-        att = F.softmax(corrs, 1).unsqueeze(1)
+        out, att = self.non_local_attention(fs, bsz)
 
-        visualize_att(imgs, att, random.randint(0,3400), w_, self.patch_size)
 
-        unfold_fs = list([ F.unfold(ref, kernel_size=self.patch_size, \
-            padding=int((self.patch_size-1)/2)).reshape(bsz, feat_dim, -1, w_, h_) for ref in refs])
-        unfold_fs = torch.cat(unfold_fs, 2)
-
-        out = (unfold_fs * att).sum(2).reshape(bsz, feat_dim, -1).permute(0,2,1).reshape(-1, feat_dim)
+        visualize_att(imgs, att, iteration, mask_query_idx, fs.shape[-1], self.patch_size, dst_path=save_path, norm_mode='mean-std')
 
         if self.fc:
             predict = self.predictor(out)
@@ -225,7 +211,7 @@ class Vqvae_Tracker(BaseModel):
 
         out = (unfold_fs * att).sum(2).reshape(bsz, feat_dim, -1).permute(0,2,1).reshape(-1, feat_dim)
 
-        return out
+        return out, att
     
     def non_local_attention(self, fs, bsz):
 
@@ -241,6 +227,6 @@ class Vqvae_Tracker(BaseModel):
 
         out = torch.matmul(att, refs).reshape(-1, feat_dim)
 
-        return out
+        return out, att
 
 

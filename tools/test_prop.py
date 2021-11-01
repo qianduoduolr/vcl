@@ -83,10 +83,10 @@ def main():
 
     if 'output_dir' in eval_config and not args.out:
         args.tmpdir = eval_config['output_dir']
-        eval_config['output_dir'] = os.path.join(eval_config['output_dir'], f'indices{args.out_indices[0]}')
+        eval_config['output_dir'] = eval_config['output_dir'] + f'indices{args.out_indices[0]}'
     else:
         args.tmpdir = args.out
-        eval_config['output_dir'] = os.path.join(args.out, f'indices{args.out_indices[0]}')
+        eval_config['output_dir'] = args.out + f'indices{args.out_indices[0]}'
 
     if 'checkpoint_path' in eval_config and not args.checkpoint:
         args.checkpoint = eval_config['checkpoint_path']

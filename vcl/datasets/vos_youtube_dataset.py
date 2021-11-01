@@ -293,6 +293,7 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
         
         self.samples = []
         self.video_dir = osp.join(self.root, self.data_prefix, self.split, 'JPEGImages')
+        self.mask_dir = osp.join(self.root, self.data_prefix, self.split, 'Annotations')
         list_path = osp.join(self.list_path, f'youtube{self.data_prefix}_train_list.txt')
 
         with open(list_path, 'r') as f:
@@ -300,11 +301,40 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
                 sample = dict()
                 vname, num_frames = line.strip('\n').split()
                 sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
+                sample['masks_path'] = sorted(glob.glob(osp.join(self.mask_dir, vname, '*.png')))
                 sample['num_frames'] = int(num_frames)
                 self.samples.append(sample)
     
     def prepare_test_data(self, idx):
-        pass
+        sample = self.samples[idx]
+        frames_path = sample['frames_path']
+        masks_path = sample['masks_path']
+        num_frames = sample['num_frames']
+
+        offset = [ random.randint(0, num_frames-4)]
+        frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
+        mask = self._parser_rgb_rawframe([offset[0]+1], masks_path, 1, flag='unchanged', backend='pillow')[0]
+
+        mask = cv2.resize(mask, (self.vq_res, self.vq_res), cv2.INTER_NEAREST).reshape(-1)
+        obj_idxs = np.nonzero(mask)[0]
+
+        if mask.max() > 0:
+            sample_idx = np.array(random.sample(obj_idxs.tolist(), 1))
+        else:
+            sample_idx = np.array(random.sample(range(self.vq_res * self.vq_res), 1))
+
+        assert sample_idx.shape[0] == 1
+
+        data = {
+            'imgs': frames,
+            'mask_query_idx': sample_idx,
+            'modality': 'RGB',
+            'num_clips': 1,
+            'num_proposals':1,
+            'clip_len': self.clip_length
+        }
+
+        return self.pipeline(data)
 
     def prepare_train_data(self, idx):
         
