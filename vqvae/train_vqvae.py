@@ -12,7 +12,7 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 
 from dataset import ImageFolderLMDB, VideoFolderRGB
-from vqvae import VQVAE
+from vqvae_my import VQVAE
 
 
 def train(epoch, loader, model, optimizer, scheduler, device):
