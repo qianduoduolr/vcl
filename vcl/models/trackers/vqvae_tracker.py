@@ -27,10 +27,11 @@ class Vqvae_Tracker(BaseModel):
     def __init__(self,
                  backbone,
                  vqvae,
-                 ce_loss,
                  patch_size,
                  pretrained_vq,
                  temperature,
+                 ce_loss=None,
+                 l2_loss=None,
                  fc=True,
                  train_cfg=None,
                  test_cfg=None,
@@ -70,7 +71,8 @@ class Vqvae_Tracker(BaseModel):
             logger.info('load pretrained VQVAE successfully')
 
         # loss
-        self.ce_loss = build_loss(ce_loss)
+        self.ce_loss = build_loss(ce_loss) if ce_loss else None
+        self.l2_loss = build_loss(l2_loss) if l2_loss else None
 
         # corr
         self.correlation_sampler = SpatialCorrelationSampler(
@@ -92,12 +94,7 @@ class Vqvae_Tracker(BaseModel):
             _ = load_checkpoint(self, pretrained, map_location='cpu')
             logger.info('load pretrained model successfully')
 
-    def forward_train(self, imgs, mask_query_idx):
-        bsz, num_clips, t, c, w, h = imgs.shape
-        mask_query_idx = mask_query_idx.bool()
-
-        fs = self.backbone(imgs.reshape(bsz * t, c, h, w))
-        fs = fs.reshape(bsz, t, -1, fs.shape[-1], fs.shape[-1])
+    def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
 
         # vqvae tokenize for query frame
         with torch.no_grad():
@@ -110,22 +107,40 @@ class Vqvae_Tracker(BaseModel):
                 ind = self.vq_enc(imgs[:, 0, -1])
                 ind = torch.argmax(ind, axis=1).reshape(-1, 1).long().detach()
 
+        if jitter_imgs is not None:
+            imgs = jitter_imgs
+
+        bsz, num_clips, t, c, w, h = imgs.shape
+        mask_query_idx = mask_query_idx.bool()
+
+        fs = self.backbone(imgs.reshape(bsz * t, c, h, w))
+        fs = fs.reshape(bsz, t, -1, fs.shape[-1], fs.shape[-1])
+
         if self.patch_size != -1:
             out, _ = self.local_attention(fs, bsz, t)
         else:
             out, _ = self.non_local_attention(fs, bsz)
 
-        if self.fc:
-            predict = self.predictor(out)
-        else:
+        losses = {}
+
+        if self.ce_loss:
+            if self.fc:
+                predict = self.predictor(out)
+            else:
+                predict = self.embedding_layer(out)
+                predict = nn.functional.normalize(predict, dim=-1)
+                predict = torch.mm(predict, nn.functional.normalize(self.vq_emb, dim=0))
+                predict = torch.div(predict, self.vq_t)
+
+            losses['ce_loss'] = (self.ce_loss(predict, ind) * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
+
+        if self.l2_loss:
             predict = self.embedding_layer(out)
             predict = nn.functional.normalize(predict, dim=-1)
-            predict = torch.mm(predict, nn.functional.normalize(self.vq_emb, dim=0))
-            predict = torch.div(predict, self.vq_t)
+            embeds = torch.index_select(self.vq_emb, dim=1, index=ind.view(-1)).permute(1,0)
+            embeds = nn.functional.normalize(embeds, dim=-1)
+            losses['l2_loss'] = (self.l2_loss(predict, embeds) * mask_query_idx.reshape(-1,1)).sum() / mask_query_idx.sum()
 
-
-        losses = {}
-        losses['ce_loss'] = (self.ce_loss(predict, ind) * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
         return losses
 
     def forward_test(self, imgs, mask_query_idx,

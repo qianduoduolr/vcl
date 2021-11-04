@@ -1,4 +1,5 @@
 import random
+import copy
 from collections.abc import Sequence
 
 import mmcv
@@ -15,7 +16,7 @@ from torchvision.transforms import functional as F
 from ..registry import PIPELINES
 
 
-def _init_lazy_if_proper(results, lazy):
+def _init_lazy_if_proper(results, lazy, keys='imgs'):
     """Initialize lazy operation properly.
 
     Make sure that a lazy operation is properly initialized,
@@ -33,7 +34,7 @@ def _init_lazy_if_proper(results, lazy):
     """
 
     if 'img_shape' not in results:
-        results['img_shape'] = results['imgs'][0].shape[:2]
+        results['img_shape'] = results[keys][0].shape[:2]
     if lazy:
         if 'lazy' not in results:
             img_h, img_w = results['img_shape']
@@ -60,12 +61,14 @@ class Fuse(object):
     are "imgs", "lazy".
     Required keys in "lazy" are "crop_bbox", "interpolation", "flip_direction".
     """
+    def __init__(self, keys='imgs'):
+        self.keys = keys
 
     def __call__(self, results):
         if 'lazy' not in results:
             raise ValueError('No lazy operation detected')
         lazyop = results['lazy']
-        imgs = results['imgs']
+        imgs = results[self.keys]
 
         # crop
         left, top, right, bottom = lazyop['crop_bbox'].round().astype(int)
@@ -87,7 +90,7 @@ class Fuse(object):
             for img in imgs:
                 mmcv.imflip_(img, lazyop['flip_direction'])
 
-        results['imgs'] = imgs
+        results[self.keys] = imgs
         del results['lazy']
 
         return results
@@ -106,11 +109,12 @@ class RandomCrop(object):
         lazy (bool): Determine whether to apply lazy operation. Default: False.
     """
 
-    def __init__(self, size, lazy=False):
+    def __init__(self, size, lazy=False, keys='imgs'):
         if not isinstance(size, int):
             raise TypeError(f'Size must be an int, but got {type(size)}')
         self.size = size
         self.lazy = lazy
+        self.keys = keys
 
     def __call__(self, results):
         """Performs the RandomCrop augmentation.
@@ -119,7 +123,7 @@ class RandomCrop(object):
             results (dict): The resulting dict to be modified and passed
                 to the next transform in pipeline.
         """
-        _init_lazy_if_proper(results, self.lazy)
+        _init_lazy_if_proper(results, self.lazy, self.keys)
 
         img_h, img_w = results['img_shape']
         assert self.size <= img_h and self.size <= img_w
@@ -138,9 +142,9 @@ class RandomCrop(object):
         results['img_shape'] = (new_h, new_w)
 
         if not self.lazy:
-            results['imgs'] = [
+            results[self.keys] = [
                 img[y_offset:y_offset + new_h, x_offset:x_offset + new_w]
-                for img in results['imgs']
+                for img in results[self.keys]
             ]
         else:
             lazyop = results['lazy']
@@ -190,7 +194,8 @@ class RandomResizedCrop(object):
                  same_across_clip=True,
                  same_clip_indices=None,
                  same_frame_indices=None,
-                 lazy=False):
+                 lazy=False,
+                 keys='imgs'):
         self.area_range = area_range
         self.aspect_ratio_range = aspect_ratio_range
         self.lazy = lazy
@@ -208,6 +213,7 @@ class RandomResizedCrop(object):
         if same_frame_indices is not None:
             assert isinstance(same_frame_indices, Sequence)
         self.same_frame_indices = same_frame_indices
+        self.keys = keys
 
     @staticmethod
     def get_crop_bbox(img_shape,
@@ -267,7 +273,7 @@ class RandomResizedCrop(object):
             results (dict): The resulting dict to be modified and passed
                 to the next transform in pipeline.
         """
-        _init_lazy_if_proper(results, self.lazy)
+        _init_lazy_if_proper(results, self.lazy, self.keys)
 
         img_h, img_w = results['img_shape']
 
@@ -279,7 +285,7 @@ class RandomResizedCrop(object):
         results['img_shape'] = (new_h, new_w)
 
         if not self.lazy:
-            for i, img in enumerate(results['imgs']):
+            for i, img in enumerate(results[self.keys]):
                 is_new_clip = not self.same_across_clip and i % results[
                     'clip_len'] == 0 and i > 0
                 generate_new = not self.same_on_clip or is_new_clip
@@ -303,7 +309,7 @@ class RandomResizedCrop(object):
 
                 results['crop_bbox'] = np.array([left, top, right, bottom])
                 results['img_shape'] = (new_h, new_w)
-                results['imgs'][i] = img[top:bottom, left:right]
+                results[self.keys][i] = img[top:bottom, left:right]
                 if 'grids' in results:
                     grid = results['grids'][i]
                     results['grids'][i] = grid[top:bottom, left:right]
@@ -370,7 +376,8 @@ class MultiScaleCrop(object):
                  max_wh_scale_gap=1,
                  random_crop=False,
                  num_fixed_crops=5,
-                 lazy=False):
+                 lazy=False,
+                 keys='imgs'):
         self.input_size = _pair(input_size)
         if not mmcv.is_tuple_of(self.input_size, int):
             raise TypeError(f'Input_size must be int or tuple of int, '
@@ -388,6 +395,7 @@ class MultiScaleCrop(object):
         self.random_crop = random_crop
         self.num_fixed_crops = num_fixed_crops
         self.lazy = lazy
+        self.keys = keys
 
     def __call__(self, results):
         """Performs the MultiScaleCrop augmentation.
@@ -396,7 +404,7 @@ class MultiScaleCrop(object):
             results (dict): The resulting dict to be modified and passed
                 to the next transform in pipeline.
         """
-        _init_lazy_if_proper(results, self.lazy)
+        _init_lazy_if_proper(results, self.lazy, self.keys)
 
         img_h, img_w = results['img_shape']
         base_size = min(img_h, img_w)
@@ -450,9 +458,9 @@ class MultiScaleCrop(object):
         results['scales'] = self.scales
 
         if not self.lazy:
-            results['imgs'] = [
+            results[self.keys] = [
                 img[y_offset:y_offset + new_h, x_offset:x_offset + new_w]
-                for img in results['imgs']
+                for img in results[self.keys]
             ]
         else:
             lazyop = results['lazy']
@@ -511,7 +519,8 @@ class Resize(object):
                  scale,
                  keep_ratio=True,
                  interpolation='bilinear',
-                 lazy=False):
+                 lazy=False,
+                 keys='imgs'):
         if isinstance(scale, float):
             if scale <= 0:
                 raise ValueError(f'Invalid scale {scale}, must be positive.')
@@ -528,6 +537,7 @@ class Resize(object):
         self.keep_ratio = keep_ratio
         self.interpolation = interpolation
         self.lazy = lazy
+        self.keys = keys
 
     def __call__(self, results):
         """Performs the Resize augmentation.
@@ -537,7 +547,7 @@ class Resize(object):
                 to the next transform in pipeline.
         """
 
-        _init_lazy_if_proper(results, self.lazy)
+        _init_lazy_if_proper(results, self.lazy, self.keys)
 
         if 'scale_factor' not in results:
             results['scale_factor'] = np.array([1, 1], dtype=np.float32)
@@ -556,10 +566,10 @@ class Resize(object):
         results['scale_factor'] = results['scale_factor'] * self.scale_factor
 
         if not self.lazy:
-            results['imgs'] = [
+            results[self.keys] = [
                 mmcv.imresize(
                     img, (new_w, new_h), interpolation=self.interpolation)
-                for img in results['imgs']
+                for img in results[self.keys]
             ]
             if 'grids' in results:
                 results['grids'] = [
@@ -621,7 +631,8 @@ class Flip(object):
                  same_on_clip=True,
                  same_across_clip=True,
                  same_clip_indices=None,
-                 same_frame_indices=None):
+                 same_frame_indices=None,
+                 keys='imgs'):
         if direction not in self._directions:
             raise ValueError(f'Direction {direction} is not supported. '
                              f'Currently support ones are {self._directions}')
@@ -636,6 +647,7 @@ class Flip(object):
         if same_frame_indices is not None:
             assert isinstance(same_frame_indices, Sequence)
         self.same_frame_indices = same_frame_indices
+        self.keys = keys
 
     def __call__(self, results):
         """Performs the Flip augmentation.
@@ -644,7 +656,7 @@ class Flip(object):
             results (dict): The resulting dict to be modified and passed
                 to the next transform in pipeline.
         """
-        _init_lazy_if_proper(results, self.lazy)
+        _init_lazy_if_proper(results, self.lazy, self.keys)
         modality = results['modality']
         if modality == 'Flow':
             assert self.direction == 'horizontal'
@@ -658,7 +670,7 @@ class Flip(object):
         results['flip_direction'] = self.direction
 
         if not self.lazy:
-            for i, img in enumerate(results['imgs']):
+            for i, img in enumerate(results[self.keys]):
                 is_new_clip = not self.same_across_clip and i % results[
                     'clip_len'] == 0 and i > 0
                 generate_new = not self.same_on_clip or is_new_clip
@@ -681,15 +693,15 @@ class Flip(object):
                     if 'grids' in results:
                         mmcv.imflip_(results['grids'][i], self.direction)
             if flip:
-                lt = len(results['imgs'])
+                lt = len(results[self.keys])
                 for i in range(0, lt, 2):
                     # flow with even indexes are x_flow, which need to be
                     # inverted when doing horizontal flip
                     if modality == 'Flow':
-                        results['imgs'][i] = mmcv.iminvert(results['imgs'][i])
+                        results[self.keys][i] = mmcv.iminvert(results[self.keys][i])
 
             else:
-                results['imgs'] = list(results['imgs'])
+                results[self.keys] = list(results[self.keys])
         else:
             lazyop = results['lazy']
             if lazyop['flip']:
@@ -724,7 +736,7 @@ class Normalize(object):
             on 'scale_factor' when modality is 'Flow'. Default: False.
     """
 
-    def __init__(self, mean, std, to_bgr=False, adjust_magnitude=False):
+    def __init__(self, mean, std, to_bgr=False, adjust_magnitude=False, keys='imgs'):
         if not isinstance(mean, Sequence):
             raise TypeError(
                 f'Mean must be list, tuple or np.ndarray, but got {type(mean)}'
@@ -738,43 +750,44 @@ class Normalize(object):
         self.std = np.array(std, dtype=np.float32)
         self.to_bgr = to_bgr
         self.adjust_magnitude = adjust_magnitude
+        self.keys = keys
 
     def __call__(self, results):
         modality = results['modality']
 
         if modality == 'RGB':
-            n = len(results['imgs'])
-            h, w, c = results['imgs'][0].shape
+            n = len(results[self.keys])
+            h, w, c = results[self.keys][0].shape
             imgs = np.empty((n, h, w, c), dtype=np.float32)
-            for i, img in enumerate(results['imgs']):
+            for i, img in enumerate(results[self.keys]):
                 imgs[i] = img
 
             for img in imgs:
                 mmcv.imnormalize_(img, self.mean, self.std, self.to_bgr)
 
-            results['imgs'] = imgs
+            results[self.keys] = imgs
             results['img_norm_cfg'] = dict(
                 mean=self.mean, std=self.std, to_bgr=self.to_bgr)
             return results
         elif modality == 'Flow':
-            num_imgs = len(results['imgs'])
+            num_imgs = len(results[self.keys])
             assert num_imgs % 2 == 0
             assert self.mean.shape[0] == 2
             assert self.std.shape[0] == 2
             n = num_imgs // 2
-            h, w = results['imgs'][0].shape
+            h, w = results[self.keys][0].shape
             x_flow = np.empty((n, h, w), dtype=np.float32)
             y_flow = np.empty((n, h, w), dtype=np.float32)
             for i in range(n):
-                x_flow[i] = results['imgs'][2 * i]
-                y_flow[i] = results['imgs'][2 * i + 1]
+                x_flow[i] = results[self.keys][2 * i]
+                y_flow[i] = results[self.keys][2 * i + 1]
             x_flow = (x_flow - self.mean[0]) / self.std[0]
             y_flow = (y_flow - self.mean[1]) / self.std[1]
             if self.adjust_magnitude:
                 x_flow = x_flow * results['scale_factor'][0]
                 y_flow = y_flow * results['scale_factor'][1]
             imgs = np.stack([x_flow, y_flow], axis=-1)
-            results['imgs'] = imgs
+            results[self.keys] = imgs
             args = dict(
                 mean=self.mean,
                 std=self.std,
@@ -807,9 +820,10 @@ class CenterCrop(object):
         lazy (bool): Determine whether to apply lazy operation. Default: False.
     """
 
-    def __init__(self, crop_size, lazy=False):
+    def __init__(self, crop_size, lazy=False, keys='imgs'):
         self.crop_size = _pair(crop_size)
         self.lazy = lazy
+        self.keys = keys
         if not mmcv.is_tuple_of(self.crop_size, int):
             raise TypeError(f'Crop_size must be int or tuple of int, '
                             f'but got {type(crop_size)}')
@@ -821,7 +835,7 @@ class CenterCrop(object):
             results (dict): The resulting dict to be modified and passed
                 to the next transform in pipeline.
         """
-        _init_lazy_if_proper(results, self.lazy)
+        _init_lazy_if_proper(results, self.lazy, self.keys)
 
         img_h, img_w = results['img_shape']
         crop_w, crop_h = self.crop_size
@@ -836,8 +850,8 @@ class CenterCrop(object):
         results['img_shape'] = (new_h, new_w)
 
         if not self.lazy:
-            results['imgs'] = [
-                img[top:bottom, left:right] for img in results['imgs']
+            results[self.keys] = [
+                img[top:bottom, left:right] for img in results[self.keys]
             ]
         else:
             lazyop = results['lazy']
@@ -877,8 +891,9 @@ class ThreeCrop(object):
         crop_size(int | tuple[int]): (w, h) of crop size.
     """
 
-    def __init__(self, crop_size):
+    def __init__(self, crop_size, keys='imgs'):
         self.crop_size = _pair(crop_size)
+        self.keys = keys
         if not mmcv.is_tuple_of(self.crop_size, int):
             raise TypeError(f'Crop_size must be int or tuple of int, '
                             f'but got {type(crop_size)}')
@@ -890,10 +905,10 @@ class ThreeCrop(object):
             results (dict): The resulting dict to be modified and passed
                 to the next transform in pipeline.
         """
-        _init_lazy_if_proper(results, False)
+        _init_lazy_if_proper(results, False, self.keys)
 
-        imgs = results['imgs']
-        img_h, img_w = results['imgs'][0].shape[:2]
+        imgs = results[self.keys]
+        img_h, img_w = results[self.keys][0].shape[:2]
         crop_w, crop_h = self.crop_size
         assert crop_h == img_h or crop_w == img_w
 
@@ -924,9 +939,9 @@ class ThreeCrop(object):
             crop_bboxes.extend([bbox for _ in range(len(imgs))])
 
         crop_bboxes = np.array(crop_bboxes)
-        results['imgs'] = cropped
+        results[self.keys] = cropped
         results['crop_bbox'] = crop_bboxes
-        results['img_shape'] = results['imgs'][0].shape[:2]
+        results['img_shape'] = results[self.keys][0].shape[:2]
 
         return results
 
@@ -948,8 +963,9 @@ class TenCrop(object):
         crop_size(int | tuple[int]): (w, h) of crop size.
     """
 
-    def __init__(self, crop_size):
+    def __init__(self, crop_size, keys='imgs'):
         self.crop_size = _pair(crop_size)
+        self.keys = keys
         if not mmcv.is_tuple_of(self.crop_size, int):
             raise TypeError(f'Crop_size must be int or tuple of int, '
                             f'but got {type(crop_size)}')
@@ -961,11 +977,11 @@ class TenCrop(object):
             results (dict): The resulting dict to be modified and passed
                 to the next transform in pipeline.
         """
-        _init_lazy_if_proper(results, False)
+        _init_lazy_if_proper(results, False, self.keys)
 
-        imgs = results['imgs']
+        imgs = results[self.keys]
 
-        img_h, img_w = results['imgs'][0].shape[:2]
+        img_h, img_w = results[self.keys][0].shape[:2]
         crop_w, crop_h = self.crop_size
 
         w_step = (img_w - crop_w) // 4
@@ -993,9 +1009,9 @@ class TenCrop(object):
             crop_bboxes.extend([bbox for _ in range(len(imgs) * 2)])
 
         crop_bboxes = np.array(crop_bboxes)
-        results['imgs'] = img_crops
+        results[self.keys] = img_crops
         results['crop_bbox'] = crop_bboxes
-        results['img_shape'] = results['imgs'][0].shape[:2]
+        results['img_shape'] = results[self.keys][0].shape[:2]
 
         return results
 
@@ -1018,9 +1034,10 @@ class MultiGroupCrop(object):
         groups(int): Number of groups.
     """
 
-    def __init__(self, crop_size, groups):
+    def __init__(self, crop_size, groups, keys='imgs'):
         self.crop_size = _pair(crop_size)
         self.groups = groups
+        self.keys = keys
         if not mmcv.is_tuple_of(self.crop_size, int):
             raise TypeError(
                 'Crop size must be int or tuple of int, but got {}'.format(
@@ -1039,7 +1056,7 @@ class MultiGroupCrop(object):
             results (dict): The resulting dict to be modified and passed
                 to the next transform in pipeline.
         """
-        imgs = results['imgs']
+        imgs = results[self.keys]
         img_h, img_w = imgs[0].shape[:2]
         crop_w, crop_h = self.crop_size
 
@@ -1058,9 +1075,9 @@ class MultiGroupCrop(object):
             crop_bboxes.extend([bbox for _ in range(len(imgs))])
 
         crop_bboxes = np.array(crop_bboxes)
-        results['imgs'] = img_crops
+        results[self.keys] = img_crops
         results['crop_bbox'] = crop_bboxes
-        results['img_shape'] = results['imgs'][0].shape[:2]
+        results['img_shape'] = results[self.keys][0].shape[:2]
 
         return results
 
@@ -1074,12 +1091,12 @@ class MultiGroupCrop(object):
 @PIPELINES.register_module()
 class RGB2LAB(object):
 
-    def __init__(self):
-        pass
+    def __init__(self, keys='imgs'):
+        self.keys = keys
 
     def __call__(self, results):
-        for i, img in enumerate(results['imgs']):
-            results['imgs'][i] = mmcv.imconvert(img, 'rgb', 'lab')
+        for i, img in enumerate(results[self.keys]):
+            results[self.keys][i] = mmcv.imconvert(img, 'rgb', 'lab')
         return results
 
 
@@ -1112,7 +1129,8 @@ class PhotoMetricDistortion(object):
                  hue_delta=18,
                  p=0.5,
                  same_on_clip=True,
-                 same_across_clip=True):
+                 same_across_clip=True,
+                 keys='imgs'):
         self.brightness_delta = brightness_delta
         self.contrast_lower, self.contrast_upper = contrast_range
         self.saturation_lower, self.saturation_upper = saturation_range
@@ -1120,6 +1138,7 @@ class PhotoMetricDistortion(object):
         self.p = p
         self.same_on_clip = same_on_clip
         self.same_across_clip = same_across_clip
+        self.keys = keys
 
     def convert(self, img, alpha=1, beta=0):
         """Multiple with alpha and add beat with clip."""
@@ -1171,7 +1190,7 @@ class PhotoMetricDistortion(object):
         hue_delta = npr.randint(-self.hue_delta, self.hue_delta)
         apply_mode = npr.rand() < self.p
 
-        for i, img in enumerate(results['imgs']):
+        for i, img in enumerate(results[self.keys]):
             is_new_clip = not self.same_across_clip and i % results[
                 'clip_len'] == 0 and i > 0
             if not self.same_on_clip or is_new_clip:
@@ -1206,7 +1225,7 @@ class PhotoMetricDistortion(object):
             if not apply_mode and apply_contrast:
                 img = self.contrast(img, alpha=saturation_alpha)
 
-            results['imgs'][i] = img
+            results[self.keys][i] = img
         return results
 
     def __repr__(self):
@@ -1227,16 +1246,18 @@ class RandomGaussianBlur(object):
                  sigma_range=(0.1, 0.2),
                  p=0.5,
                  same_on_clip=True,
-                 same_across_clip=True):
+                 same_across_clip=True,
+                 keys='imgs'):
         self.sigma_range = sigma_range
         self.p = p
         self.same_on_clip = same_on_clip
         self.same_across_clip = same_across_clip
+        self.keys = keys
 
     def __call__(self, results):
         apply = npr.rand() < self.p
         sigma = random.uniform(self.sigma_range[0], self.sigma_range[1])
-        for i, img in enumerate(results['imgs']):
+        for i, img in enumerate(results[self.keys]):
             is_new_clip = not self.same_across_clip and i % results[
                 'clip_len'] == 0 and i > 0
             if not self.same_on_clip or is_new_clip:
@@ -1248,7 +1269,7 @@ class RandomGaussianBlur(object):
                 pil_image = pil_image.filter(
                     ImageFilter.GaussianBlur(radius=sigma))
                 img = np.array(pil_image)
-                results['imgs'][i] = img
+                results[self.keys][i] = img
 
         return results
 
@@ -1256,14 +1277,15 @@ class RandomGaussianBlur(object):
 @PIPELINES.register_module()
 class RandomGrayScale(object):
 
-    def __init__(self, p=0.5, same_on_clip=True, same_across_clip=True):
+    def __init__(self, p=0.5, same_on_clip=True, same_across_clip=True, keys='imgs'):
         self.p = p
         self.same_on_clip = same_on_clip
         self.same_across_clip = same_across_clip
+        self.keys = keys
 
     def __call__(self, results):
         apply = npr.rand() < self.p
-        for i, img in enumerate(results['imgs']):
+        for i, img in enumerate(results[self.keys]):
             is_new_clip = not self.same_across_clip and i % results[
                 'clip_len'] == 0 and i > 0
             if not self.same_on_clip or is_new_clip:
@@ -1271,7 +1293,7 @@ class RandomGrayScale(object):
             if apply:
                 img = mmcv.rgb2gray(img, keepdim=True)
                 img = np.repeat(img, 3, axis=-1)
-                results['imgs'][i] = img
+                results[self.keys][i] = img
 
         return results
 
@@ -1286,7 +1308,9 @@ class ColorJitter(object):
                  brightness=0,
                  contrast=0,
                  saturation=0,
-                 hue=0):
+                 hue=0,
+                 keys='imgs',
+                 output_keys='imgs'):
         trans = _ColorJitter(
             brightness=brightness,
             contrast=contrast,
@@ -1299,12 +1323,17 @@ class ColorJitter(object):
         self.p = p
         self.same_on_clip = same_on_clip
         self.same_across_clip = same_across_clip
+        self.keys = keys
+        self.output_keys = output_keys
 
     def __call__(self, results):
         apply = npr.rand() < self.p
         trans = _ColorJitter.get_params(self.brightness, self.contrast,
                                         self.saturation, self.hue)
-        for i, img in enumerate(results['imgs']):
+        if self.keys is not self.output_keys: 
+            results[self.output_keys] = results[self.output_keys] = copy.deepcopy(results[self.keys])
+
+        for i, img in enumerate(results[self.keys]):
             is_new_clip = not self.same_across_clip and i % results[
                 'clip_len'] == 0 and i > 0
             if not self.same_on_clip or is_new_clip:
@@ -1313,7 +1342,7 @@ class ColorJitter(object):
                                                 self.saturation, self.hue)
             if apply:
                 img = np.array(trans(Image.fromarray(img)))
-                results['imgs'][i] = img
+                results[self.output_keys][i] = img
 
         return results
 
@@ -1321,8 +1350,9 @@ class ColorJitter(object):
 @PIPELINES.register_module()
 class Grid(object):
 
-    def __init__(self, normalize=False):
+    def __init__(self, normalize=False, keys='imgs'):
         self.normalize = normalize
+        self.keys = keys
 
     def __call__(self, results):
         h, w = results['original_shape']
@@ -1333,7 +1363,7 @@ class Grid(object):
             x_grid = 2 * x_grid / w - 1
         grids = [
             np.stack((y_grid, x_grid), axis=-1).astype(np.float)
-            for _ in range(len(results['imgs']))
+            for _ in range(len(results[self.keys]))
         ]
 
         results['grids'] = grids
@@ -1345,20 +1375,21 @@ class Grid(object):
 @PIPELINES.register_module()
 class Image2Patch(object):
 
-    def __init__(self, patch_size, stride, scale_jitter=(0.7, 0.9)):
+    def __init__(self, patch_size, stride, scale_jitter=(0.7, 0.9), keys='imgs'):
         self.patch_size = patch_size
         self.stride = stride
         self.crop_trans = _RandomResizedCrop(patch_size, scale=scale_jitter)
+        self.keys = keys
 
     def __call__(self, results):
 
         patches = []
-        for img in results['imgs']:
+        for img in results[self.keys]:
             patch = view_as_windows(img, self.patch_size, self.stride)
             patches.extend(list(patch.view(-1, *patch.shape[2:])))
         for i in range(len(patches)):
             patches[i] = self.crop_trans(patches[i])
-        results['imgs'] = patches
+        results[self.keys] = patches
 
         return results
 
@@ -1367,21 +1398,22 @@ class Image2Patch(object):
 class HidePatch(object):
     """after normalization."""
 
-    def __init__(self, patch_size, hide_prob):
+    def __init__(self, patch_size, hide_prob, keys='imgs'):
         if not isinstance(patch_size, (list, tuple)):
             patch_size = [patch_size]
         self.patch_size = patch_size
         self.hide_prob = hide_prob
+        self.keys = keys
 
     def __call__(self, results):
         patch_size = np.random.choice(self.patch_size)
-        h, w = results['imgs'][0].shape[:2]
-        for i, img in enumerate(results['imgs']):
+        h, w = results[self.keys][0].shape[:2]
+        for i, img in enumerate(results[self.keys]):
             for y in range(0, h, patch_size):
                 for x in range(0, w, patch_size):
                     apply = npr.rand() < self.hide_prob
                     if apply:
-                        results['imgs'][i][y:y + patch_size,
+                        results[self.keys][i][y:y + patch_size,
                                            x:x + patch_size] = 0
 
         return results
@@ -1399,7 +1431,8 @@ class RandomAffine(object):
                  scale=None,
                  shear=None,
                  resample=2,
-                 fillcolor=0):
+                 fillcolor=0,
+                 keys='imgs'):
         trans = _RandomAffine(
             degrees=degrees,
             translate=translate,
@@ -1416,13 +1449,14 @@ class RandomAffine(object):
         self.p = p
         self.same_on_clip = same_on_clip
         self.same_across_clip = same_across_clip
+        self.keys = keys
 
     def __call__(self, results):
         apply = npr.rand() < self.p
-        h, w = results['imgs'][0].shape[:2]
+        h, w = results[self.keys][0].shape[:2]
         ret = _RandomAffine.get_params(self.degrees, self.translate,
                                        self.scale, self.shear, (w, h))
-        for i, img in enumerate(results['imgs']):
+        for i, img in enumerate(results[self.keys]):
             is_new_clip = not self.same_across_clip and i % results[
                 'clip_len'] == 0 and i > 0
             if not self.same_on_clip or is_new_clip:
@@ -1436,7 +1470,7 @@ class RandomAffine(object):
                         *ret,
                         resample=self.resample,
                         fillcolor=self.fillcolor))
-                results['imgs'][i] = img
+                results[self.keys][i] = img
 
         return results
 
@@ -1444,7 +1478,7 @@ class RandomAffine(object):
 @PIPELINES.register_module()
 class RandomChoiceRotate(object):
 
-    def __init__(self, p, degrees, same_on_clip=True, same_across_clip=True):
+    def __init__(self, p, degrees, same_on_clip=True, same_across_clip=True, keys='imgs'):
         self.p = p
         if not isinstance(degrees, (list, tuple)):
             degrees = [degrees]
@@ -1452,12 +1486,13 @@ class RandomChoiceRotate(object):
         self.label_map = {d: i for i, d in enumerate(degrees)}
         self.same_on_clip = same_on_clip
         self.same_across_clip = same_across_clip
+        self.keys = keys
 
     def __call__(self, results):
         apply = npr.rand() < self.p
         degree = np.random.choice(self.degrees)
         labels = []
-        for i, img in enumerate(results['imgs']):
+        for i, img in enumerate(results[self.keys]):
             is_new_clip = not self.same_across_clip and i % results[
                 'clip_len'] == 0 and i > 0
             if not self.same_on_clip or is_new_clip:
@@ -1465,7 +1500,7 @@ class RandomChoiceRotate(object):
                 degree = np.random.choice(self.degrees)
             if apply:
                 img = np.array(mmcv.imrotate(img, angle=degree))
-                results['imgs'][i] = img
+                results[self.keys][i] = img
                 labels.append(self.label_map[degree])
             else:
                 labels.append(0)
@@ -1501,13 +1536,15 @@ class RandomErasing(object):
                  area_range=(0.02, 1 / 3),
                  aspect_ratio_range=(1 / 3, 3),
                  count_range=(1, 1),
-                 mode='const'):
+                 mode='const',
+                 keys='imgs'):
         self.p = p
         self.area_range = area_range
         self.aspect_ratio_range = aspect_ratio_range
         self.count_range = count_range
         assert mode in ['rand', 'pixel', 'const']
         self.mode = mode
+        self.keys = keys
 
     @staticmethod
     def get_crop_bbox(img_shape,
@@ -1583,9 +1620,9 @@ class RandomErasing(object):
         return img
 
     def __call__(self, results):
-        for i, img in enumerate(results['imgs']):
+        for i, img in enumerate(results[self.keys]):
             apply = npr.rand() < self.p
             if apply:
-                results['imgs'][i] = self.erase(img)
+                results[self.keys][i] = self.erase(img)
 
         return results

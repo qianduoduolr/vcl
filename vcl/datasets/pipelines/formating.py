@@ -229,8 +229,9 @@ class FormatShape(object):
         input_format (str): Define the final imgs format.
     """
 
-    def __init__(self, input_format):
+    def __init__(self, input_format, keys='imgs'):
         self.input_format = input_format
+        self.keys= keys
         if self.input_format not in ['NCTHW', 'NCHW', 'NCHW_Flow', 'NPTCHW']:
             raise ValueError(
                 f'The input format {self.input_format} is invalid.')
@@ -242,7 +243,7 @@ class FormatShape(object):
             results (dict): The resulting dict to be modified and passed
                 to the next transform in pipeline.
         """
-        imgs = results['imgs']
+        imgs = results[self.keys]
         # [M x H x W x C]
         # M = 1 * N_crops * N_clips * L
         if self.input_format == 'NCTHW':
@@ -302,7 +303,7 @@ class FormatShape(object):
             imgs = np.transpose(imgs, (0, 1, 4, 2, 3))
             # P x M x C x H x W
 
-        results['imgs'] = imgs
+        results[self.keys] = imgs
         results['input_shape'] = imgs.shape
         if 'grids' in results:
             results['grids'] = grids

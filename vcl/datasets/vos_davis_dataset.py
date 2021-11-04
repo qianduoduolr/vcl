@@ -154,6 +154,37 @@ class VOS_davis_dataset_test(VOS_dataset_base):
         }
 
         return self.pipeline(data)
+    
+    def prepare_test_data_vis(self, index):
+        sample = self.samples[index]
+        frames_path = sample['frames_path']
+        masks_path = sample['masks_path']
+        num_frames = sample['num_frames']
+
+        offset = [ random.randint(1, num_frames-4)]
+        frames = self._parser_rgb_rawframe([0], frames_path, 2, step=offset[0])[::-1]
+        mask = self._parser_rgb_rawframe([0], masks_path, 1, flag='unchanged', backend='pillow')[0]
+
+        mask = cv2.resize(mask, (32, 32), cv2.INTER_NEAREST).reshape(-1)
+        obj_idxs = np.nonzero(mask)[0]
+
+        if mask.max() > 0:
+            sample_idx = np.array(random.sample(obj_idxs.tolist(), 1))
+        else:
+            sample_idx = np.array(random.sample(range(self.vq_res * self.vq_res), 1))
+
+        assert sample_idx.shape[0] == 1
+
+        data = {
+            'imgs': frames,
+            'mask_query_idx': sample_idx,
+            'modality': 'RGB',
+            'num_clips': 1,
+            'num_proposals':1,
+            'clip_len': 2
+        }
+
+        return self.pipeline(data)
 
     def davis_evaluate(self, results, output_dir, logger=None):
         dataset_eval = DAVISEvaluation(

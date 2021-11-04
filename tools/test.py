@@ -17,9 +17,9 @@ from vcl.utils import get_root_logger
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train an editor')
-    parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/vqvae_mlm_orivq.py')
-    parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='')
-    # parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_dyt_nl_l2_nofc_orivq/epoch_800.pth')
+    parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/local/vqvae_mlm_orivq.py')
+    # parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='')
+    parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_dyt_nl_l2_fc_orivq/epoch_800.pth')
     parser.add_argument('--seed', type=int, default=3, help='random seed')
     parser.add_argument(
         '--deterministic',
@@ -40,7 +40,7 @@ def parse_args():
         help='whether to use gpu to collect results')
     parser.add_argument(
         '--save-path',
-        default='output/vis_vfs',
+        default='output/vis_vq2',
         type=str,
         help='path to store images and if not given, will not save image')
     parser.add_argument('--tmpdir', help='tmp dir for writing some results')
@@ -108,8 +108,8 @@ def main():
     model = build_model(
         cfg.model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
 
-    model.backbone.pretrained = '/home/lr/models/ssl/vcl/vfs_pretrain/r18_nc_sgd_cos_100e_r2_1xNx8_k400-db1a4c0d.pth'
-    model.backbone.init_weights()
+    # model.backbone.pretrained = '/home/lr/models/ssl/vcl/vfs_pretrain/r18_nc_sgd_cos_100e_r2_1xNx8_k400-db1a4c0d.pth'
+    # model.backbone.init_weights()
 
     args.save_image = args.save_path is not None
     empty_cache = cfg.get('empty_cache', False)
