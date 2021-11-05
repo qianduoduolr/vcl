@@ -70,7 +70,6 @@ def main():
     parser.add_argument("--n_embed", type=int, default=4096)
     parser.add_argument("--save_path", type=str, default="/home/lr/models/vqvae")
     parser.add_argument("--pretrained_model", type=str, default="")
-
     args = parser.parse_args()
     print("input args:\n", json.dumps(vars(args), indent=4, separators=(",", ":")))
 
