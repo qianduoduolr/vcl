@@ -12,6 +12,7 @@ from PIL import Image
 from raft import RAFT
 from utils import flow_viz
 from utils.utils import InputPadder
+from torch.nn.parallel import DistributedDataParallel
 
 from tqdm import tqdm
 
@@ -25,11 +26,9 @@ def load_image(imfile):
 
 def main(args):
     num_gpu = args.num_gpu
-
-    # torch.cuda.set_device(args.local_rank)
-    torch.distributed.init_process_group(backend='nccl', init_method='env://')
     
-    model = torch.nn.parallel.DistributedDataParallel(RAFT(args), device_ids=[args.local_rank], broadcast_buffers=False)
+    model = RAFT(args).cuda()
+    model = DistributedDataParallel(model, device_ids=[args.local_rank], broadcast_buffers=False)
     model.load_state_dict(torch.load(args.model))
 
     model = model.module
@@ -78,16 +77,19 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', help="restore checkpoint", default='/gdata/lirui/models/optical_flow/raft-things.pth')
-    parser.add_argument('--path', help="dataset for evaluation", default='/gdata/lirui/dataset/YouTube-VOS/2018/train/JPEGImages')
+    parser.add_argument('--path', help="dataset for evaluation", default='/gdata/lirui/dataset/YouTube-VOS/2018/train_all_frames/JPEGImages')
     parser.add_argument('--out', help="dataset for evaluation", default='/gdata/lirui/dataset/YouTube-VOS/2018/train/Flows')
     parser.add_argument('--small', action='store_true', help='use small model')
     parser.add_argument('--mixed_precision', action='store_true', help='use mixed precision')
     parser.add_argument('--alternate_corr', action='store_true', help='use efficent correlation implementation')
-    parser.add_argument('--local_rank',  help='use small model', default=0)
+    parser.add_argument('--local_rank',  type=int, help='use small model')
     parser.add_argument('--num-gpu',  type=int, default=1, help='use small model')
 
-
-
     args = parser.parse_args()
+
+    print(args.local_rank)
+
+    torch.cuda.set_device(args.local_rank)
+    torch.distributed.init_process_group(backend='nccl', init_method='env://')
 
     main(args)
