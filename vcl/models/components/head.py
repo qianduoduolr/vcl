@@ -97,7 +97,6 @@ class SimSiamHead(nn.Module):
         self.norm_cfg = norm_cfg
         self.act_cfg = act_cfg
         self.with_norm = with_norm
-        self.loss_feat = build_loss(loss_feat)
         convs = []
         last_channels = in_channels
         for i in range(num_convs):
@@ -204,11 +203,3 @@ class SimSiamHead(nn.Module):
         p = self.predictor_fcs(z)
 
         return z, p
-
-    def loss(self, p1, z1, p2, z2, mask12=None, mask21=None, weight=1.):
-        assert mask12 is None
-        assert mask21 is None
-
-        loss = self.loss_feat(p1, z2.detach()) * 0.5 + self.loss_feat(
-            p2, z1.detach()) * 0.5
-        return loss

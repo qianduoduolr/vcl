@@ -33,6 +33,7 @@ class Vqvae_Tracker(BaseModel):
                  sim_siam_head=None,
                  ce_loss=None,
                  l2_loss=None,
+                 cts_loss=None,
                  fc=True,
                  train_cfg=None,
                  test_cfg=None,
@@ -79,6 +80,7 @@ class Vqvae_Tracker(BaseModel):
         # loss
         self.ce_loss = build_loss(ce_loss) if ce_loss else None
         self.l2_loss = build_loss(l2_loss) if l2_loss else None
+        self.cts_loss = build_loss(cts_loss) if cts_loss else None
 
         # corr
         self.correlation_sampler = SpatialCorrelationSampler(
@@ -147,7 +149,7 @@ class Vqvae_Tracker(BaseModel):
             embeds = nn.functional.normalize(embeds, dim=-1)
             losses['l2_loss'] = (self.l2_loss(predict, embeds) * mask_query_idx.reshape(-1,1)).sum() / mask_query_idx.sum()
 
-        if self.head is not None:
+        if self.cts_loss:
             losses['cts_loss'] = self.forward_img_head(tar, refs[-1])
         else:
             pass
@@ -262,6 +264,7 @@ class Vqvae_Tracker(BaseModel):
 
         z1, p1 = self.head(x1)
         z2, p2 = self.head(x2)
-        loss = self.head.loss(p1, z1, p2, z2)
+        
+        loss = self.cts_loss(p1, z2.detach()) * 0.5 + self.cts_loss(p2, z1.detach()) * 0.5
 
         return loss

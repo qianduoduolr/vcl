@@ -18,8 +18,8 @@ model = dict(
         predictor_mid_channels=128,
         predictor_out_channels=512,
         with_norm=True,
-        loss_feat=dict(type='CosineSimLoss', negative=False),
         spatial_type='avg'),
+    cts_loss=dict(type='CosineSimLoss', negative=False),
     patch_size=-1,
     fc=False,
     temperature=0.1,
@@ -121,7 +121,6 @@ data = dict(
 # optimizer
 optimizers = dict(
     backbone=dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001),
-    embedding_layer=dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001),
     head=dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
     )
 
