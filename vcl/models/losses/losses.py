@@ -201,3 +201,54 @@ class CharbonnierLoss(nn.Module):
             eps=self.eps,
             reduction=self.reduction,
             sample_wise=self.sample_wise)
+
+
+@LOSSES.register_module()
+class CosineSimLoss(nn.Module):
+    """NLL Loss.
+
+    It will calculate Cosine Similarity loss given cls_score and label.
+    """
+
+    def __init__(self,
+                 loss_weight=1.0,
+                 with_norm=True,
+                 negative=False,
+                 pairwise=False,
+                 reduction='mean',
+                 **kwargs):
+        super().__init__()
+        self.with_norm = with_norm
+        self.negative = negative
+        self.pairwise = pairwise
+        self.loss_weight = loss_weight
+        self.reduction = reduction
+
+    def forward(self, cls_score, label, mask=None, **kwargs):
+        if self.with_norm:
+            cls_score = F.normalize(cls_score, p=2, dim=1)
+            label = F.normalize(label, p=2, dim=1)
+        if mask is not None:
+            assert self.pairwise
+        if self.pairwise:
+            cls_score = cls_score.flatten(2)
+            label = label.flatten(2)
+            prod = torch.einsum('bci,bcj->bij', cls_score, label)
+            if mask is not None:
+                assert prod.shape == mask.shape
+                prod *= mask.float()
+            prod = prod.flatten(1)
+        else:
+            prod = torch.sum(
+                cls_score * label, dim=1).view(cls_score.size(0), -1)
+        if self.negative:
+            loss = -prod.mean(dim=-1)
+        else:
+            loss = 2 - 2 * prod.mean(dim=-1)
+        
+        if self.reduction == 'mean':
+            loss = loss.mean()
+        else:
+            loss = loss.sum()
+            
+        return loss * self.loss_weight

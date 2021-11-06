@@ -30,6 +30,7 @@ class Vqvae_Tracker(BaseModel):
                  patch_size,
                  pretrained_vq,
                  temperature,
+                 sim_siam_head=None,
                  ce_loss=None,
                  l2_loss=None,
                  fc=True,
@@ -55,6 +56,11 @@ class Vqvae_Tracker(BaseModel):
         logger = get_root_logger()
 
         self.backbone = build_backbone(backbone)
+        if sim_siam_head is not None:
+            self.head = build_components(sim_siam_head)
+            self.head.init_weights()
+        else:
+            self.head = None
 
         self.vq_type = vqvae.type
         if vqvae.type is not 'DALLE_Encoder':
@@ -110,16 +116,16 @@ class Vqvae_Tracker(BaseModel):
         if jitter_imgs is not None:
             imgs = jitter_imgs
 
-        bsz, num_clips, t, c, w, h = imgs.shape
+        bsz, num_clips, t, c, h, w = imgs.shape
         mask_query_idx = mask_query_idx.bool()
 
-        fs = self.backbone(imgs.reshape(bsz * t, c, h, w))
-        fs = fs.reshape(bsz, t, -1, fs.shape[-1], fs.shape[-1])
+        tar = self.backbone(imgs[:,0,-1])
+        refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
 
         if self.patch_size != -1:
-            out, _ = self.local_attention(fs, bsz, t)
+            out, _ = self.local_attention(tar, refs, bsz, t)
         else:
-            out, _ = self.non_local_attention(fs, bsz)
+            out, _ = self.non_local_attention(tar, refs, bsz)
 
         losses = {}
 
@@ -141,6 +147,11 @@ class Vqvae_Tracker(BaseModel):
             embeds = nn.functional.normalize(embeds, dim=-1)
             losses['l2_loss'] = (self.l2_loss(predict, embeds) * mask_query_idx.reshape(-1,1)).sum() / mask_query_idx.sum()
 
+        if self.head is not None:
+            losses['cts_loss'] = self.forward_img_head(tar, refs[-1])
+        else:
+            pass
+
         return losses
 
     def forward_test(self, imgs, mask_query_idx,
@@ -149,8 +160,8 @@ class Vqvae_Tracker(BaseModel):
                     iteration=None):
         bsz, num_clips, t, c, w, h = imgs.shape
 
-        fs = self.backbone(imgs.reshape(bsz * t, c, h, w))
-        fs = fs.reshape(bsz, t, -1, fs.shape[-1], fs.shape[-1])
+        tar = self.backbone(imgs[:,0,-1])
+        refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
 
         # vqvae tokenize for query frame
         with torch.no_grad():
@@ -162,10 +173,10 @@ class Vqvae_Tracker(BaseModel):
                 ind = torch.argmax(ind, axis=1).reshape(-1, 1).long().detach()
 
 
-        out, att = self.non_local_attention(fs, bsz)
+        out, att = self.non_local_attention(tar, refs, bsz)
 
 
-        visualize_att(imgs, att, iteration, mask_query_idx, fs.shape[-1], self.patch_size, dst_path=save_path, norm_mode='mean-std')
+        visualize_att(imgs, att, iteration, mask_query_idx, tar.shape[-1], self.patch_size, dst_path=save_path, norm_mode='mean-std')
 
         if self.fc:
             predict = self.predictor(out)
@@ -207,10 +218,8 @@ class Vqvae_Tracker(BaseModel):
 
         return outputs
 
-    def local_attention(self, fs, bsz, t):
+    def local_attention(self, tar, refs, bsz, t):
 
-        refs = list([ fs[:,idx] for idx in range(t-1)])
-        tar = fs[:, -1]
         _, feat_dim, w_, h_ = tar.shape
         corrs = []
         for i in range(t-1):
@@ -228,10 +237,9 @@ class Vqvae_Tracker(BaseModel):
 
         return out, att
     
-    def non_local_attention(self, fs, bsz):
+    def non_local_attention(self, tar, refs, bsz):
 
-        refs = fs[:, :-1].permute(0, 2, 1, 3, 4)
-        tar = fs[:, -1]
+        refs = torch.stack(refs, 2)
         _, feat_dim, w_, h_ = tar.shape
 
         refs = refs.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
@@ -245,3 +253,15 @@ class Vqvae_Tracker(BaseModel):
         return out, att
 
 
+    def forward_img_head(self, x1, x2):
+
+        if isinstance(x1, tuple):
+            x1 = x1[-1]
+        if isinstance(x2, tuple):
+            x2 = x2[-1]
+
+        z1, p1 = self.head(x1)
+        z2, p2 = self.head(x2)
+        loss = self.head.loss(p1, z1, p2, z2)
+
+        return loss

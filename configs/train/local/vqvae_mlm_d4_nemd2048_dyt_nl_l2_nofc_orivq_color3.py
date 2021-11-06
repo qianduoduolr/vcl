@@ -1,5 +1,5 @@
 import os
-exp_name = 'vqvae_mlm_d4_nemd2048_dyt_nl_l2_nofc_orivq_color2'
+exp_name = 'vqvae_mlm_d4_nemd2048_dyt_nl_l2_nofc_orivq_color3'
 docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corr'
 
 # model settings
@@ -48,11 +48,11 @@ train_pipeline = [
     dict(type='Flip', flip_ratio=0.5),
     dict(
         type='ColorJitter',
-        brightness=0.4,
-        contrast=0.4,
-        saturation=0.4,
-        hue=0.1,
-        p=0.8,
+        brightness=0.7,
+        contrast=0.7,
+        saturation=0.7,
+        hue=0.3,
+        p=0.9,
         same_across_clip=False,
         same_on_clip=False,
         output_keys='jitter_imgs'),
@@ -79,7 +79,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=4,
-    train_dataloader=dict(samples_per_gpu=16, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=36, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 

@@ -5,9 +5,21 @@ model = dict(
     type='Vqvae_Tracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
     vqvae=dict(type='VQVAE', downsample=4, n_embed=2048, channel=256, n_res_channel=128, embed_dim=128),
-    # ce_loss=dict(type='Ce_Loss',reduction='none'),
-    ce_loss = None,
-    l2_loss = dict(type='MSELoss', reduction='none'),
+    sim_siam_head=dict(
+        type='SimSiamHead',
+        in_channels=512,
+        # norm_cfg=dict(type='SyncBN'),
+        num_projection_fcs=3,
+        projection_mid_channels=512,
+        projection_out_channels=512,
+        num_predictor_fcs=2,
+        predictor_mid_channels=128,
+        predictor_out_channels=512,
+        with_norm=True,
+        loss_feat=dict(type='CosineSimLoss', negative=False),
+        spatial_type='avg'),
+    ce_loss=dict(type='Ce_Loss',reduction='none'),
+    l2_loss = None,
     patch_size=-1,
     fc=False,
     temperature=0.1,
@@ -108,7 +120,9 @@ data = dict(
 # optimizer
 optimizers = dict(
     backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-    embedding_layer=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    embedding_layer=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
+    head=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    
     )
 # optimizers = dict(
 #     backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
