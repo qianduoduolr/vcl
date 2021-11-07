@@ -26,9 +26,9 @@ def load_image(imfile):
     ratio = w / h
 
     if ratio >= 1:
-        img = img.resize(( int(256*ratio), 256))
+        img = img.resize((int(256*ratio), 256))
     else:
-        img = img.resize((256, int(256*ratio))
+        img = img.resize((256, int(256*ratio)))
 
     img = np.array(img).astype(np.uint8)
     img = torch.from_numpy(img).permute(2, 0, 1).float()
