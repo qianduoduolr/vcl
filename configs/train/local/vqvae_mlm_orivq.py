@@ -136,6 +136,7 @@ lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.01,
     by_epoch=False,
+    # warmup='linear',
     warmup_iters=10,
     warmup_ratio=0.1,
     warmup_by_epoch=True
