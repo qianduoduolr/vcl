@@ -1,7 +1,7 @@
 #PBS -N make_raft_flow
 #PBS -o /gdata/lirui/pbs/pbs_out/make_raft_flow.out
 #PBS -e /gdata/lirui/pbs/pbs_out/make_raft_flow.err
-#PBS -l nodes=1:gpus=2:D
+#PBS -l nodes=1:gpus=2:d
 #PBS -r y
 
 cd $PBS_O_WORKDIR
