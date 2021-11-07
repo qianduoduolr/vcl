@@ -18,9 +18,19 @@ from tqdm import tqdm
 
 DEVICE = 'cuda'
 bound = 20
+target = 256
 
 def load_image(imfile):
-    img = np.array(Image.open(imfile)).astype(np.uint8)
+    img = Image.open(imfile)
+    w, h = img.size
+    ratio = w / h
+
+    if ratio >= 1:
+        img = img.resize(( int(256*ratio), 256))
+    else:
+        img = img.resize(256, int(256*ratio))
+
+    img = np.array(img).astype(np.uint8)
     img = torch.from_numpy(img).permute(2, 0, 1).float()
     return img[None].to(DEVICE)
 
