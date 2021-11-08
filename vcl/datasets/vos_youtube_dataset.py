@@ -378,6 +378,7 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
         self.samples = []
         self.video_dir = osp.join(self.root, self.data_prefix, self.split, 'JPEGImages_s256')
         self.mask_dir = osp.join(self.root, self.data_prefix, self.split, 'Annotations')
+        self.flows_dir = osp.join(self.root, self.data_prefix, self.split, 'Flows')
         list_path = osp.join(self.list_path, f'youtube{self.data_prefix}_train_list.txt')
 
         with open(list_path, 'r') as f:
@@ -387,12 +388,8 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
                 sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
                 sample['masks_path'] = sorted(glob.glob(osp.join(self.mask_dir, vname, '*.png')))
                 sample['num_frames'] = int(num_frames)
-                sample['flows_path'] = []
+                sample['flows_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
 
-                for frame_path in sample['frames_path']:
-                    flow_path = frame_path.replace('JPEGSImages_s256', 'Flows')
-                    if os.path.exists(flow_path):
-                        sample['flows_path'].append(flow_path)
                 if len(sample['frames_path']) - len(sample['flows_path']) <= 1:
                     self.samples.append(sample)
 
