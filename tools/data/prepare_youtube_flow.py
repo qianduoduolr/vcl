@@ -61,6 +61,8 @@ def main(args):
 
             video_path = vid_file.replace('JPEGImages','Flows')
             os.makedirs(video_path, exist_ok=True)
+
+            if os.path.exists(video_path): continue
             
             out_flows = []
             for idx, (imfile1, imfile2) in enumerate(zip(images[:-1], images[1:])):

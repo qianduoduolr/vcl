@@ -16,7 +16,7 @@ import mmcv
 
 from .base_dataset import BaseDataset
 from .registry import DATASETS
-from .pipelines.my_aug import aug_heavy
+from .pipelines.my_aug import ClipRandomSizedCrop, ClipMotionStatistic
 from .vos_davis_dataset import VOS_dataset_base
 
 from .pipelines import Compose
@@ -349,6 +349,74 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
         mask_query_idx = np.zeros(self.vq_res * self.vq_res)
         sample_idx = np.array(random.sample(range(self.vq_res * self.vq_res), mask_num))
         mask_query_idx[sample_idx] = 1
+
+        assert mask_query_idx.sum() == mask_num
+
+        data = {
+            'imgs': frames,
+            'mask_query_idx': mask_query_idx,
+            'modality': 'RGB',
+            'num_clips': 1,
+            'num_proposals':1,
+            'clip_len': self.clip_length
+        }
+
+        return self.pipeline(data)
+
+
+@DATASETS.register_module()
+class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
+    def __init__(self, size, p=0.7, **kwargs
+                       ):
+        super().__init__(**kwargs)
+        self.trans = ClipRandomSizedCrop(size=size, scale=(0.6, 1))
+        self.motion_statistic = ClipMotionStatistic(input_size=size, mag_size=self.vq_size)
+        self.p = p
+
+    
+    def load_annotations(self):
+        self.samples = []
+        self.video_dir = osp.join(self.root, self.data_prefix, self.split, 'JPEGImages_s256')
+        self.mask_dir = osp.join(self.root, self.data_prefix, self.split, 'Annotations')
+        list_path = osp.join(self.list_path, f'youtube{self.data_prefix}_train_list.txt')
+
+        with open(list_path, 'r') as f:
+            for idx, line in enumerate(f.readlines()):
+                sample = dict()
+                vname, num_frames = line.strip('\n').split()
+                sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
+                sample['masks_path'] = sorted(glob.glob(osp.join(self.mask_dir, vname, '*.png')))
+                sample['num_frames'] = int(num_frames)
+                sample['flows_path'] = []
+
+                for frame_path in sample['frames_path']:
+                    flow_path = frame_path.replace('JPEGSImages_s256', 'Flows')
+                    if os.path.exists(flow_path):
+                        sample['flows_path'].append(flow_path)
+                if len(sample['frames_path']) - len(sample['flows_path']) <= 1:
+                    self.samples.append(sample)
+
+    def prepare_train_data(self, idx):
+        sample = self.samples[idx]
+        frames_path = sample['frames_path']
+        flows_path = sample['flows_path']
+        num_frames = sample['num_frames']
+
+        offset = [ random.randint(0, num_frames-3)]
+        frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
+        flows = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
+
+        results = dict(imgs=frames, flows=flows)
+        frames, flows = self.trans(results, with_flow=True)
+        mag = self.motion_statistic(flows[-1:])
+
+        if random.random() <= self.p:
+            pass
+        else:
+            mask_num = int(self.vq_res * self.vq_res * self.mask_ratio)
+            mask_query_idx = np.zeros(self.vq_res * self.vq_res)
+            sample_idx = np.array(random.sample(range(self.vq_res * self.vq_res), mask_num))
+            mask_query_idx[sample_idx] = 1
 
         assert mask_query_idx.sum() == mask_num
 

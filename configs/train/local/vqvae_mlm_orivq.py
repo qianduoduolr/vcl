@@ -41,7 +41,7 @@ test_cfg = dict(
     output_dir='eval_results')
 
 # dataset settings
-train_dataset_type = 'VOS_youtube_dataset_mlm'
+train_dataset_type = 'VOS_youtube_dataset_mlm_motion'
 
 val_dataset_type = None
 test_dataset_type = 'VOS_davis_dataset_test'
@@ -55,9 +55,6 @@ img_norm_cfg = dict(
 
 
 train_pipeline = [
-    dict(type='RandomResizedCrop', area_range=(1.0,1.0)),
-    dict(type='Resize', scale=(256, 256), keep_ratio=False),
-    dict(type='Flip', flip_ratio=0),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='FormatShape', input_format='NPTCHW'),
     dict(type='Collect', keys=['imgs', 'mask_query_idx'], meta_keys=[]),
@@ -87,6 +84,8 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
+            size=256,
+            p=0.7,
             root='/home/lr/dataset/YouTube-VOS',
             list_path='/home/lr/dataset/YouTube-VOS/2018',
             data_prefix='2018',
@@ -143,8 +142,8 @@ lr_config = dict(
     )
 
 checkpoint_config = dict(interval=50, save_optimizer=True, by_epoch=True)
-# remove gpu_collect=True in non distributed training
-# evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
+
+
 log_config = dict(
     interval=100,
     hooks=[

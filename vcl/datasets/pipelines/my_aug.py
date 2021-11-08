@@ -9,6 +9,7 @@ from torchvision import transforms
 import warnings
 import math
 import torch
+from scipy import ndimage
 
 from ..registry import PIPELINES
 
@@ -92,7 +93,7 @@ class ClipRandomSizedCrop(object):
         self.backend = backend
 
     @staticmethod
-    def get_params(img, scale, ratio):
+    def get_params(img, scale, ratio, backend):
         """Get parameters for ``crop`` for a random sized crop.
         Args:
             img (Image): Image to be cropped.
@@ -102,7 +103,7 @@ class ClipRandomSizedCrop(object):
             tuple: params (i, j, h, w) to be passed to ``crop`` for a random
                 sized crop.
         """
-        if self.backend == 'pillow':
+        if backend == 'pillow':
             width, height, _ = img.size()
         else:
             height, width, _ = img.shape
@@ -141,19 +142,24 @@ class ClipRandomSizedCrop(object):
 
         return i, j, h, w
 
-    def __call__(self, results):
-        i, j, h, w = self.get_params(results['images'][0], self.scale, self.ratio)
+    def __call__(self, results, with_flow=False):
+        i, j, h, w = self.get_params(results['images'][0], self.scale, self.ratio, self.backend)
 
         if self.backend == 'pillow':
             results['images'] = list([F.resized_crop(img, i, j, h, w, self.size, self.interpolation) for img in results['images']])
+            if with_flow:
+                results['flows'] = list([F.resized_crop(flow, i, j, h, w, self.size, self.interpolation) for flow in results['flows']])
         else:
             results['images'] = list([cv2.resize(img[i:i+h, j:j+w], self.size, self.interpolation) for img in results['images']])
-
+            if with_flow:
+                results['flows'] = list([cv2.resize(flow, i, j, h, w, self.size, self.interpolation) for flow in results['flows']])
+        
+        return results
 
 @PIPELINES.register_module()
 class ClipRandomResizedCropObject(object):
 
-    def __init__(self, size,  scale=(0.08, 1.0), ratio=(1.5, 1.8), backend='cv2'):
+    def __init__(self, size,  scale=(0.08, 1.0), ratio=(3/4, 4/3), backend='cv2'):
         if isinstance(size, (tuple, list)):
             self.size = size
         else:
@@ -326,37 +332,64 @@ class ClipOrganize():
         return results
 
 
-class aug_heavy(object):
-    def __init__(self):
-        self.affinity = iaa.Sequential([
-            # iaa.Sometimes(
-            #     0.5,
-            #     iaa.Affine(rotate=(-30, 30))
-            # ),
-            # iaa.Sometimes(
-            #     0.5,
-            #     iaa.Affine(shear=(-15, 15))
-            # ),
-            # iaa.Sometimes(
-            #     0.5,
-            #     iaa.Affine(translate_px={"x": (-15, 15), "y": (-15, 15)})
-            # ),
-            iaa.Sometimes(
-                0.5,
-                iaa.Affine(scale={"x": (0.8, 1.2), "y": (0.8, 1.2)})
-            ),   
-            ], random_order=True)
+@PIPELINES.register_module()
+class ClipMotionStatistic():
+    def __init__(self, input_size, mag_size):
+        self.input_size = input_size
+        self.mag_size = mag_size
 
-        # self.crop = RandomSizedCrop([0.80,1.1],384)
-        self.crop = RandomResizedCropObj((384,384), scale=(0.99,1.0))
-        self.resize = Resize()
-        self.flip = Flip(0.5)
+    @staticmethod
+    def motion_mag_downsample(mag, size, input_size):
+        block_size = input_size // size
+        mask = np.zeros((size,size))
+        for i in range(size):
+            for j in range(size):
+                x_start = i * block_size
+                x_end = x_start + block_size
+                y_start = j * block_size
+                y_end = y_start + block_size
 
-    def __call__(self,images,labels, obj_num):
-        images,labels = self.flip(images,labels)
-        # for i in range(len(images)):
-        #     images[i],labels[i] = self.affinity(image = images[i],segmentation_maps = labels[i][np.newaxis,:,:,np.newaxis])
-        #     labels[i] = labels[i][0,:,:,0]
-        images,labels = self.crop(images,labels, obj_num)
-        # images, labels = self.resize(images,labels, (384,384))
-        return images,labels
+                tmp_block = mag[x_start:x_end, y_start:y_end]
+
+                block_mean = np.mean(tmp_block)
+                mask[i, j] = block_mean
+        return mask
+
+    @staticmethod
+    def compute_motion_boudary(flow_clip):
+        mx = np.array([[-1, 0, 1], [-1, 0, 1], [-1, 0, 1]])
+        my = np.array([[-1, -1, -1], [0, 0, 0], [1, 1, 1]])
+        dx_all = []
+        dy_all = []
+        mb_x = 0
+        mb_y = 0
+
+        for flow_img in flow_clip:
+            d_x = ndimage.convolve(flow_img, mx)
+            d_y = ndimage.convolve(flow_img, my)
+
+            dx_all.append(d_x)
+            dy_all.append(d_y)
+
+            mb_x += d_x
+            mb_y += d_y
+
+        dx_all = np.array(dx_all)
+        dy_all = np.array(dy_all)
+
+        return dx_all, dy_all, mb_x, mb_y
+
+    def __call__(self, flows):
+
+        u, v = list([flow[:,:,0].astype(np.float32) for flow in flows]), list([flow[:,:,1].astype(np.float32) for flow in flows])
+        _, _ , mb_x_u, mb_y_u = self.compute_motion_boudary(u)
+        mag_u, ang = cv2.cartToPolar(mb_x_u, mb_y_u, angleInDegrees=True)
+
+        _, _ , mb_x_v, mb_y_v = self.compute_motion_boudary(v)
+        mag_v, ang = cv2.cartToPolar(mb_x_v, mb_y_v, angleInDegrees=True)
+
+        mag = (mag_u + mag_v) / 2
+
+        mag_down = self.motion_mag_downsample(mag, self.mag_size, self.input_size)
+
+        return mag_down
