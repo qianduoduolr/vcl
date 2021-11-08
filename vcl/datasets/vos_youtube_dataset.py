@@ -366,11 +366,12 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
 
 @DATASETS.register_module()
 class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
-    def __init__(self, size, p=0.7, **kwargs
+    def __init__(self, size, p=0.7, flow_context=3, **kwargs
                        ):
+        self.flow_context = flow_context
         super().__init__(**kwargs)
         self.trans = ClipRandomSizedCrop(size=size, scale=(0.6, 1))
-        self.motion_statistic = ClipMotionStatistic(input_size=size, mag_size=self.vq_size)
+        self.motion_statistic = ClipMotionStatistic(input_size=size, mag_size=self.vq_res)
         self.p = p
 
     
@@ -385,10 +386,25 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
             for idx, line in enumerate(f.readlines()):
                 sample = dict()
                 vname, num_frames = line.strip('\n').split()
-                sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
-                sample['masks_path'] = sorted(glob.glob(osp.join(self.mask_dir, vname, '*.png')))
-                sample['num_frames'] = int(num_frames)
-                sample['flows_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
+                sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))[:-1]
+                sample['masks_path'] = sorted(glob.glob(osp.join(self.mask_dir, vname, '*.png')))[:-1]
+                sample['num_frames'] = int(num_frames) - 1
+                sample['flows_path'] = []
+                flows_path_all = sorted(glob.glob(osp.join(self.flows_dir, vname, '*.jpg')))
+
+                if self.flow_context is not -1:
+                    for frame_path in sample['frames_path']:
+                        flow_path = frame_path.replace('JPEGImages_s256', 'Flows')
+                        try:
+                            index = flows_path_all.index(flow_path)
+                        except Exception as e:
+                            continue
+                        flow_context = flows_path_all[max(index-1,0):index+2]
+                        sample['flows_path'].append(flow_context)
+                else:
+                    for frame_path in sample['frames_path']:
+                        flow_path = frame_path.replace('JPEGImages', 'Flows')
+                        sample['flows_path'].append([flow_path])
 
                 if len(sample['frames_path']) - len(sample['flows_path']) <= 1:
                     self.samples.append(sample)
@@ -401,24 +417,27 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
 
         offset = [ random.randint(0, num_frames-3)]
         frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
-        flows = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
+        sample_flows_path = flows_path[offset[0]+1]
+        flows = self._parser_rgb_rawframe([0], sample_flows_path, len(sample_flows_path), step=1)
 
         results = dict(imgs=frames, flows=flows)
-        frames, flows = self.trans(results, with_flow=True)
-        mag = self.motion_statistic(flows[-1:])
+        results = self.trans(results, with_flow=True)
+        mag = self.motion_statistic(results['flows'])
 
+        mask_num = int(self.vq_res * self.vq_res * self.mask_ratio)
+        mask_query_idx = np.zeros(self.vq_res * self.vq_res)
         if random.random() <= self.p:
-            pass
+            mag = mag.reshape(-1)
+            idxs = np.argsort(mag)[::-1][:mask_num]
+            mask_query_idx[idxs] = 1
         else:
-            mask_num = int(self.vq_res * self.vq_res * self.mask_ratio)
-            mask_query_idx = np.zeros(self.vq_res * self.vq_res)
             sample_idx = np.array(random.sample(range(self.vq_res * self.vq_res), mask_num))
             mask_query_idx[sample_idx] = 1
 
         assert mask_query_idx.sum() == mask_num
 
         data = {
-            'imgs': frames,
+            'imgs': results['imgs'],
             'mask_query_idx': mask_query_idx,
             'modality': 'RGB',
             'num_clips': 1,

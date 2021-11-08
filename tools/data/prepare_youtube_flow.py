@@ -26,9 +26,9 @@ def load_image(imfile):
     ratio = w / h
 
     if ratio >= 1:
-        img = img.resize((int(256*ratio), 256))
+        img = img.resize((int(256*w/h), 256))
     else:
-        img = img.resize((256, int(256*ratio)))
+        img = img.resize((256, int(256*h/w)))
 
     img = np.array(img).astype(np.uint8)
     img = torch.from_numpy(img).permute(2, 0, 1).float()
@@ -47,10 +47,15 @@ def main(args):
 
     vid_files = glob.glob(os.path.join(args.path,'*'))
 
-    per_samples = len(vid_files) // num_gpu
 
-    sub_files = vid_files[args.local_rank * per_samples:(args.local_rank+1) * per_samples] if args.local_rank != num_gpu -1 else \
-        vid_files[args.local_rank * per_samples:]
+    if args.split == -1:
+        per_samples = len(vid_files) // num_gpu
+        sub_files = vid_files[args.local_rank * per_samples:(args.local_rank+1) * per_samples] if args.local_rank != num_gpu -1 else \
+            vid_files[args.local_rank * per_samples:]
+    else:
+        per_samples = len(vid_files) // 2
+        sub_files = vid_files[args.split * per_samples:(args.split+1) * per_samples] if args.split != 1 else \
+            vid_files[args.split * per_samples:]
     
     with torch.no_grad():
         for vid_file in tqdm(sub_files, total=len(sub_files)):
@@ -59,7 +64,7 @@ def main(args):
 
             images = sorted(images)
 
-            video_path = vid_file.replace('JPEGImages','Flows')
+            video_path = vid_file.replace('JPEGImages','Flows2')
             if len(glob.glob(os.path.join(video_path, '*.jpg'))) == len(images) -1: continue
 
             os.makedirs(video_path, exist_ok=True)
@@ -91,12 +96,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', help="restore checkpoint", default='/gdata/lirui/models/optical_flow/raft-things.pth')
     parser.add_argument('--path', help="dataset for evaluation", default='/gdata/lirui/dataset/YouTube-VOS/2019/train_all_frames/JPEGImages')
-    parser.add_argument('--out', help="dataset for evaluation", default='/gdata/lirui/dataset/YouTube-VOS/2018/train/Flows')
+    parser.add_argument('--out', help="dataset for evaluation", default='/gdata/lirui/dataset/YouTube-VOS/2018/train/Flows2')
     parser.add_argument('--small', action='store_true', help='use small model')
     parser.add_argument('--mixed_precision', action='store_true', help='use mixed precision')
     parser.add_argument('--alternate_corr', action='store_true', help='use efficent correlation implementation')
     parser.add_argument('--local_rank',  type=int, help='use small model')
     parser.add_argument('--num-gpu',  type=int, default=1, help='use small model')
+    parser.add_argument('--split',  type=int, default=-1, help='use small model')
+    
 
     args = parser.parse_args()
 

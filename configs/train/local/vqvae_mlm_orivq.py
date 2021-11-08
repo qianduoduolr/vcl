@@ -55,10 +55,22 @@ img_norm_cfg = dict(
 
 
 train_pipeline = [
+    dict(
+        type='ColorJitter',
+        brightness=0.4,
+        contrast=0.4,
+        saturation=0.4,
+        hue=0.1,
+        p=0.8,
+        same_across_clip=False,
+        same_on_clip=False,
+        output_keys='jitter_imgs'),
     dict(type='Normalize', **img_norm_cfg),
+    dict(type='Normalize', **img_norm_cfg, keys='jitter_imgs'),
     dict(type='FormatShape', input_format='NPTCHW'),
-    dict(type='Collect', keys=['imgs', 'mask_query_idx'], meta_keys=[]),
-    dict(type='ToTensor', keys=['imgs', 'mask_query_idx'])
+    dict(type='FormatShape', input_format='NPTCHW', keys='jitter_imgs'),
+    dict(type='Collect', keys=['imgs', 'jitter_imgs', 'mask_query_idx'], meta_keys=[]),
+    dict(type='ToTensor', keys=['imgs', 'jitter_imgs', 'mask_query_idx'])
 ]
 
 val_pipeline = [

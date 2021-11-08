@@ -78,7 +78,7 @@ class ClipRandomSizedCrop_stm(object):
 
 @PIPELINES.register_module()
 class ClipRandomSizedCrop(object):
-    def __init__(self, size,  scale=(0.08, 1.0), ratio=(3. / 4., 4. / 3.), interpolation=Image.BILINEAR, backend='pillow'):
+    def __init__(self, size,  scale=(0.08, 1.0), ratio=(3. / 4., 4. / 3.), interpolation=Image.BILINEAR, backend='cv2'):
         if isinstance(size, (tuple, list)):
             self.size = size
         else:
@@ -103,13 +103,12 @@ class ClipRandomSizedCrop(object):
             tuple: params (i, j, h, w) to be passed to ``crop`` for a random
                 sized crop.
         """
-        if backend == 'pillow':
-            width, height, _ = img.size()
-        else:
+        if backend == 'cv2':
             height, width, _ = img.shape
+        else:
+            width, height = img.size()
 
         area = height * width
-
 
         for _ in range(20):
             sc = random.uniform(*scale)
@@ -143,16 +142,16 @@ class ClipRandomSizedCrop(object):
         return i, j, h, w
 
     def __call__(self, results, with_flow=False):
-        i, j, h, w = self.get_params(results['images'][0], self.scale, self.ratio, self.backend)
+        i, j, h, w = self.get_params(results['imgs'][0], self.scale, self.ratio, self.backend)
 
         if self.backend == 'pillow':
-            results['images'] = list([F.resized_crop(img, i, j, h, w, self.size, self.interpolation) for img in results['images']])
+            results['imgs'] = list([F.resized_crop(img, i, j, h, w, self.size, self.interpolation) for img in results['imgs']])
             if with_flow:
                 results['flows'] = list([F.resized_crop(flow, i, j, h, w, self.size, self.interpolation) for flow in results['flows']])
         else:
-            results['images'] = list([cv2.resize(img[i:i+h, j:j+w], self.size, self.interpolation) for img in results['images']])
+            results['imgs'] = list([cv2.resize(img[i:i+h, j:j+w], self.size, self.interpolation) for img in results['imgs']])
             if with_flow:
-                results['flows'] = list([cv2.resize(flow, i, j, h, w, self.size, self.interpolation) for flow in results['flows']])
+                results['flows'] = list([cv2.resize(flow[i:i+h, j:j+w], self.size, self.interpolation) for flow in results['flows']])
         
         return results
 

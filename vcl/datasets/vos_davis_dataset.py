@@ -23,7 +23,6 @@ from davis2017.evaluation import DAVISEvaluation
 
 from .base_dataset import BaseDataset
 from .registry import DATASETS
-from .pipelines.my_aug import aug_heavy
 
 
 MAX_OBJECT_NUM_PER_SAMPLE = 5
