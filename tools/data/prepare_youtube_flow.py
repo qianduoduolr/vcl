@@ -60,9 +60,10 @@ def main(args):
             images = sorted(images)
 
             video_path = vid_file.replace('JPEGImages','Flows')
+            if len(glob.glob(video_path, '*.jpg')) == len(images) -1: continue
+
             os.makedirs(video_path, exist_ok=True)
 
-            if os.path.exists(video_path): continue
             
             out_flows = []
             for idx, (imfile1, imfile2) in enumerate(zip(images[:-1], images[1:])):
