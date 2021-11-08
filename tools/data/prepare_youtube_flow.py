@@ -60,7 +60,7 @@ def main(args):
             images = sorted(images)
 
             video_path = vid_file.replace('JPEGImages','Flows')
-            if len(glob.glob(video_path, '*.jpg')) == len(images) -1: continue
+            if len(glob.glob(os.path.join(video_path, '*.jpg'))) == len(images) -1: continue
 
             os.makedirs(video_path, exist_ok=True)
 
