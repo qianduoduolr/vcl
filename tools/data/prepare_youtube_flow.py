@@ -89,7 +89,9 @@ def main(args):
                 flow_img = empty_img.copy()
                 flow_img[:,:,:2] = flow[:]
 
-                dst_path = os.path.join(video_path, '{:05d}.jpg'.format(idx))
+                base_name = os.path.basename(image1)
+
+                dst_path = os.path.join(video_path, base_name)
                 cv2.imwrite(dst_path, flow_img)
 
 if __name__ == '__main__':
