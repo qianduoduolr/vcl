@@ -142,16 +142,16 @@ class ClipRandomSizedCrop(object):
 
         return i, j, h, w
 
-    def __call__(self, results, with_flow=False):
+    def __call__(self, results):
         i, j, h, w = self.get_params(results['imgs'][0], self.scale, self.ratio, self.backend)
 
         if self.backend == 'pillow':
             results['imgs'] = list([F.resized_crop(img, i, j, h, w, self.size, self.interpolation) for img in results['imgs']])
-            if with_flow:
+            if results['with_flow']:
                 results['flows'] = list([F.resized_crop(flow, i, j, h, w, self.size, self.interpolation) for flow in results['flows']])
         else:
             results['imgs'] = list([cv2.resize(img[i:i+h, j:j+w], self.size, self.interpolation) for img in results['imgs']])
-            if with_flow:
+            if results['with_flow']:
                 results['flows'] = list([cv2.resize(flow[i:i+h, j:j+w], self.size, self.interpolation) for flow in results['flows']])
         
         return results
@@ -406,8 +406,8 @@ class ClipRandomHorizontalFlip(transforms.RandomHorizontalFlip):
         """
 
         if torch.rand(1) < self.p:
-            results =  list([mmcv.imflip_(img, 'horizontal') for img in results['imgs']])
+            results['imgs'] =  list([mmcv.imflip_(img, 'horizontal') for img in results['imgs']])
 
             if results['with_flow']:
-                results =  list([mmcv.imflip_(flow, 'horizontal') for flow in results['flows']])
+                results['flows'] =  list([mmcv.imflip_(flow, 'horizontal') for flow in results['flows']])
         return results
