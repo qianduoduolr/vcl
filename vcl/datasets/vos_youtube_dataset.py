@@ -403,10 +403,7 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
                 if self.flow_context is not -1:
                     for frame_path in sample['frames_path']:
                         flow_path = frame_path.replace('JPEGImages_s256', 'Flows')
-                        try:
-                            index = flows_path_all.index(flow_path)
-                        except Exception as e:
-                            continue
+                        index = flows_path_all.index(flow_path)
                         flow_context = flows_path_all[max(index-1,0):index+2]
                         sample['flows_path'].append(flow_context)
                 else:
@@ -414,8 +411,9 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
                         flow_path = frame_path.replace('JPEGImages', 'Flows')
                         sample['flows_path'].append([flow_path])
 
-                if len(sample['frames_path']) - len(sample['flows_path']) <= 1:
-                    self.samples.append(sample)
+                self.samples.append(sample)
+                print(len(self.samples))
+
 
     def prepare_train_data(self, idx):
         sample = self.samples[idx]
