@@ -7,6 +7,7 @@ import os
 import random
 import torch
 import torchvision.transforms.functional as F
+from torchvision import transforms
 import numpy as np
 import cv2
 from PIL import Image
@@ -16,7 +17,7 @@ import mmcv
 
 from .base_dataset import BaseDataset
 from .registry import DATASETS
-from .pipelines.my_aug import ClipRandomSizedCrop, ClipMotionStatistic
+from .pipelines.my_aug import ClipRandomSizedCrop, ClipMotionStatistic, ClipRandomHorizontalFlip
 from .vos_davis_dataset import VOS_dataset_base
 
 from .pipelines import Compose
@@ -370,11 +371,13 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
                        ):
         self.flow_context = flow_context
         super().__init__(**kwargs)
-        self.trans = ClipRandomSizedCrop(size=size, scale=(0.6, 1))
+        self.trans = transforms.Compose([ClipRandomSizedCrop(size=size, scale=(0.6, 1)),
+                                        ClipRandomHorizontalFlip(p=0.5)]
+                                        )
         self.motion_statistic = ClipMotionStatistic(input_size=size, mag_size=self.vq_res)
         self.p = p
 
-    
+
     def load_annotations(self):
         self.samples = []
         self.video_dir = osp.join(self.root, self.data_prefix, self.split, 'JPEGImages_s256')
@@ -391,6 +394,11 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
                 sample['num_frames'] = int(num_frames) - 1
                 sample['flows_path'] = []
                 flows_path_all = sorted(glob.glob(osp.join(self.flows_dir, vname, '*.jpg')))
+
+                # a = cv2.imread(sample['frames_path'][0]).shape
+                # if len(flows_path_all) == 0: continue
+                # b = cv2.imread(flows_path_all[0]).shape
+                # if a[0] != b[0]: continue
 
                 if self.flow_context is not -1:
                     for frame_path in sample['frames_path']:
@@ -420,8 +428,8 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
         sample_flows_path = flows_path[offset[0]+1]
         flows = self._parser_rgb_rawframe([0], sample_flows_path, len(sample_flows_path), step=1)
 
-        results = dict(imgs=frames, flows=flows)
-        results = self.trans(results, with_flow=True)
+        results = dict(imgs=frames, flows=flows, with_flow=True)
+        results = self.trans(results)
         mag = self.motion_statistic(results['flows'])
 
         mask_num = int(self.vq_res * self.vq_res * self.mask_ratio)

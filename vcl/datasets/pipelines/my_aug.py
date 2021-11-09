@@ -10,6 +10,7 @@ import warnings
 import math
 import torch
 from scipy import ndimage
+import mmcv
 
 from ..registry import PIPELINES
 
@@ -392,3 +393,21 @@ class ClipMotionStatistic():
         mag_down = self.motion_mag_downsample(mag, self.mag_size, self.input_size)
 
         return mag_down
+
+class ClipRandomHorizontalFlip(transforms.RandomHorizontalFlip):
+
+    def __call__(self, results):
+        """
+        Args:
+            clip (List of PIL Image or Tensor): Clip to be flipped.
+
+        Returns:
+            List of PIL Image or Tensor: Randomly flipped clip.
+        """
+
+        if torch.rand(1) < self.p:
+            results =  list([mmcv.imflip_(img, 'horizontal') for img in results['imgs']])
+
+            if results['with_flow']:
+                results =  list([mmcv.imflip_(flow, 'horizontal') for flow in results['flows']])
+        return results
