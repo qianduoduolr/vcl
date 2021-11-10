@@ -409,7 +409,8 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
                             sample['flows_path'].append(flow_context)
                         except Exception as e:
                             print('haha')
-                            continue
+                            break
+                    continue
                 else:
                     for frame_path in sample['frames_path']:
                         flow_path = frame_path.replace('JPEGImages', 'Flows')
