@@ -5,7 +5,6 @@ from collections import *
 
 import mmcv
 from mmcv.runner import auto_fp16, load_checkpoint
-from spatial_correlation_sampler import SpatialCorrelationSampler
 from dall_e  import map_pixels, unmap_pixels, load_model
 
 from ..base import BaseModel
@@ -64,7 +63,7 @@ class Vqvae_Tracker(BaseModel):
             self.head = None
 
         self.vq_type = vqvae.type
-        if vqvae.type is not 'DALLE_Encoder':
+        if vqvae.type != 'DALLE_Encoder':
             self.vqvae = build_components(vqvae).cuda()
             _ = load_checkpoint(self.vqvae, pretrained_vq, map_location='cpu')
             logger.info('load pretrained VQVAE successfully')
@@ -83,12 +82,14 @@ class Vqvae_Tracker(BaseModel):
         self.cts_loss = build_loss(cts_loss) if cts_loss else None
 
         # corr
-        self.correlation_sampler = SpatialCorrelationSampler(
-            kernel_size=1,
-            patch_size=patch_size,
-            stride=1,
-            padding=0,
-            dilation=1)
+        if patch_size != -1:
+            from spatial_correlation_sampler import SpatialCorrelationSampler
+            self.correlation_sampler = SpatialCorrelationSampler(
+                kernel_size=1,
+                patch_size=patch_size,
+                stride=1,
+                padding=0,
+                dilation=1)
 
         # fc
         self.fc = fc
@@ -135,7 +136,10 @@ class Vqvae_Tracker(BaseModel):
             if self.fc:
                 predict = self.predictor(out)
             else:
-                predict = self.embedding_layer(out)
+                if out.shape[-1] != self.vq_emb.shape[0]:
+                    predict = self.embedding_layer(out)
+                else:
+                    predict = out
                 predict = nn.functional.normalize(predict, dim=-1)
                 predict = torch.mm(predict, nn.functional.normalize(self.vq_emb, dim=0))
                 predict = torch.div(predict, self.vq_t)

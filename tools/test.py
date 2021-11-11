@@ -19,7 +19,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train an editor')
     parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/local/vqvae_mlm_orivq_viz.py')
     # parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='')
-    parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_dyt_nl_l2_nofc_orivq_color2/epoch_800.pth')
+    parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_dyt_nl_l2_nofc_orivq_color3/epoch_800.pth')
     parser.add_argument('--seed', type=int, default=3, help='random seed')
     parser.add_argument(
         '--deterministic',
@@ -40,7 +40,7 @@ def parse_args():
         help='whether to use gpu to collect results')
     parser.add_argument(
         '--save-path',
-        default='output/vis_vq3',
+        default='output/vqvae_mlm_d4_nemd2048_dyt_nl_l2_nofc_orivq_color3',
         type=str,
         help='path to store images and if not given, will not save image')
     parser.add_argument('--tmpdir', help='tmp dir for writing some results')
