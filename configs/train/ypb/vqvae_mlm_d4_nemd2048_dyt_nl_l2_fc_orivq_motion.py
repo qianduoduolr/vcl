@@ -1,17 +1,17 @@
 import os
-exp_name = 'vqvae_mlm_d4_nemd2048_dyt_nl_l2_nofc_orivq_color3'
+exp_name = 'vqvae_mlm_d4_nemd2048_dyt_nl_l2_fc_orivq_motion'
 docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corr'
 
 # model settings
 model = dict(
     type='Vqvae_Tracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
-    vqvae=dict(type='VQVAE', downsample=4, n_embed=2048, channel=256, n_res_channel=128, embed_dim=128),
+    vqvae=dict(type='VQVAE', downsample=4, n_embed=2048, channel=512, n_res_channel=128, embed_dim=512),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
     patch_size=-1,
-    fc=False,
+    fc=True,
     temperature=0.1,
-    pretrained_vq='/gdata/lirui/models/vqvae/vqvae_youtube_d4_n2048_c256_embc128.pth',
+    pretrained_vq='/gdata/lirui/models/vqvae/vqvae_youtube_d4_n2048_c512_embc512.pth',
     pretrained=None
 )
 
@@ -30,7 +30,7 @@ test_cfg = dict(
     output_dir='eval_results')
 
 # dataset settings
-train_dataset_type = 'VOS_youtube_dataset_mlm'
+train_dataset_type = 'VOS_youtube_dataset_mlm_motion'
 
 val_dataset_type = None
 test_dataset_type = 'VOS_davis_dataset_test'
@@ -43,9 +43,6 @@ img_norm_cfg = dict(
 #     mean=[0, 0, 0], std=[255, 255, 255], to_bgr=False)
 
 train_pipeline = [
-    dict(type='RandomResizedCrop', area_range=(0.2,1.0)),
-    dict(type='Resize', scale=(256, 256), keep_ratio=False),
-    dict(type='Flip', flip_ratio=0.5),
     dict(
         type='ColorJitter',
         brightness=0.7,
@@ -79,7 +76,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=4,
-    train_dataloader=dict(samples_per_gpu=36, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -87,6 +84,8 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
+            size=256,
+            p=0.8,
             root='/gdata/lirui/dataset/YouTube-VOS',
             list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
             data_prefix='2018',
@@ -109,7 +108,7 @@ data = dict(
 # optimizer
 optimizers = dict(
     backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-    embedding_layer=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
     )
 # learning policy
 # total_iters = 200000
