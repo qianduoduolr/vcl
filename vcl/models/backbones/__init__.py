@@ -1,6 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-from .resnet import ResNet
+from .resnet import *
+from .swin_transformer import *
+from .vq_swin import *
 
-__all__ = [
-   "ResNet"
-]
