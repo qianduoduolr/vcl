@@ -71,7 +71,7 @@ class DistributedDataParallelWrapper(nn.Module):
 
     def to_ddp(self, device_ids, dim, broadcast_buffers,
                find_unused_parameters, **kwargs):
-        """Wrap models with separate MMDistributedDataParallel.
+        """Wrap models with separate MMDistributedDataParallel. Note present olny support 2-recurent structures
 
         It only wraps the modules with parameters.
         """
@@ -79,7 +79,18 @@ class DistributedDataParallelWrapper(nn.Module):
             if next(module.parameters(), None) is None:
                 module = module.cuda()
             elif any(not p.requires_grad for p in module.parameters()):
-                module = module.cuda()
+                for name_, module_ in module._modules.items():
+                    if all(not p.requires_grad for p in module_.parameters()):
+                        module_ = module_.cuda()
+                    else:
+                        module_ = MMDistributedDataParallel(
+                                module_.cuda(),
+                                device_ids=device_ids,
+                                dim=dim,
+                                broadcast_buffers=broadcast_buffers,
+                                find_unused_parameters=find_unused_parameters,
+                                **kwargs)
+                module._modules[name_] = module_
             else:
                 module = MMDistributedDataParallel(
                     module.cuda(),

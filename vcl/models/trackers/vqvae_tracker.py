@@ -274,198 +274,198 @@ class Vqvae_Tracker(BaseModel):
         return loss
 
 
-# @MODELS.register_module()
-# class Vqvae_Tracker_v2(BaseModel):
+@MODELS.register_module()
+class Vqvae_Tracker_v2(BaseModel):
 
-#     def __init__(self,
-#                  backbone,
-#                  vqvae,
-#                  patch_size,
-#                  pretrained_vq,
-#                  temperature,
-#                  ce_loss=None,
-#                  l2_loss=None,
-#                  fc=True,
-#                  train_cfg=None,
-#                  test_cfg=None,
-#                  pretrained=None
-#                  ):
-#         """ Space-Time Memory Network for Video Object Segmentation
+    def __init__(self,
+                 backbone,
+                 vqvae,
+                 patch_size,
+                 pretrained_vq,
+                 temperature,
+                 ce_loss=None,
+                 l2_loss=None,
+                 fc=True,
+                 train_cfg=None,
+                 test_cfg=None,
+                 pretrained=None
+                 ):
+        """ Space-Time Memory Network for Video Object Segmentation
 
-#         Args:
-#             depth ([type]): ResNet depth for encoder
-#             pixel_loss ([type]): loss option
-#             train_cfg ([type], optional): [description]. Defaults to None.
-#             test_cfg ([type], optional): [description]. Defaults to None.
-#             pretrained ([type], optional): [description]. Defaults to None.
-#         """
-#         super(Vqvae_Tracker_v2, self).__init__()
+        Args:
+            depth ([type]): ResNet depth for encoder
+            pixel_loss ([type]): loss option
+            train_cfg ([type], optional): [description]. Defaults to None.
+            test_cfg ([type], optional): [description]. Defaults to None.
+            pretrained ([type], optional): [description]. Defaults to None.
+        """
+        super(Vqvae_Tracker_v2, self).__init__()
 
-#         self.train_cfg = train_cfg
-#         self.test_cfg = test_cfg
-#         self.patch_size = patch_size
+        self.train_cfg = train_cfg
+        self.test_cfg = test_cfg
+        self.patch_size = patch_size
 
-#         logger = get_root_logger()
+        logger = get_root_logger()
 
-#         self.backbone = build_backbone(backbone)
-#         self.embed_dim = self.backbone.transformer_blocks.embed_dim
+        self.backbone = build_backbone(backbone)
+        self.embed_dim = self.backbone.transformer_blocks.embed_dim
 
-#         self.vq_type = vqvae.type
-#         if vqvae.type != 'DALLE_Encoder':
-#             self.vqvae = build_components(vqvae).cuda()
-#             _ = load_checkpoint(self.vqvae, pretrained_vq, map_location='cpu')
-#             logger.info('load pretrained VQVAE successfully')
-#             self.vq_emb = self.vqvae.quantize.embed
-#             self.n_embed = vqvae.n_embed
-#             self.vq_t = temperature
-#             self.vq_enc = self.vqvae.encode
-#         else:
-#             self.vq_enc = load_model(pretrained_vq).cuda()
-#             self.n_embed = self.vq_enc.vocab_size
-#             logger.info('load pretrained VQVAE successfully')
+        self.vq_type = vqvae.type
+        if vqvae.type != 'DALLE_Encoder':
+            self.vqvae = build_components(vqvae).cuda()
+            _ = load_checkpoint(self.vqvae, pretrained_vq, map_location='cpu')
+            logger.info('load pretrained VQVAE successfully')
+            self.vq_emb = self.vqvae.quantize.embed
+            self.n_embed = vqvae.n_embed
+            self.vq_t = temperature
+            self.vq_enc = self.vqvae.encode
+        else:
+            self.vq_enc = load_model(pretrained_vq).cuda()
+            self.n_embed = self.vq_enc.vocab_size
+            logger.info('load pretrained VQVAE successfully')
 
-#         # loss
-#         self.ce_loss = build_loss(ce_loss) if ce_loss else None
-#         self.l2_loss = build_loss(l2_loss) if l2_loss else None
+        # loss
+        self.ce_loss = build_loss(ce_loss) if ce_loss else None
+        self.l2_loss = build_loss(l2_loss) if l2_loss else None
 
-#         # fc
-#         self.fc = fc
+        # fc
+        self.fc = fc
 
-#         if self.fc:
-#             self.predictor = nn.Linear(self.embed_dim, self.n_embed)
-#         else:
-#             self.embedding_layer = nn.Linear(self.embed_dim, self.vq_emb.shape[0])
+        if self.fc:
+            self.predictor = nn.Linear(self.embed_dim, self.n_embed)
+        else:
+            self.embedding_layer = nn.Linear(self.embed_dim, self.vq_emb.shape[0])
 
-#         if pretrained:
-#             _ = load_checkpoint(self, pretrained, map_location='cpu')
-#             logger.info('load pretrained model successfully')
+        if pretrained:
+            _ = load_checkpoint(self, pretrained, map_location='cpu')
+            logger.info('load pretrained model successfully')
 
-#     def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
+    def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
 
-#         # vqvae tokenize for query frame
-#         with torch.no_grad():
-#             if self.vq_type == 'VQVAE':
-#                 self.vqvae.eval()
-#                 _, quant, diff, ind, embed = self.vq_enc(imgs[:, 0, -1])
-#                 ind = ind.reshape(-1, 1).long().detach()
-#             else:
-#                 self.vq_enc.eval()
-#                 ind = self.vq_enc(imgs[:, 0, -1])
-#                 ind = torch.argmax(ind, axis=1).reshape(-1, 1).long().detach()
+        # vqvae tokenize for query frame
+        with torch.no_grad():
+            if self.vq_type == 'VQVAE':
+                self.vqvae.eval()
+                _, quant, diff, ind, embed = self.vq_enc(imgs[:, 0, -1])
+                ind = ind.reshape(-1, 1).long().detach()
+            else:
+                self.vq_enc.eval()
+                ind = self.vq_enc(imgs[:, 0, -1])
+                ind = torch.argmax(ind, axis=1).reshape(-1, 1).long().detach()
 
-#         if jitter_imgs is not None:
-#             imgs = jitter_imgs
+        if jitter_imgs is not None:
+            imgs = jitter_imgs
 
-#         bsz, num_clips, t, c, h, w = imgs.shape
-#         mask_query_idx = mask_query_idx.bool()
-
-
-#         tar = self.backbone(imgs[:, 0, -1])
-#         refs = list([self.backbone(imgs[:, 0, i]) for i in range(t-1)])
-
-#         out, _ = self.non_local_attention(tar, refs, bsz)
-
-#         losses = {}
-
-#         if self.ce_loss:
-#             if self.fc:
-#                 predict = self.predictor(out)
-#             else:
-#                 if out.shape[-1] != self.vq_emb.shape[0]:
-#                     predict = self.embedding_layer(out)
-#                 else:
-#                     predict = out
-#                 predict = nn.functional.normalize(predict, dim=-1)
-#                 predict = torch.mm(predict, nn.functional.normalize(self.vq_emb, dim=0))
-#                 predict = torch.div(predict, self.vq_t)
-
-#             losses['ce_loss'] = (self.ce_loss(predict, ind) * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
-
-#         if self.l2_loss:
-#             predict = self.embedding_layer(out)
-#             predict = nn.functional.normalize(predict, dim=-1)
-#             embeds = torch.index_select(self.vq_emb, dim=1, index=ind.view(-1)).permute(1,0)
-#             embeds = nn.functional.normalize(embeds, dim=-1)
-#             losses['l2_loss'] = (self.l2_loss(predict, embeds) * mask_query_idx.reshape(-1,1)).sum() / mask_query_idx.sum()
-
-#         return losses
-
-#     def forward_test(self, imgs, mask_query_idx,
-#                     save_image=False,
-#                     save_path=None,
-#                     iteration=None):
-#         bsz, num_clips, t, c, w, h = imgs.shape
-
-#         tar = self.backbone(imgs[:,0,-1])
-#         refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
-
-#         # vqvae tokenize for query frame
-#         with torch.no_grad():
-#             if self.vq_type == 'VQVAE':
-#                 _, quant, diff, ind, embed = self.vqvae.encode(imgs[:, 0, -1])
-#                 ind = ind.reshape(-1, 1).long().detach()
-#             else:
-#                 ind = self.vqvae(imgs[:, 0, -1])
-#                 ind = torch.argmax(ind, axis=1).reshape(-1, 1).long().detach()
+        bsz, num_clips, t, c, h, w = imgs.shape
+        mask_query_idx = mask_query_idx.bool()
 
 
-#         out, att = self.non_local_attention(tar, refs, bsz)
+        tar = self.backbone(imgs[:, 0, -1])
+        refs = list([self.backbone(imgs[:, 0, i]) for i in range(t-1)])
+
+        out, _ = self.non_local_attention(tar, refs, bsz)
+
+        losses = {}
+
+        if self.ce_loss:
+            if self.fc:
+                predict = self.predictor(out)
+            else:
+                if out.shape[-1] != self.vq_emb.shape[0]:
+                    predict = self.embedding_layer(out)
+                else:
+                    predict = out
+                predict = nn.functional.normalize(predict, dim=-1)
+                predict = torch.mm(predict, nn.functional.normalize(self.vq_emb, dim=0))
+                predict = torch.div(predict, self.vq_t)
+
+            losses['ce_loss'] = (self.ce_loss(predict, ind) * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
+
+        if self.l2_loss:
+            predict = self.embedding_layer(out)
+            predict = nn.functional.normalize(predict, dim=-1)
+            embeds = torch.index_select(self.vq_emb, dim=1, index=ind.view(-1)).permute(1,0)
+            embeds = nn.functional.normalize(embeds, dim=-1)
+            losses['l2_loss'] = (self.l2_loss(predict, embeds) * mask_query_idx.reshape(-1,1)).sum() / mask_query_idx.sum()
+
+        return losses
+
+    def forward_test(self, imgs, mask_query_idx,
+                    save_image=False,
+                    save_path=None,
+                    iteration=None):
+        bsz, num_clips, t, c, w, h = imgs.shape
+
+        tar = self.backbone(imgs[:,0,-1])
+        refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
+
+        # vqvae tokenize for query frame
+        with torch.no_grad():
+            if self.vq_type == 'VQVAE':
+                _, quant, diff, ind, embed = self.vqvae.encode(imgs[:, 0, -1])
+                ind = ind.reshape(-1, 1).long().detach()
+            else:
+                ind = self.vqvae(imgs[:, 0, -1])
+                ind = torch.argmax(ind, axis=1).reshape(-1, 1).long().detach()
 
 
-#         visualize_att(imgs, att, iteration, mask_query_idx, tar.shape[-1], self.patch_size, dst_path=save_path, norm_mode='mean-std')
+        out, att = self.non_local_attention(tar, refs, bsz)
 
-#         if self.fc:
-#             predict = self.predictor(out)
-#         else:
-#             predict = self.embedding_layer(out)
-#             predict = torch.mm(predict, self.vq_emb)
 
-#         out2 = torch.argmax(predict.cpu().detach(), axis=1).numpy()
-#         out1 = ind.cpu().numpy()
+        visualize_att(imgs, att, iteration, mask_query_idx, tar.shape[-1], self.patch_size, dst_path=save_path, norm_mode='mean-std')
 
-#         return out1, out2
+        if self.fc:
+            predict = self.predictor(out)
+        else:
+            predict = self.embedding_layer(out)
+            predict = torch.mm(predict, self.vq_emb)
 
-#     def forward(self, test_mode=False, **kwargs):
+        out2 = torch.argmax(predict.cpu().detach(), axis=1).numpy()
+        out1 = ind.cpu().numpy()
 
-#         if test_mode:
-#             return self.forward_test(**kwargs)
+        return out1, out2
 
-#         return self.forward_train(**kwargs)
+    def forward(self, test_mode=False, **kwargs):
 
-#     def train_step(self, data_batch, optimizer):
+        if test_mode:
+            return self.forward_test(**kwargs)
 
-#         # parser loss
-#         losses = self(**data_batch, test_mode=False)
-#         loss, log_vars = self.parse_losses(losses)
+        return self.forward_train(**kwargs)
 
-#         # optimizer
-#         for k,opz in optimizer.items():
-#             opz.zero_grad()
+    def train_step(self, data_batch, optimizer):
 
-#         loss.backward()
-#         for k,opz in optimizer.items():
-#             opz.step()
+        # parser loss
+        losses = self(**data_batch, test_mode=False)
+        loss, log_vars = self.parse_losses(losses)
 
-#         log_vars.pop('loss')
-#         outputs = dict(
-#             log_vars=log_vars,
-#             num_samples=len(data_batch['imgs'])
-#         )
+        # optimizer
+        for k,opz in optimizer.items():
+            opz.zero_grad()
 
-#         return outputs
+        loss.backward()
+        for k,opz in optimizer.items():
+            opz.step()
+
+        log_vars.pop('loss')
+        outputs = dict(
+            log_vars=log_vars,
+            num_samples=len(data_batch['imgs'])
+        )
+
+        return outputs
 
     
-#     def non_local_attention(self, tar, refs, bsz):
+    def non_local_attention(self, tar, refs, bsz):
 
-#         refs = torch.stack(refs, 2)
-#         _, feat_dim, w_, h_ = tar.shape
+        refs = torch.stack(refs, 2)
+        _, feat_dim, w_, h_ = tar.shape
 
-#         refs = refs.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
-#         tar = tar.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
+        refs = refs.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
+        tar = tar.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
 
-#         att = torch.einsum("bic,bjc -> bij", (tar, refs))
-#         att = F.softmax(att, dim=-1)
+        att = torch.einsum("bic,bjc -> bij", (tar, refs))
+        att = F.softmax(att, dim=-1)
 
-#         out = torch.matmul(att, refs).reshape(-1, feat_dim)
+        out = torch.matmul(att, refs).reshape(-1, feat_dim)
 
-#         return out, att
+        return out, att
