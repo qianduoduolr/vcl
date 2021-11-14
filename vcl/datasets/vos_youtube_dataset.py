@@ -5,6 +5,7 @@ from pathlib import Path
 import glob
 import os
 import random
+import pickle
 import torch
 import torchvision.transforms.functional as F
 from torchvision import transforms
@@ -297,6 +298,13 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
         self.mask_dir = osp.join(self.root, self.data_prefix, self.split, 'Annotations')
         list_path = osp.join(self.list_path, f'youtube{self.data_prefix}_train_list.txt')
 
+        if self.test_mode:
+            self.test_dic = {}
+            with open(osp.join(self.list_path, 'test_records.txt'), 'r') as f:
+                for line in f.readlines():
+                    name, offset, s_idx = line.strip('\n').split()
+                    self.test_dic[name] = [int(offset), int(s_idx)]
+
         with open(list_path, 'r') as f:
             for idx, line in enumerate(f.readlines()):
                 sample = dict()
@@ -311,18 +319,21 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
         frames_path = sample['frames_path']
         masks_path = sample['masks_path']
         num_frames = sample['num_frames']
+        vid_name = frames_path[0].split('/')[-2]
 
-        offset = [ random.randint(0, num_frames-4)]
+        # offset = [ random.randint(0, num_frames-4)]
+        offset = [self.test_dic[vid_name][0]]
         frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
-        mask = self._parser_rgb_rawframe([offset[0]+1], masks_path, 1, flag='unchanged', backend='pillow')[0]
+        # mask = self._parser_rgb_rawframe([offset[0]+1], masks_path, 1, flag='unchanged', backend='pillow')[0]
 
-        mask = cv2.resize(mask, (self.vq_res, self.vq_res), cv2.INTER_NEAREST).reshape(-1)
-        obj_idxs = np.nonzero(mask)[0]
+        # mask = cv2.resize(mask, (self.vq_res, self.vq_res), cv2.INTER_NEAREST).reshape(-1)
+        # obj_idxs = np.nonzero(mask)[0]
 
-        if mask.max() > 0:
-            sample_idx = np.array(random.sample(obj_idxs.tolist(), 1))
-        else:
-            sample_idx = np.array(random.sample(range(self.vq_res * self.vq_res), 1))
+        # if mask.max() > 0:
+        #     sample_idx = np.array(random.sample(obj_idxs.tolist(), 1))
+        # else:
+        #     sample_idx = np.array(random.sample(range(self.vq_res * self.vq_res), 1))
+        sample_idx = np.array([self.test_dic[vid_name][1]])
 
         assert sample_idx.shape[0] == 1
 

@@ -172,7 +172,7 @@ class Vqvae_Tracker(BaseModel):
         # vqvae tokenize for query frame
         with torch.no_grad():
             if self.vq_type == 'VQVAE':
-                _, quant, diff, ind, embed = self.vqvae.encode(imgs[:, 0, -1])
+                _, quant, diff, ind, embed = self.vq_enc(imgs[:, 0, -1])
                 ind = ind.reshape(-1, 1).long().detach()
             else:
                 ind = self.vqvae(imgs[:, 0, -1])
@@ -184,16 +184,24 @@ class Vqvae_Tracker(BaseModel):
 
         visualize_att(imgs, att, iteration, mask_query_idx, tar.shape[-1], self.patch_size, dst_path=save_path, norm_mode='mean-std')
 
-        if self.fc:
-            predict = self.predictor(out)
+        if self.backbone.out_indices[0] == 3:
+            if self.fc:
+                predict = self.predictor(out)
+            else:
+                if out.shape[-1] != self.vq_emb.shape[0]:
+                    predict = self.embedding_layer(out)
+                else:
+                    predict = out
+                predict = nn.functional.normalize(predict, dim=-1)
+                predict = torch.mm(predict, nn.functional.normalize(self.vq_emb, dim=0))
+                predict = torch.div(predict, self.vq_t)
+
+            out2 = torch.argmax(predict.cpu().detach(), axis=1).numpy()
+            out1 = ind.cpu().numpy()
+
+            return out1, out2
         else:
-            predict = self.embedding_layer(out)
-            predict = torch.mm(predict, self.vq_emb)
-
-        out2 = torch.argmax(predict.cpu().detach(), axis=1).numpy()
-        out1 = ind.cpu().numpy()
-
-        return out1, out2
+            return None
 
     def forward(self, test_mode=False, **kwargs):
 
@@ -308,7 +316,7 @@ class Vqvae_Tracker_v2(BaseModel):
         logger = get_root_logger()
 
         self.backbone = build_backbone(backbone)
-        self.embed_dim = self.backbone.transformer_blocks.embed_dim
+        self.embed_dim = self.backbone.res_blocks.feat_dim
 
         self.vq_type = vqvae.type
         if vqvae.type != 'DALLE_Encoder':
@@ -465,6 +473,8 @@ class Vqvae_Tracker_v2(BaseModel):
 
         att = torch.einsum("bic,bjc -> bij", (tar, refs))
         att = F.softmax(att, dim=-1)
+
+        # a = att[0,32,:].reshape(32,32).detach().cpu().numpy()
 
         out = torch.matmul(att, refs).reshape(-1, feat_dim)
 

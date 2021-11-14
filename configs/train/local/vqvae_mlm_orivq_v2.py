@@ -5,7 +5,7 @@ pretrained_vq='/home/lr/models/vqvae/vqvae_youtube_d4_n2048_c512_embc512.pth'
 model = dict(
     type='Vqvae_Tracker_v2',
     backbone=dict(type='Vq_Swin',
-                  transformer_blocks=dict(type='SwinTransformer', img_size=256, num_classes=-1, embed_dim=512, depths=[2,2], num_heads=[4,8], window_size=8, patch_size=8),
+                  res_blocks=dict(depth=10, inplanes=128),
                   vqvae=dict(type='VQVAE', downsample=4, n_embed=2048, channel=512, n_res_channel=128, embed_dim=512),
                   pretrained_vq=pretrained_vq
     ),

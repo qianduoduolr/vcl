@@ -19,7 +19,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train an editor')
     parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/local/vqvae_mlm_orivq_viz.py')
     # parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='')
-    parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_dyt_nl_l2_nofc_orivq_color3/epoch_800.pth')
+    parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='')
     parser.add_argument('--seed', type=int, default=3, help='random seed')
     parser.add_argument(
         '--deterministic',
@@ -40,7 +40,7 @@ def parse_args():
         help='whether to use gpu to collect results')
     parser.add_argument(
         '--save-path',
-        default='output/vqvae_mlm_d4_nemd2048_dyt_nl_l2_nofc_orivq_color3',
+        default='output/youtube/vis_vfs',
         type=str,
         help='path to store images and if not given, will not save image')
     parser.add_argument('--tmpdir', help='tmp dir for writing some results')
@@ -108,8 +108,8 @@ def main():
     model = build_model(
         cfg.model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
 
-    # model.backbone.pretrained = '/home/lr/models/ssl/vcl/vfs_pretrain/r18_nc_sgd_cos_100e_r2_1xNx8_k400-db1a4c0d.pth'
-    # model.backbone.init_weights()
+    model.backbone.pretrained = '/home/lr/models/ssl/vcl/vfs_pretrain/r18_nc_sgd_cos_100e_r2_1xNx8_k400-db1a4c0d.pth'
+    model.backbone.init_weights()
 
     args.save_image = args.save_path is not None
     empty_cache = cfg.get('empty_cache', False)
@@ -133,52 +133,56 @@ def main():
 
     model = MMDataParallel(model, device_ids=[0])
 
+    args.save_path = os.path.join(args.save_path, f'out{model.module.backbone.out_indices[0]}')
     outputs = single_gpu_test(
             model,
             data_loader,
             save_path=args.save_path,
             save_image=args.save_image)
     
-    import numpy as np
+    if outputs[0] != None:
+        import numpy as np
 
-    predict = []
-    target = []
-    for out in outputs:
-        target.append(out[0])
-        predict.append(out[1])
+        predict = []
+        target = []
+        for out in outputs:
+            target.append(out[0])
+            predict.append(out[1])
 
-    predict = np.concatenate(predict,0).reshape(-1)
-    target = np.concatenate(target,0).reshape(-1)
+        predict = np.concatenate(predict,0).reshape(-1)
+        target = np.concatenate(target,0).reshape(-1)
 
-    #######################
-    import matplotlib.pyplot as plt
+        #######################
+        import matplotlib.pyplot as plt
 
-    def vis_bar(inp, name):
-        plt.figure()
+        def vis_bar(inp, name):
+            plt.figure()
 
-        print('There are {} keys in {}'.format(len(np.unique(inp)), name) )
+            with open(os.path.join(args.save_path, 'result.txt'), 'a') as f:    
+                print('There are {} keys in {}'.format(len(np.unique(inp)), name))
+                f.write('There are {} keys in {}'.format(len(np.unique(inp)), name) + '\n')
 
-        x = np.array(list([ (i==inp).astype(np.uint8).sum() for i in range(2048) ]))
+            x = np.array(list([ (i==inp).astype(np.uint8).sum() for i in range(2048) ]))
 
-        # the histogram of the data
-        plt.bar(range(2048), x)
+            # the histogram of the data
+            plt.bar(range(2048), x)
 
-        plt.xlabel('keys')
-        plt.ylabel('times')
-        plt.title('Histogram of times of each key ')
+            plt.xlabel('keys')
+            plt.ylabel('times')
+            plt.title('Histogram of times of each key ')
 
-        # Tweak spacing to prevent clipping of ylabel
-        plt.savefig(f'./test_{name}.jpg')
-        # plt.show()
+            # Tweak spacing to prevent clipping of ylabel
+            # plt.savefig(f'./test_{name}.jpg')
+            # plt.show()
 
-    vis_bar(predict, 'predict')
-    vis_bar(target, 'target')
-
-
-    ##########################
-    print('predict acc is {:4f}'.format((predict==target).astype(np.uint8).sum() / len(predict)))
+        vis_bar(predict, 'predict')
+        vis_bar(target, 'target')
 
 
+        ##########################
+        with open(os.path.join(args.save_path, 'result.txt'), 'a') as f:    
+            print('predict acc is {:4f}'.format((predict==target).astype(np.uint8).sum() / len(predict)))
+            f.write('predict acc is {:4f}'.format((predict==target).astype(np.uint8).sum() / len(predict)))
 
 if __name__ == '__main__':
     main()

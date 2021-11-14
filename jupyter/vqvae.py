@@ -1,6 +1,15 @@
+# import attr
+import math
+import numpy as np
+
 import torch
-from torch import nn
-from torch.nn import functional as F
+import torch.nn as nn
+import torch.nn.functional as F
+
+from collections  import OrderedDict
+from functools    import partial
+
+logit_laplace_eps: float = 0.1
 
 
 class Quantize(nn.Module):
@@ -110,10 +119,12 @@ class Encoder(nn.Module):
         :param downsample: times of downsample
         """
         super().__init__()
+
         if downsample == 1:
             blocks = [
                 nn.Conv2d(in_channel, channel, 4, stride=2, padding=1)
             ]
+
         elif downsample == 2:
             blocks = [
                 nn.Conv2d(in_channel, channel//2, 4, stride=2, padding=1),
@@ -122,12 +133,12 @@ class Encoder(nn.Module):
             ]
         elif downsample == 4:
             blocks = [
-                nn.Conv2d(in_channel, channel//2, 4, stride=2, padding=1), 
-                nn.ELU(), 
-                nn.Conv2d(channel//2, channel//2, 4, stride=2, padding=1), 
-                nn.ELU(), 
+                nn.Conv2d(in_channel, channel//2, 4, stride=2, padding=1),
+                nn.ELU(),
+                nn.Conv2d(channel//2, channel//2, 4, stride=2, padding=1),
+                nn.ELU(),
                 nn.Conv2d(channel//2, channel, 4, stride=2, padding=1)
-                ]
+            ]
 
         blocks.append(nn.ELU())
         blocks.append(nn.Conv2d(channel, channel, 3, padding=1))
@@ -144,6 +155,96 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
+    """
+        Decoder network. It consists a convolutional layer, N residual blocks and a deconvolution.
+    """
+    def __init__(self, in_channel, out_channel, channel, n_res_block, n_res_channel, upsample):
+        """
+        :param in_channel: input channels
+        :param out_channel: output channels
+        :param channel: convolution channels
+        :param n_res_block: number of residual blocks
+        :param n_res_channel: number of intermediate layers of the residual block
+        :param upsample: times of upsample
+        """
+        super().__init__()
+
+
+        blocks = [nn.Conv2d(in_channel, channel, 3, padding=1)]
+
+        for i in range(n_res_block):
+            blocks.append(ResBlock(channel, n_res_channel))
+
+        blocks.append(nn.ELU())
+
+        if upsample == 1:
+            blocks.append(nn.ConvTranspose2d(channel, out_channel, 4, stride=2, padding=1))
+
+        elif upsample == 2:
+            blocks.append(nn.ConvTranspose2d(channel, channel//2, 4, stride=2, padding=1))
+            blocks.append(nn.ELU())
+            blocks.append(nn.ConvTranspose2d(channel//2, out_channel, 4, stride=2, padding=1))
+        elif upsample == 4:
+            blocks.append(nn.ConvTranspose2d(channel, channel//2, 4, stride=2, padding=1))
+            blocks.append(nn.ELU())
+            blocks.append(nn.ConvTranspose2d(channel//2, channel//2, 4, stride=2, padding=1))
+            blocks.append(nn.ELU())
+            blocks.append(nn.ConvTranspose2d(channel//2, out_channel, 4, stride=2, padding=1))
+
+        self.blocks = nn.Sequential(*blocks)
+
+    def forward(self, z):
+        return self.blocks(z)
+
+class Encoder_my(nn.Module):
+    """
+        Encoder network. It consists a set of convolutional layers followed by N residual blocks.
+    """
+    def __init__(self, in_channel, channel, n_res_block, n_res_channel, downsample):
+        """
+        :param in_channel: input channels
+        :param channel: convolution channels
+        :param n_res_block: number of residual blocks
+        :param n_res_channel: number of intermediate layers of the residual block
+        :param downsample: times of downsample
+        """
+        super().__init__()
+
+        if downsample == 1:
+            blocks = [
+                nn.Conv2d(in_channel, channel // 2, 4, stride=2, padding=1)
+            ]
+
+        elif downsample == 2:
+            blocks = [
+                nn.Conv2d(in_channel, channel//2, 4, stride=2, padding=1),
+                nn.ELU(),
+                nn.Conv2d(channel//2, channel//2, 4, stride=2, padding=1)
+            ]
+        elif downsample == 4:
+            blocks = [
+                nn.Conv2d(in_channel, channel//2, 4, stride=2, padding=1),
+                nn.ELU(),
+                nn.Conv2d(channel//2, channel//2, 4, stride=2, padding=1),
+                nn.ELU(),
+                nn.Conv2d(channel//2, channel//2, 4, stride=2, padding=1)
+            ]
+
+        blocks.append(nn.ELU())
+        blocks.append(nn.Conv2d(channel//2, channel, 3, padding=1))
+
+        for i in range(n_res_block):
+            blocks.append(ResBlock(channel, n_res_channel))
+
+        blocks.append(nn.ELU())
+
+        self.blocks = nn.Sequential(*blocks)
+
+    def forward(self, x):
+        return self.blocks(x)
+
+
+class Decoder_my(nn.Module):
     """
         Decoder network. It consists a convolutional layer, N residual blocks and a deconvolution.
     """
@@ -202,6 +303,7 @@ class VQVAE(nn.Module):
         n_embed=4096,
         commitment_cost=0.25,
         decay=0.99,
+        newed=False,
     ):
         """
         :param in_channel: input channels
@@ -216,10 +318,16 @@ class VQVAE(nn.Module):
         """
         super().__init__()
 
-        self.enc = Encoder(in_channel, channel, n_res_block, n_res_channel, downsample)
+        if newed:
+            self.enc = Encoder_my(in_channel, channel, n_res_block, n_res_channel, downsample)
+            self.dec = Decoder_my(embed_dim, in_channel, channel, n_res_block, n_res_channel, downsample)
+        else:
+            self.enc = Encoder(in_channel, channel, n_res_block, n_res_channel, downsample)
+            self.dec = Decoder(embed_dim, in_channel, channel, n_res_block, n_res_channel, downsample)
+            
         self.quantize_conv = nn.Conv2d(channel, embed_dim, 1)  # Dimension reduction to embedding size
         self.quantize = Quantize(embed_dim, n_embed, commitment_cost, decay)  # Vector quantization
-        self.dec = Decoder(embed_dim, in_channel, channel, n_res_block, n_res_channel, downsample)
+        
 
     def forward(self, x):
         _, quant, diff, _, _ = self.encode(x)
@@ -256,7 +364,3 @@ class VQVAE(nn.Module):
         dec = self.dec(quant)  # Decodes to input space
 
         return dec
-
-
-if __name__ == '__main__':
-    model = VQVAE(downsample=4, n_embed=2048)

@@ -483,7 +483,7 @@ class SwinTransformer(nn.Module):
                  window_size=7, mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
-                 use_checkpoint=False, **kwargs):
+                 use_checkpoint=False, keep_res=False, **kwargs):
         super().__init__()
 
         self.num_classes = num_classes
@@ -514,36 +514,38 @@ class SwinTransformer(nn.Module):
 
         # build layers
         self.layers = nn.ModuleList()
-        # for i_layer in range(self.num_layers):
-        #     layer = BasicLayer(dim=int(embed_dim * 2 ** i_layer),
-        #                        input_resolution=(patches_resolution[0] // (2 ** i_layer),
-        #                                          patches_resolution[1] // (2 ** i_layer)),
-        #                        depth=depths[i_layer],
-        #                        num_heads=num_heads[i_layer],
-        #                        window_size=window_size,
-        #                        mlp_ratio=self.mlp_ratio,
-        #                        qkv_bias=qkv_bias, qk_scale=qk_scale,
-        #                        drop=drop_rate, attn_drop=attn_drop_rate,
-        #                        drop_path=dpr[sum(depths[:i_layer]):sum(depths[:i_layer + 1])],
-        #                        norm_layer=norm_layer,
-        #                        downsample=PatchMerging if (i_layer < self.num_layers - 1) else None,
-        #                        use_checkpoint=use_checkpoint)
-        #     self.layers.append(layer)
-        for i_layer in range(self.num_layers):
-            layer = BasicLayer(dim=int(embed_dim),
-                               input_resolution=(patches_resolution[0],
-                                                 patches_resolution[1]),
-                               depth=depths[i_layer],
-                               num_heads=num_heads[i_layer],
-                               window_size=window_size,
-                               mlp_ratio=self.mlp_ratio,
-                               qkv_bias=qkv_bias, qk_scale=qk_scale,
-                               drop=drop_rate, attn_drop=attn_drop_rate,
-                               drop_path=dpr[sum(depths[:i_layer]):sum(depths[:i_layer + 1])],
-                               norm_layer=norm_layer,
-                               downsample=None,
-                               use_checkpoint=use_checkpoint)
-            self.layers.append(layer)
+        if not keep_res:
+            for i_layer in range(self.num_layers):
+                layer = BasicLayer(dim=int(embed_dim * 2 ** i_layer),
+                                input_resolution=(patches_resolution[0] // (2 ** i_layer),
+                                                    patches_resolution[1] // (2 ** i_layer)),
+                                depth=depths[i_layer],
+                                num_heads=num_heads[i_layer],
+                                window_size=window_size,
+                                mlp_ratio=self.mlp_ratio,
+                                qkv_bias=qkv_bias, qk_scale=qk_scale,
+                                drop=drop_rate, attn_drop=attn_drop_rate,
+                                drop_path=dpr[sum(depths[:i_layer]):sum(depths[:i_layer + 1])],
+                                norm_layer=norm_layer,
+                                downsample=PatchMerging if (i_layer < self.num_layers - 1) else None,
+                                use_checkpoint=use_checkpoint)
+                self.layers.append(layer)
+        else:
+            for i_layer in range(self.num_layers):
+                layer = BasicLayer(dim=int(embed_dim),
+                                input_resolution=(patches_resolution[0],
+                                                    patches_resolution[1]),
+                                depth=depths[i_layer],
+                                num_heads=num_heads[i_layer],
+                                window_size=window_size,
+                                mlp_ratio=self.mlp_ratio,
+                                qkv_bias=qkv_bias, qk_scale=qk_scale,
+                                drop=drop_rate, attn_drop=attn_drop_rate,
+                                drop_path=dpr[sum(depths[:i_layer]):sum(depths[:i_layer + 1])],
+                                norm_layer=norm_layer,
+                                downsample=None,
+                                use_checkpoint=use_checkpoint)
+                self.layers.append(layer)
 
         self.norm = norm_layer(self.num_features)
         self.avgpool = nn.AdaptiveAvgPool1d(1)
