@@ -6,7 +6,6 @@ from ...utils import get_root_logger
 from ..common import change_stride
 from .resnet import *
 from ..registry import BACKBONES
-from .swin_transformer import SwinTransformer
 from ..builder import build_backbone, build_loss, build_components
 
 
