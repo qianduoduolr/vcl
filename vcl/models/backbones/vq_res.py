@@ -352,6 +352,7 @@ class Vq_Res(nn.Module):
         else:
             raise NotImplementedError
 
+        self.out_indices = self.res_blocks.out_indices
         self.vq_type = vqvae.type
         self.init_weights()
 

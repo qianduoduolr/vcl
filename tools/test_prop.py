@@ -16,7 +16,7 @@ from vcl.models import build_model
 
 def parse_args():
     parser = argparse.ArgumentParser(description='mmediting tester')
-    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/train/local/vqvae_mlm_v2_d4_nemd2048_dyt_nl_fc_orivq_res.py')
+    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/train/local/vqvae_mlm_v2_d4_nemd2048_dyt_nl_fc_orivq_motion2.py')
     # parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_dyt_nl_l2_nofc_orivq/epoch_800.pth')
     parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='')
     parser.add_argument('--out-indices', nargs='+', type=int, default=[0])
@@ -92,7 +92,7 @@ def main():
         args.checkpoint = eval_config['checkpoint_path']
         eval_config.pop('checkpoint_path')
     else:
-        pass
+        eval_config.pop('checkpoint_path')
 
     # init distributed env first, since logger depends on the dist info.
     if args.launcher == 'none':

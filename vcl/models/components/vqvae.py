@@ -59,6 +59,11 @@ class Quantize(nn.Module):
         embed_onehot = F.one_hot(embed_ind, self.n_embed).type(flatten.dtype)  # Assigns the actual codes according
         # their closest indices, with flattened
         embed_ind = embed_ind.view(*z.shape[:-1])  # B x H x W tensor with the indices of their nearest code
+
+        # embed_ind = F.interpolate(embed_ind.float().unsqueeze(1),
+        #             size=[32,32],
+        #             mode='nearest').squeeze(1).long()
+
         quantize = F.embedding(embed_ind, self.embed.transpose(0, 1))  # B x H x W x D quantized tensor
 
         # Exponential decay updating, as a replacement to codebook loss
