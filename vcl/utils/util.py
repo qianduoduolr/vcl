@@ -155,9 +155,10 @@ def visualize_att(imgs, att, idx, query_idx=None, feat_size=25, patch_size=5, ds
         cv2.imwrite(os.path.join(dst_path,'blend_tar.png'), blend_out2)
 
 
-    # cv2.imwrite(os.path.join(dst_path,'att_all.jpg'), att_map)
-    # cv2.imwrite(os.path.join(dst_path,'att_all_query.jpg'), att_query_map)
-
+def moment_update(model, model_ema, m):
+    """ model_ema = m * model_ema + (1 - m) model """
+    for p1, p2 in zip(model.parameters(), model_ema.parameters()):
+        p2.data.mul_(m).add_(1 - m, p1.detach().data)
 
 
 
