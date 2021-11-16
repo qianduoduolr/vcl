@@ -16,6 +16,7 @@ from vcl.utils import *
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
+import math
 
 
 @MODELS.register_module()
@@ -26,7 +27,7 @@ class Dist_Tracker(BaseModel):
                  patch_size,
                  moment,
                  temperature,
-                 ce_loss=None,
+                 loss=None,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None
@@ -54,17 +55,7 @@ class Dist_Tracker(BaseModel):
         self.backbone_t = build_backbone(backbone)
 
         # loss
-        self.ce_loss = build_loss(ce_loss) if ce_loss else None
-
-        # corr
-        if patch_size != -1:
-            from spatial_correlation_sampler import SpatialCorrelationSampler
-            self.correlation_sampler = SpatialCorrelationSampler(
-                kernel_size=1,
-                patch_size=patch_size,
-                stride=1,
-                padding=0,
-                dilation=1)
+        self.loss = build_loss(loss)
 
     def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
 
@@ -73,21 +64,27 @@ class Dist_Tracker(BaseModel):
 
         tar = self.backbone_s(imgs[:,0,-1])
         refs = list([self.backbone_s(imgs[:,0,i]) for i in range(t-1)])
-        _, predict_att = self.non_local_attention(tar, refs, bsz)
+        _, predict_att = self.non_local_attention(tar, refs, bsz, return_att=True)
+
+        h,w = tar.shape[-2:]
+        if self.patch_size != -1:
+            t_masks = self.make_mask(h, self.patch_size)
 
         with torch.no_grad():
             tar_t = self.backbone_t(imgs[:,0,-1])
             refs_t = list([self.backbone_t(imgs[:,0,i]) for i in range(t-1)])
-            if self.patch_size != -1:
-                _, target_att = self.local_attention(tar_t, refs_t, bsz, t)
-            else:
-                _, target_att = self.non_local_attention(tar_t, refs_t, bsz)
-        
-        target = target_att.reshape(-1, target_att.shape[-1]).argmax(dim=-1, keepdim=True).long().detach()
+
+        _, target_att = self.non_local_attention(tar_t, refs_t, bsz, return_att=True)
+        if self.patch_size != -1:
+            target_att = target_att * t_masks.unsqueeze(0)
+        else:
+            pass
+
+        target = target_att.reshape(-1, target_att.shape[-1]).detach()
         predict_att = predict_att.reshape(-1, predict_att.shape[-1])
 
         losses = {}
-        losses['att_loss'] = (self.ce_loss(predict_att, target) * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
+        losses['att_loss'] = (self.loss(predict_att, target) * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
 
         return losses
 
@@ -143,7 +140,7 @@ class Dist_Tracker(BaseModel):
 
         return out, att
     
-    def non_local_attention(self, tar, refs, bsz):
+    def non_local_attention(self, tar, refs, bsz, return_att=False):
 
         refs = torch.stack(refs, 2)
         _, feat_dim, w_, h_ = tar.shape
@@ -152,8 +149,21 @@ class Dist_Tracker(BaseModel):
         tar = tar.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
 
         att = torch.einsum("bic,bjc -> bij", (tar, refs))
+        
+        if return_att:
+            return None, att
+
         att = F.softmax(att, dim=-1)
 
         out = torch.matmul(att, refs).reshape(-1, feat_dim)
 
         return out, att
+    
+    def make_mask(self, size, t_size):
+        masks = []
+        for i in range(size):
+            for j in range(size):
+                mask = torch.zeros((size, size)).cuda()
+                mask[max(0, i-t_size):min(size, i+t_size+1), max(0, j-t_size):min(size, j+t_size+1)] = 1
+                masks.append(mask.reshape(-1))
+        return torch.stack(masks)

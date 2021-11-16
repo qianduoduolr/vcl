@@ -67,6 +67,63 @@ class Ce_Loss(nn.Module):
         """
         return self.loss_weight * F.cross_entropy(pred, target.squeeze(1), reduction=self.reduction)
 
+@LOSSES.register_module()
+class Soft_Ce_Loss(nn.Module):
+
+    def __init__(self, loss_weight=1.0, reduction='mean', sample_wise=False):
+        super().__init__()
+        if reduction not in ['none', 'mean', 'sum']:
+            raise ValueError(f'Unsupported reduction mode: {reduction}. '
+                             f'Supported ones are: {_reduction_modes}')
+
+        self.loss_weight = loss_weight
+        self.reduction = reduction
+        self.sample_wise = sample_wise
+
+    def forward(self, pred, target, weight=None, **kwargs):
+        """Forward Function.
+
+        Args:
+            pred (Tensor): of shape (N, C, H, W). Predicted tensor.
+            target (Tensor): of shape (N, C, H, W). Ground truth tensor.
+            weight (Tensor, optional): of shape (N, C, H, W). Element-wise
+                weights. Default: None.
+        """
+        log_likelihood = -F.log_softmax(pred, dim=-1)
+        bsz = pred.shape[0]
+        if self.reduction == 'mean':
+            loss = torch.sum(torch.mul(log_likelihood, target.softmax(dim=-1))) / bsz
+        else:
+            loss = torch.sum(torch.mul(log_likelihood, target.softmax(dim=-1)), dim=-1)
+        return loss * self.loss_weight
+
+
+@LOSSES.register_module()
+class Kl_Loss(nn.Module):
+
+    def __init__(self, loss_weight=1.0, reduction='mean', sample_wise=False):
+        super().__init__()
+        if reduction not in ['none', 'mean', 'sum']:
+            raise ValueError(f'Unsupported reduction mode: {reduction}. '
+                             f'Supported ones are: {_reduction_modes}')
+
+        self.loss_weight = loss_weight
+        self.reduction = reduction
+        self.sample_wise = sample_wise
+
+    def forward(self, pred, target, weight=None, **kwargs):
+        """Forward Function.
+
+        Args:
+            pred (Tensor): of shape (N, C, H, W). Predicted tensor.
+            target (Tensor): of shape (N, C, H, W). Ground truth tensor.
+            weight (Tensor, optional): of shape (N, C, H, W). Element-wise
+                weights. Default: None.
+        """
+        loss = F.kl_div(F.log_softmax(pred, dim=-1).log(), target.softmax(dim=-1), reduction=self.reduction)
+        if self.reduction == 'none':
+            loss = loss.sum(-1, keepdim=True)
+        return loss * self.loss_weight
 
 
 @LOSSES.register_module()

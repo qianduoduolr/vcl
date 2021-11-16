@@ -6,7 +6,7 @@ docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corr'
 model = dict(
     type='Dist_Tracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
-    ce_loss=dict(type='Ce_Loss',reduction='none'),
+    loss=dict(type='Soft_Ce_Loss',reduction='none', loss_weight=1),
     patch_size=-1,
     temperature=0.1,
     moment=0.999,
