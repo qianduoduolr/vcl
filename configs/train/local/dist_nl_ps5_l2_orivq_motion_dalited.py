@@ -167,7 +167,6 @@ def make_local_config():
     with open(f'configs/train/local/{exp_name}.py', 'r') as f:
         for line in f:
             line = line.replace('/home/lr','/gdata/lirui')
-            line = line.replace('load_to_ram=False', 'load_to_ram=True')
             # line = line.replace('/home/lr/dataset','/home/lr/dataset')
             config_data += line
 

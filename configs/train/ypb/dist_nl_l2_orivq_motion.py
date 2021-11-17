@@ -92,7 +92,7 @@ data = dict(
             vq_size=32,
             pipeline=train_pipeline,
             test_mode=False,
-            load_to_ram=True),
+            load_to_ram=False),
 
     test =  dict(
             type=test_dataset_type,
