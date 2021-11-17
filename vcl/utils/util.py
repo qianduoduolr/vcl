@@ -161,7 +161,26 @@ def moment_update(model, model_ema, m):
         p2.data.mul_(m).add_(1 - m, p1.detach().data)
 
 
+def make_pbs(exp_name, docker_name):
+    pbs_data = ""
+    with open('configs/pbs/template.pbs', 'r') as f:
+        for line in f:
+            line = line.replace('exp_name',f'{exp_name}')
+            line = line.replace('docker_name', f'{docker_name}')
+            pbs_data += line
 
+    with open(f'configs/pbs/{exp_name}.pbs',"w") as f:
+        f.write(pbs_data)
 
+def make_local_config(exp_name):
+    config_data = ""
+    with open(f'configs/train/local/{exp_name}.py', 'r') as f:
+        for line in f:
+            line = line.replace('/home/lr','/gdata/lirui')
+            line = line.replace('/gdata/lirui/dataset/YouTube-VOS','/dev/shm')
+            # line = line.replace('/home/lr/dataset','/home/lr/dataset')
+            config_data += line
 
+    with open(f'configs/train/ypb/{exp_name}.py',"w") as f:
+        f.write(config_data)
 

@@ -1,4 +1,8 @@
 import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+from vcl.utils import *
+
 exp_name = 'vqvae_mlm_d4_nemd256_dyt_nl_l2_fc_orivq_motion'
 docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corr'
 
@@ -152,29 +156,6 @@ resume_from = None
 workflow = [('train', 1)]
 
 
-def make_pbs():
-    pbs_data = ""
-    with open('configs/pbs/template.pbs', 'r') as f:
-        for line in f:
-            line = line.replace('exp_name',f'{exp_name}')
-            line = line.replace('docker_name', f'{docker_name}')
-            pbs_data += line
-
-    with open(f'configs/pbs/{exp_name}.pbs',"w") as f:
-        f.write(pbs_data)
-
-def make_local_config():
-    config_data = ""
-    with open(f'configs/train/local/{exp_name}.py', 'r') as f:
-        for line in f:
-            line = line.replace('/home/lr','/gdata/lirui')
-            # line = line.replace('/home/lr/dataset','/home/lr/dataset')
-            config_data += line
-
-    with open(f'configs/train/ypb/{exp_name}.py',"w") as f:
-        f.write(config_data)
-
-
 if __name__ == '__main__':
-    make_pbs()
-    make_local_config()
+    make_pbs(exp_name, docker_name)
+    make_local_config(exp_name)

@@ -1,4 +1,8 @@
 import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+from vcl.utils import *
+
 exp_name = 'dist_nl_ps5_l2_orivq_motion'
 docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corr'
 
@@ -7,7 +11,8 @@ model = dict(
     type='Dist_Tracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
     loss=dict(type='Soft_Ce_Loss',reduction='none', loss_weight=1),
-    patch_size=5,
+    dilated_search=False,
+    patch_size=-1,
     temperature=0.1,
     moment=0.999,
     pretrained=None
@@ -74,7 +79,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=4,
-    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=16, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -84,8 +89,8 @@ data = dict(
             type=train_dataset_type,
             size=256,
             p=0.8,
-            root='/gdata/lirui/dataset/YouTube-VOS',
-            list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
+            root='/dev/shm',
+            list_path='/dev/shm/2018/train',
             data_prefix='2018',
             mask_ratio=0.15,
             clip_length=2,
@@ -105,7 +110,7 @@ data = dict(
 
 # optimizer
 optimizers = dict(
-    backbone_s=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
     )
 # learning policy
 # total_iters = 200000
@@ -149,29 +154,7 @@ resume_from = None
 workflow = [('train', 1)]
 
 
-def make_pbs():
-    pbs_data = ""
-    with open('configs/pbs/template.pbs', 'r') as f:
-        for line in f:
-            line = line.replace('exp_name',f'{exp_name}')
-            line = line.replace('docker_name', f'{docker_name}')
-            pbs_data += line
-
-    with open(f'configs/pbs/{exp_name}.pbs',"w") as f:
-        f.write(pbs_data)
-
-def make_local_config():
-    config_data = ""
-    with open(f'configs/train/local/{exp_name}.py', 'r') as f:
-        for line in f:
-            line = line.replace('/gdata/lirui','/gdata/lirui')
-            # line = line.replace('/gdata/lirui/dataset','/gdata/lirui/dataset')
-            config_data += line
-
-    with open(f'configs/train/ypb/{exp_name}.py',"w") as f:
-        f.write(config_data)
-
 
 if __name__ == '__main__':
-    make_pbs()
-    make_local_config()
+    make_pbs(exp_name, docker_name)
+    make_local_config(exp_name)

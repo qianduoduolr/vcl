@@ -1,13 +1,4 @@
 #!/usr/bin/env bash
-# data processing
-cd /dev/shm
-mkdir -p 2018/train
-cd 2018/train
-cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/JPEGImages_s256.zip .
-unzip JPEGImages_s256.zip
-cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/Flows.zip .
-unzip Flows.zip
-cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/*.txt .
 
 CONFIG=$1
 GPUS=$2

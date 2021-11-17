@@ -1,7 +1,7 @@
 #PBS -N dist_nl_ps5_l2_orivq_motion
 #PBS -o /gdata/lirui/pbs/pbs_out/dist_nl_ps5_l2_orivq_motion.out
 #PBS -e /gdata/lirui/pbs/pbs_out/dist_nl_ps5_l2_orivq_motion.err
-#PBS -l nodes=1:gpus=4:Q
+#PBS -l nodes=1:gpus=4:q
 #PBS -r y
 
 cd $PBS_O_WORKDIR
