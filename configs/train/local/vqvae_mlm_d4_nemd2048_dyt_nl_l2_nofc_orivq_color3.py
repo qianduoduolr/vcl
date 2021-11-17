@@ -11,7 +11,7 @@ model = dict(
     patch_size=-1,
     fc=False,
     temperature=0.1,
-    pretrained_vq='/home/lr/models/vqvae/vqvae_youtube_d4_n2048_c256_embc128',
+    pretrained_vq='/home/lr/models/vqvae/vqvae_youtube_d4_n2048_c256_embc128.pth',
     pretrained=None
 )
 
@@ -79,7 +79,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=4,
-    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=16, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 

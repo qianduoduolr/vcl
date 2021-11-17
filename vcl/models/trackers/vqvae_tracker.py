@@ -210,7 +210,7 @@ class Vqvae_Tracker(BaseModel):
 
         return self.forward_train(**kwargs)
 
-    def train_step(self, data_batch, optimizer):
+    def train_step(self, data_batch, optimizer, progress_ratio):
 
         # parser loss
         losses = self(**data_batch, test_mode=False)
@@ -450,7 +450,7 @@ class Vqvae_Tracker_v2(BaseModel):
 
         return self.forward_train(**kwargs)
 
-    def train_step(self, data_batch, optimizer):
+    def train_step(self, data_batch, optimizer, progress_ratio):
 
         # parser loss
         losses = self(**data_batch, test_mode=False)

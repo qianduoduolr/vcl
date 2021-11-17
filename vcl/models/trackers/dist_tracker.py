@@ -27,6 +27,7 @@ class Dist_Tracker(BaseModel):
                  patch_size,
                  moment,
                  temperature,
+                 dilated_search=False,
                  loss=None,
                  train_cfg=None,
                  test_cfg=None,
@@ -48,27 +49,32 @@ class Dist_Tracker(BaseModel):
         self.test_cfg = test_cfg
         self.patch_size = patch_size
         self.moment = moment
+        self.dilated_search = dilated_search
 
         logger = get_root_logger()
 
-        self.backbone_s = build_backbone(backbone)
+        self.backbone = build_backbone(backbone)
         self.backbone_t = build_backbone(backbone)
 
         # loss
         self.loss = build_loss(loss)
 
-    def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
+    def forward_train(self, imgs, mask_query_idx, jitter_imgs=None, progress_ratio=0.0):
 
         bsz, num_clips, t, c, h, w = imgs.shape
         mask_query_idx = mask_query_idx.bool()
 
-        tar = self.backbone_s(imgs[:,0,-1])
-        refs = list([self.backbone_s(imgs[:,0,i]) for i in range(t-1)])
+        tar = self.backbone(jitter_imgs[:,0,-1])
+        refs = list([self.backbone(jitter_imgs[:,0,i]) for i in range(t-1)])
         _, predict_att = self.non_local_attention(tar, refs, bsz, return_att=True)
 
-        h,w = tar.shape[-2:]
+        h_,w_ = tar.shape[-2:]
         if self.patch_size != -1:
-            t_masks = self.make_mask(h, self.patch_size)
+            if self.dilated_search:
+                patch_size = self.patch_size + int((h_ // 2 - self.patch_size - 1) * progress_ratio)
+            else:
+                patch_size = self.patch_size
+            t_masks = self.make_mask(h_, patch_size)
 
         with torch.no_grad():
             tar_t = self.backbone_t(imgs[:,0,-1])
@@ -95,7 +101,9 @@ class Dist_Tracker(BaseModel):
 
         return self.forward_train(**kwargs)
 
-    def train_step(self, data_batch, optimizer):
+    def train_step(self, data_batch, optimizer, progress_ratio):
+
+        data_batch = {**data_batch, 'progress_ratio':progress_ratio}
 
         # parser loss
         losses = self(**data_batch, test_mode=False)
@@ -109,7 +117,7 @@ class Dist_Tracker(BaseModel):
         for k,opz in optimizer.items():
             opz.step()
 
-        moment_update(self.backbone_s, self.backbone_t, self.moment)
+        moment_update(self.backbone, self.backbone_t, self.moment)
 
         log_vars.pop('loss')
         outputs = dict(
