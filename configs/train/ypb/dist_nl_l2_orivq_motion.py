@@ -106,7 +106,7 @@ data = dict(
 
 # optimizer
 optimizers = dict(
-    backbone_s=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
     )
 # learning policy
 # total_iters = 200000
