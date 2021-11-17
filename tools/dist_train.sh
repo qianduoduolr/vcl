@@ -8,6 +8,8 @@ unzip JPEGImages_s256.zip
 cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/Flows.zip .
 unzip Flows.zip
 cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/*.txt .
+cd
+echo "finish cp data"
 
 CONFIG=$1
 GPUS=$2
