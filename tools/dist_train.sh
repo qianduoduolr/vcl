@@ -4,9 +4,9 @@
 mkdir -p /dev/shm/2018/train
 # cd 2018/train
 cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/JPEGImages_s256.zip /dev/shm/2018/train/
-unzip /dev/shm/2018/train/JPEGImages_s256.zip
+sudo unzip -d /dev/shm/2018/train/ /dev/shm/2018/train/JPEGImages_s256.zip
 cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/Flows.zip /dev/shm/2018/train/
-unzip /dev/shm/2018/train/Flows.zip
+sudo unzip -d /dev/shm/2018/train/ /dev/shm/2018/train/Flows.zip
 cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/*.txt /dev/shm/2018/train/
 echo "finish cp data"
 
