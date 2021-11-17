@@ -82,6 +82,18 @@ class VOS_dataset_base(BaseDataset):
             frame_list_all.append(frame_list)
         return frame_list_all if len(frame_list_all) >= 2 else frame_list_all[0]
 
+    def _parser_rgb_lmdb(self, offsets, frames_path, clip_length, step=1, flag='color', backend='cv2'):
+        """read frame"""
+        frame_list_all = []
+        for offset in offsets:
+            frame_list = []
+            for idx in range(clip_length):
+                frame_path = frames_path[offset + idx]
+                frame = mmcv.imread(frame_path, backend=backend, flag=flag, channel_order='rgb')
+                frame_list.append(frame)
+            frame_list_all.append(frame_list)
+        return frame_list_all if len(frame_list_all) >= 2 else frame_list_all[0]
+
 
 @DATASETS.register_module()
 class VOS_davis_dataset_test(VOS_dataset_base):

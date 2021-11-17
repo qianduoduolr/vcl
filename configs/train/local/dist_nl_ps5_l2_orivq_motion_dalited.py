@@ -92,7 +92,8 @@ data = dict(
             clip_length=2,
             vq_size=32,
             pipeline=train_pipeline,
-            test_mode=False),
+            test_mode=False,
+            load_to_ram=False),
 
     test =  dict(
             type=test_dataset_type,
@@ -166,6 +167,7 @@ def make_local_config():
     with open(f'configs/train/local/{exp_name}.py', 'r') as f:
         for line in f:
             line = line.replace('/home/lr','/gdata/lirui')
+            line = line.replace('load_to_ram=False', 'load_to_ram=True')
             # line = line.replace('/home/lr/dataset','/home/lr/dataset')
             config_data += line
 

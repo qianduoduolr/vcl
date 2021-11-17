@@ -6,6 +6,7 @@ import glob
 import os
 import random
 import pickle
+from mmcv.fileio.io import load
 import torch
 import torchvision.transforms.functional as F
 from torchvision import transforms
@@ -276,7 +277,8 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
                        vq_size=32,
                        pipeline=None, 
                        test_mode=False,
-                       split='train'
+                       split='train',
+                       load_to_ram=False
                        ):
         super().__init__(root, list_path, pipeline, test_mode, split)
 
@@ -284,6 +286,7 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
         self.list_path = list_path
         self.root = root
         self.data_prefix = data_prefix
+        self.load_to_ram = load_to_ram
 
         self.load_annotations()
         self.clip_length = clip_length
@@ -312,6 +315,8 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
                 sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
                 sample['masks_path'] = sorted(glob.glob(osp.join(self.mask_dir, vname, '*.png')))
                 sample['num_frames'] = int(num_frames)
+                if self.load_to_ram:
+                    sample['frames'] = self._parser_rgb_rawframe([0], sample['frames_path'], sample['num_frames'], step=1)
                 self.samples.append(sample)
     
     def prepare_test_data(self, idx):
@@ -321,18 +326,12 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
         num_frames = sample['num_frames']
         vid_name = frames_path[0].split('/')[-2]
 
-        # offset = [ random.randint(0, num_frames-4)]
         offset = [self.test_dic[vid_name][0]]
-        frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
-        # mask = self._parser_rgb_rawframe([offset[0]+1], masks_path, 1, flag='unchanged', backend='pillow')[0]
 
-        # mask = cv2.resize(mask, (self.vq_res, self.vq_res), cv2.INTER_NEAREST).reshape(-1)
-        # obj_idxs = np.nonzero(mask)[0]
-
-        # if mask.max() > 0:
-        #     sample_idx = np.array(random.sample(obj_idxs.tolist(), 1))
-        # else:
-        #     sample_idx = np.array(random.sample(range(self.vq_res * self.vq_res), 1))
+        if self.load_to_ram:
+            frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
+        else:
+            frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
         sample_idx = np.array([self.test_dic[vid_name][1]])
 
         assert sample_idx.shape[0] == 1
@@ -355,7 +354,11 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
         num_frames = sample['num_frames']
 
         offset = [ random.randint(0, num_frames-3)]
-        frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
+
+        if self.load_to_ram:
+            frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
+        else:
+            frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
 
         mask_num = int(self.vq_res * self.vq_res * self.mask_ratio)
         mask_query_idx = np.zeros(self.vq_res * self.vq_res)
@@ -378,8 +381,7 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
 
 @DATASETS.register_module()
 class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
-    def __init__(self, size, p=0.7, flow_context=3, **kwargs
-                       ):
+    def __init__(self, size, p=0.7, flow_context=3, **kwargs):
         self.flow_context = flow_context
         super().__init__(**kwargs)
         self.trans = transforms.Compose([ClipRandomSizedCrop(size=size, scale=(0.6, 1)),
@@ -398,6 +400,7 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
 
         with open(list_path, 'r') as f:
             for idx, line in enumerate(f.readlines()):
+                # if idx >=500: break
                 sample = dict()
                 vname, num_frames = line.strip('\n').split()
                 sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))[:-1]
@@ -406,17 +409,17 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
                 sample['flows_path'] = []
                 flows_path_all = sorted(glob.glob(osp.join(self.flows_dir, vname, '*.jpg')))
 
-                # a = cv2.imread(sample['frames_path'][0]).shape
-                # if len(flows_path_all) == 0: continue
-                # b = cv2.imread(flows_path_all[0]).shape
-                # if a[0] != b[0]: continue
+                if self.load_to_ram:
+                    sample['frames'] = self._parser_rgb_rawframe([0], sample['frames_path'], sample['num_frames'], step=1)
+                    sample['flows'] = self._parser_rgb_rawframe([0], flows_path_all, sample['num_frames'], step=1)
+
 
                 if self.flow_context is not -1:
                     for frame_path in sample['frames_path']:
                         flow_path = frame_path.replace('JPEGImages_s256', 'Flows')
                         try:
                             index = flows_path_all.index(flow_path)
-                            flow_context = flows_path_all[max(index-1,0):index+2]
+                            flow_context = flows_path_all[max(index-1,0):index+2] if not self.load_to_ram else [max(index-1,0), index+2]
                             sample['flows_path'].append(flow_context)
                         except Exception as e:
                             index = None
@@ -438,9 +441,13 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
         num_frames = sample['num_frames']
 
         offset = [ random.randint(0, num_frames-3)]
-        frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
-        sample_flows_path = flows_path[offset[0]+1]
-        flows = self._parser_rgb_rawframe([0], sample_flows_path, len(sample_flows_path), step=1)
+        if self.load_to_ram:
+            frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
+            flows = (sample['flows'])[flows_path[offset[0]][0]:flows_path[offset[0]][1]]
+        else:
+            frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
+            sample_flows_path = flows_path[offset[0]+1]
+            flows = self._parser_rgb_rawframe([0], sample_flows_path, len(sample_flows_path), step=1)
 
         results = dict(imgs=frames, flows=flows, with_flow=True)
         results = self.trans(results)
