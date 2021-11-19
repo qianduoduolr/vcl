@@ -25,10 +25,11 @@ def load_image(imfile):
     w, h = img.size
     ratio = w / h
 
-    if ratio >= 1:
-        img = img.resize((int(256*w/h), 256))
-    else:
-        img = img.resize((256, int(256*h/w)))
+    if w != target and h != target:
+        if ratio >= 1:
+            img = img.resize((int(target * w/h), target))
+        else:
+            img = img.resize((target, int(target * h/w)))
 
     img = np.array(img).astype(np.uint8)
     img = torch.from_numpy(img).permute(2, 0, 1).float()
@@ -64,7 +65,7 @@ def main(args):
 
             images = sorted(images)
 
-            video_path = vid_file.replace('JPEGImages','Flows2')
+            video_path = vid_file.replace('JPEGImages_s256','Flows_s256')
             if len(glob.glob(os.path.join(video_path, '*.jpg'))) == len(images) -1: continue
 
             os.makedirs(video_path, exist_ok=True)
@@ -83,8 +84,12 @@ def main(args):
 
                 flow = np.clip(flow_up.permute(0,2,3,1).cpu().numpy(), -bound, bound)
 
-                flow = (flow + bound) * (255.0 / (2*bound))
-                flow = np.round(flow).astype('uint8')
+                if args.norm == 'min-max':
+                    flow = (flow - flow.min()) * 255.0 / (flow.max() - flow.min())
+                    flow = np.round(flow).astype('uint8')
+                else:
+                    flow = (flow + bound) * (255.0 / (2*bound))
+                    flow = np.round(flow).astype('uint8')
 
                 flow_img = empty_img.copy()
                 flow_img[:,:,:2] = flow[:]
@@ -97,14 +102,16 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', help="restore checkpoint", default='/gdata/lirui/models/optical_flow/raft-things.pth')
-    parser.add_argument('--path', help="dataset for evaluation", default='/gdata/lirui/dataset/YouTube-VOS/2019/train_all_frames/JPEGImages')
-    parser.add_argument('--out', help="dataset for evaluation", default='/gdata/lirui/dataset/YouTube-VOS/2018/train/Flows2')
+    parser.add_argument('--path', help="dataset for evaluation", default='/gdata/lirui/dataset/YouTube-VOS/2019/train/JPEGImages_s256')
+    parser.add_argument('--out', help="dataset for evaluation", default='/gdata/lirui/dataset/YouTube-VOS/2018/train/Flows_s256')
     parser.add_argument('--small', action='store_true', help='use small model')
     parser.add_argument('--mixed_precision', action='store_true', help='use mixed precision')
     parser.add_argument('--alternate_corr', action='store_true', help='use efficent correlation implementation')
     parser.add_argument('--local_rank',  type=int, help='use small model')
     parser.add_argument('--num-gpu',  type=int, default=1, help='use small model')
     parser.add_argument('--split',  type=int, default=-1, help='use small model')
+    parser.add_argument('--norm',  type=str, default='min-max', help='use small model')
+
     
 
     args = parser.parse_args()
