@@ -1,19 +1,17 @@
 import os
-from random import sample
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'dist_nl_ps5_l2_orivq_motion_dalited'
+exp_name = 'dist_nl_l2_orivq_motion_kl'
 docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corr'
 
 # model settings
 model = dict(
     type='Dist_Tracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
-    loss=dict(type='Soft_Ce_Loss',reduction='none', loss_weight=1),
-    dilated_search=True,
-    patch_size=5,
+    loss=dict(type='Kl_Loss',reduction='mean', loss_weight=1, sample_wise=True),
+    patch_size=-1,
     temperature=0.1,
     moment=0.999,
     pretrained=None
@@ -97,8 +95,7 @@ data = dict(
             clip_length=2,
             vq_size=32,
             pipeline=train_pipeline,
-            test_mode=False,
-            load_to_ram=False),
+            test_mode=False),
 
     test =  dict(
             type=test_dataset_type,
@@ -154,6 +151,7 @@ eval_config= dict(
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
+
 
 
 if __name__ == '__main__':

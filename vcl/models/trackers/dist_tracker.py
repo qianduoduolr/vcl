@@ -47,6 +47,7 @@ class Dist_Tracker(BaseModel):
 
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
+        self.loss_config = loss
         self.patch_size = patch_size
         self.moment = moment
         self.dilated_search = dilated_search
@@ -89,8 +90,13 @@ class Dist_Tracker(BaseModel):
         target = target_att.reshape(-1, target_att.shape[-1]).detach()
         predict_att = predict_att.reshape(-1, predict_att.shape[-1])
 
+        if self.loss_config.type == 'MSELoss':
+            target = target.softmax(-1)
+            predict_att = predict_att.softmax(-1)
+
         losses = {}
-        losses['att_loss'] = (self.loss(predict_att, target) * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
+        loss = self.loss(predict_att, target)
+        losses['att_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
 
         return losses
 

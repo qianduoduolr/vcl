@@ -278,6 +278,7 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
                        pipeline=None, 
                        test_mode=False,
                        split='train',
+                       year='2018',
                        load_to_ram=False
                        ):
         super().__init__(root, list_path, pipeline, test_mode, split)
@@ -286,6 +287,7 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
         self.list_path = list_path
         self.root = root
         self.data_prefix = data_prefix
+        self.year = year
         self.load_to_ram = load_to_ram
 
         self.load_annotations()
@@ -297,9 +299,9 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
     def load_annotations(self):
         
         self.samples = []
-        self.video_dir = osp.join(self.root, self.data_prefix, self.split, 'JPEGImages')
-        self.mask_dir = osp.join(self.root, self.data_prefix, self.split, 'Annotations')
-        list_path = osp.join(self.list_path, f'youtube{self.data_prefix}_train_list.txt')
+        self.video_dir = osp.join(self.root, self.year, self.data_prefix['RGB'])
+        self.mask_dir = osp.join(self.root, self.year, self.data_prefix['ANNO'])
+        list_path = osp.join(self.list_path, f'youtube{self.year}_{self.split}_list.txt')
 
         if self.test_mode:
             self.test_dic = {}
@@ -393,10 +395,11 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
 
     def load_annotations(self):
         self.samples = []
-        self.video_dir = osp.join(self.root, self.data_prefix, self.split, 'JPEGImages_s256')
-        self.mask_dir = osp.join(self.root, self.data_prefix, self.split, 'Annotations')
-        self.flows_dir = osp.join(self.root, self.data_prefix, self.split, 'Flows')
-        list_path = osp.join(self.list_path, f'youtube{self.data_prefix}_train_list.txt')
+        
+        self.video_dir = osp.join(self.root, self.year, self.data_prefix['RGB'])
+        self.mask_dir = osp.join(self.root, self.year, self.data_prefix['ANNO'])
+        self.flows_dir = osp.join(self.root, self.year, self.data_prefix['FLOW'])
+        list_path = osp.join(self.list_path, f'youtube{self.year}_{self.split}_list.txt')
 
         with open(list_path, 'r') as f:
             for idx, line in enumerate(f.readlines()):
@@ -416,7 +419,7 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
 
                 if self.flow_context is not -1:
                     for frame_path in sample['frames_path']:
-                        flow_path = frame_path.replace('JPEGImages_s256', 'Flows')
+                        flow_path = frame_path.replace(self.data_prefix['RGB'], self.data_prefix['FLOW'])
                         try:
                             index = flows_path_all.index(flow_path)
                             flow_context = flows_path_all[max(index-1,0):index+2] if not self.load_to_ram else [max(index-1,0), index+2]
@@ -428,7 +431,7 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
                         continue
                 else:
                     for frame_path in sample['frames_path']:
-                        flow_path = frame_path.replace('JPEGImages', 'Flows')
+                        flow_path = frame_path.replace(self.data_prefix['RGB'], self.data_prefix['FLOW'])
                         sample['flows_path'].append([flow_path])
 
                 self.samples.append(sample)

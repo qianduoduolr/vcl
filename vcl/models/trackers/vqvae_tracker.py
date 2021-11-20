@@ -7,6 +7,8 @@ import mmcv
 from mmcv.runner import auto_fp16, load_checkpoint
 from dall_e  import map_pixels, unmap_pixels, load_model
 
+from vcl.models.losses.losses import Ce_Loss
+
 from ..base import BaseModel
 from ..builder import build_backbone, build_loss, build_components
 from ..registry import MODELS
@@ -144,7 +146,8 @@ class Vqvae_Tracker(BaseModel):
                 predict = torch.mm(predict, nn.functional.normalize(self.vq_emb, dim=0))
                 predict = torch.div(predict, self.vq_t)
 
-            losses['ce_loss'] = (self.ce_loss(predict, ind) * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
+            loss = self.ce_loss(predict, ind)
+            losses['ce_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
 
         if self.l2_loss:
             predict = self.embedding_layer(out)
@@ -390,7 +393,8 @@ class Vqvae_Tracker_v2(BaseModel):
                 predict = torch.mm(predict, nn.functional.normalize(self.vq_emb, dim=0))
                 predict = torch.div(predict, self.vq_t)
 
-            losses['ce_loss'] = (self.ce_loss(predict, ind) * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
+            loss = self.ce_loss(predict, ind)
+            losses['ce_loss'] = ( loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
 
         if self.l2_loss:
             predict = self.embedding_layer(out)

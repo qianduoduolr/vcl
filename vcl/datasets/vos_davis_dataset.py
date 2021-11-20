@@ -110,6 +110,7 @@ class VOS_davis_dataset_test(VOS_dataset_base):
                        pipeline=None, 
                        test_mode=False,
                        task='semi-supervised',
+                       year='2017',
                        split='val'
                        ):
         super().__init__(root, list_path, pipeline, test_mode=test_mode, split=split)
@@ -119,6 +120,7 @@ class VOS_davis_dataset_test(VOS_dataset_base):
         self.list_path = list_path
         self.root = root
         self.data_prefix = data_prefix
+        self.year = year
 
         self.load_annotations()
 
@@ -127,7 +129,7 @@ class VOS_davis_dataset_test(VOS_dataset_base):
         self.samples = []
         self.mask_dir = osp.join(self.root, 'Annotations', '480p')
         self.video_dir = osp.join(self.root, 'JPEGImages', '480p')
-        list_path = osp.join(self.list_path, f'davis{self.data_prefix}_{self.split}_list.txt')
+        list_path = osp.join(self.list_path, f'davis{self.year}_{self.split}_list.txt')
 
         with open(list_path, 'r') as f:
             for idx, line in enumerate(f.readlines()):

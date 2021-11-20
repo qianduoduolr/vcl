@@ -4,16 +4,16 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'dist_nl_ps5_l2_orivq_motion_dalited'
+exp_name = 'dist_nl_ps7_l2_orivq_motion_dalited_kl'
 docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corr'
 
 # model settings
 model = dict(
     type='Dist_Tracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
-    loss=dict(type='Soft_Ce_Loss',reduction='none', loss_weight=1),
+    loss=dict(type='Kl_Loss',reduction='mean', loss_weight=1, sample_wise=True),
     dilated_search=True,
-    patch_size=5,
+    patch_size=7,
     temperature=0.1,
     moment=0.999,
     pretrained=None
