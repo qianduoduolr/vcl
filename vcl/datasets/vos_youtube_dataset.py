@@ -403,7 +403,6 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
 
         with open(list_path, 'r') as f:
             for idx, line in enumerate(f.readlines()):
-                # if idx >=500: break
                 sample = dict()
                 vname, num_frames = line.strip('\n').split()
                 sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))[:-1]
