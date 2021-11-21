@@ -93,7 +93,7 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
         return self.pipeline(frame)
 
 @DATASETS.register_module()
-class Video_dataset_rgb_withbbox(VOS_dataset_base):
+class VOS_youtube_dataset_rgb_withbbox(VOS_dataset_base):
     def __init__(self, root,  
                        list_path, 
                        data_prefix, 
@@ -136,6 +136,10 @@ class Video_dataset_rgb_withbbox(VOS_dataset_base):
                 sample['frames_bbox'].append(frame['objs']['bbox'])
 
         self.samples.append(sample)
+    
+    def prepare_train_data(self, idx):
+        sample = self.samples[idx]
+
 
     
 
@@ -148,6 +152,7 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
                        data_prefix, 
                        mask_ratio=0.15,
                        clip_length=3,
+                       num_clips=1,
                        vq_size=32,
                        pipeline=None, 
                        test_mode=False,
@@ -166,6 +171,7 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
 
         self.load_annotations()
         self.clip_length = clip_length
+        self.num_clips = num_clips
         self.vq_res = vq_size
         self.mask_ratio = mask_ratio
 
@@ -203,6 +209,8 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
         vid_name = frames_path[0].split('/')[-2]
 
         offset = [self.test_dic[vid_name][0]]
+        for i in range(self.num_clips - 1):
+            offset.append(offset[-1] + 1)
 
         if self.load_to_ram:
             frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
@@ -216,7 +224,7 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
             'imgs': frames,
             'mask_query_idx': sample_idx,
             'modality': 'RGB',
-            'num_clips': 1,
+            'num_clips': self.num_clips,
             'num_proposals':1,
             'clip_len': self.clip_length
         }
@@ -230,6 +238,8 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
         num_frames = sample['num_frames']
 
         offset = [ random.randint(0, num_frames-3)]
+        for i in range(self.num_clips - 1):
+            offset.append(offset[-1] + 1)
 
         if self.load_to_ram:
             frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
@@ -247,7 +257,7 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
             'imgs': frames,
             'mask_query_idx': mask_query_idx,
             'modality': 'RGB',
-            'num_clips': 1,
+            'num_clips': self.num_clips,
             'num_proposals':1,
             'clip_len': self.clip_length
         }
@@ -317,6 +327,9 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
         num_frames = sample['num_frames']
 
         offset = [ random.randint(0, num_frames-3)]
+        for i in range(self.num_clips):
+            offset.append(offset[-1] + 1)
+
         if self.load_to_ram:
             frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
             flows = (sample['flows'])[flows_path[offset[0]][0]:flows_path[offset[0]][1]]
@@ -345,7 +358,7 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
             'imgs': results['imgs'],
             'mask_query_idx': mask_query_idx,
             'modality': 'RGB',
-            'num_clips': 1,
+            'num_clips': self.num_clips,
             'num_proposals':1,
             'clip_len': self.clip_length
         }

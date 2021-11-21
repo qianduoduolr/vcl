@@ -43,9 +43,9 @@ img_norm_cfg = dict(
 #     mean=[0, 0, 0], std=[255, 255, 255], to_bgr=False)
 
 train_pipeline = [
-    dict(type='RandomResizedCrop', area_range=(0.2,1.0)),
+    dict(type='RandomResizedCrop', area_range=(0.2,1.0), same_across_clip=False),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
-    dict(type='Flip', flip_ratio=0.5),
+    dict(type='Flip', flip_ratio=0.5, same_across_clip=False),
     dict(
         type='ColorJitter',
         brightness=0.7,
@@ -89,9 +89,10 @@ data = dict(
             type=train_dataset_type,
             root='/home/lr/dataset/YouTube-VOS',
             list_path='/home/lr/dataset/YouTube-VOS/2018/train',
-            data_prefix='2018',
+            data_prefix=dict(RGB='train/JPEGImages_s256', ANNO='train/Annotations'),
             mask_ratio=0.15,
-            clip_length=2,
+            clip_length=1,
+            num_clips=2,
             vq_size=32,
             pipeline=train_pipeline,
             test_mode=False),

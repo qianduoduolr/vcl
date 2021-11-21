@@ -223,7 +223,8 @@ class RandomResizedCrop(object):
     def get_crop_bbox(img_shape,
                       area_range,
                       aspect_ratio_range,
-                      max_attempts=10):
+                      bbox=None,
+                      max_attempts=20):
         """Get a crop bbox given the area range and aspect ratio range.
 
         Args:
@@ -262,7 +263,11 @@ class RandomResizedCrop(object):
             if crop_h <= img_h and crop_w <= img_w:
                 x_offset = random.randint(0, img_w - crop_w)
                 y_offset = random.randint(0, img_h - crop_h)
-                return x_offset, y_offset, x_offset + crop_w, y_offset + crop_h
+                if bbox != None:
+                    if x_offset <= bbox[0] and x_offset + crop_w >= bbox[2] and y_offset <= bbox[1] and y_offset + crop_h >= bbox[3]:
+                        return x_offset, y_offset, x_offset + crop_w, y_offset + crop_h
+                else:
+                    return x_offset, y_offset, x_offset + crop_w, y_offset + crop_h
 
         # Fallback
         crop_size = min(img_h, img_w)
@@ -280,9 +285,14 @@ class RandomResizedCrop(object):
         _init_lazy_if_proper(results, self.lazy, self.keys)
 
         img_h, img_w = results['img_shape']
-
+        
+        if results.get('bboxs', None):
+            bbox = results['bboxs'][0]
+        else:
+            bbox = None
         left, top, right, bottom = self.get_crop_bbox(
-            (img_h, img_w), self.area_range, self.aspect_ratio_range)
+            (img_h, img_w), self.area_range, self.aspect_ratio_range, bbox=bbox)
+
         new_h, new_w = bottom - top, right - left
 
         results['crop_bbox'] = np.array([left, top, right, bottom])
@@ -306,14 +316,20 @@ class RandomResizedCrop(object):
                         'clip_len'] in self.same_frame_indices
                     generate_new = generate_new and not keep_same
                 if generate_new:
+                    if results.get('bboxs', None):
+                        bbox = results['bboxs'][i]
+                    else:
+                        bbox = None
                     left, top, right, bottom = self.get_crop_bbox(
                         (img_h, img_w), self.area_range,
-                        self.aspect_ratio_range)
+                        self.aspect_ratio_range, bbox=bbox)
                     new_h, new_w = bottom - top, right - left
 
                 results['crop_bbox'] = np.array([left, top, right, bottom])
                 results['img_shape'] = (new_h, new_w)
                 results[self.keys][i] = img[top:bottom, left:right]
+                if results.get('bboxs', None):
+                    results['crop_bbox_ratio'].append(self.get_ratio(results, left, top, new_w, new_h, i))
                 if 'grids' in results:
                     grid = results['grids'][i]
                     results['grids'][i] = grid[top:bottom, left:right]
@@ -335,6 +351,10 @@ class RandomResizedCrop(object):
                                            dtype=np.float32)
 
         return results
+
+    def get_ratio(self, results, left, top, new_w, new_h, idx):
+        return [max((results['bboxs'][idx][0] - left)/new_w, 0), max((results['bboxs'][idx][1] - top)/new_h, 0), \
+            min((results['bboxs'][idx][2] - left)/new_w, 1), min((results['bboxs'][idx][3] - top)/new_h, 1)]
 
     def __repr__(self):
         repr_str = (f'{self.__class__.__name__}('
@@ -600,6 +620,14 @@ class Resize(object):
                     interpolation='bilinear',
                     backend='cv2')
 
+        if 'crop_bbox_ratio' in results:
+            ratios = results['crop_bbox_ratio']
+            results['bbox_mask'] = []
+            for ratio in ratios:
+                mask = np.zeros((new_h, new_w)).astype(np.uint8)
+                mask[int(new_h * ratio[1]):int(new_h * ratio[3]), int(new_w * ratio[0]):int(new_w * ratio[2])] = 1
+                results['bbox_mask'].append(mask)
+
         return results
 
     def __repr__(self):
@@ -608,7 +636,6 @@ class Resize(object):
                     f'interpolation={self.interpolation}, '
                     f'lazy={self.lazy})')
         return repr_str
-
 
 @PIPELINES.register_module()
 class Flip(object):
@@ -694,6 +721,8 @@ class Flip(object):
                     flip = npr.rand() < self.flip_ratio
                 if flip:
                     mmcv.imflip_(img, self.direction)
+                    if results.get('bbox_mask', None):
+                        mmcv.imflip_(results['bbox_mask'][i], self.direction)
                     if 'grids' in results:
                         mmcv.imflip_(results['grids'][i], self.direction)
             if flip:
