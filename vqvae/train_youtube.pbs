@@ -1,0 +1,18 @@
+#PBS -N train_vqvae_youtube
+#PBS -o /gdata/lirui/pbs/pbs_out/train_vqvae_youtube.out
+#PBS -e /gdata/lirui/pbs/pbs_out/train_vqvae_youtube.err
+#PBS -l nodes=1:gpus=1:G
+#PBS -r y
+
+cd $PBS_O_WORKDIR
+echo Time is 'date'
+echo Directory is $PWD
+
+echo This job runs on following nodes:
+cat $PBS_NODEFILE
+echo $PBS_NODEFILE
+
+echo $PBS_GPUFILE
+cat $PBS_GPUFILE
+
+startdocker -P /gdata/lirui -D /gdata/lirui -u "--shm-size 64G" -c "bash /gdata/lirui/project/vcl/vqvae/train_youtube.sh" bit:5000/lirui_torch1.8_cuda11.1_corr
