@@ -198,6 +198,7 @@ class RandomResizedCrop(object):
                  same_across_clip=True,
                  same_clip_indices=None,
                  same_frame_indices=None,
+                 crop_ratio=0.9,
                  lazy=False,
                  keys='imgs'):
         self.area_range = area_range
@@ -217,13 +218,16 @@ class RandomResizedCrop(object):
         if same_frame_indices is not None:
             assert isinstance(same_frame_indices, Sequence)
         self.same_frame_indices = same_frame_indices
+        self.crop_ratio = crop_ratio
         self.keys = keys
+    
 
     @staticmethod
     def get_crop_bbox(img_shape,
                       area_range,
                       aspect_ratio_range,
                       bbox=None,
+                      crop_ratio=None,
                       max_attempts=20):
         """Get a crop bbox given the area range and aspect ratio range.
 
@@ -241,6 +245,19 @@ class RandomResizedCrop(object):
             (list[int]) A random crop bbox within the area range and aspect
             ratio range.
         """
+        def calc_over_lab(gt, gen):
+            out = 1
+            for i in range(2):
+                z_min = max(gt[i], gen[i])
+                z_max = min(gt[i+2], gen[i+2])
+                if z_min >= z_max:
+                    return 0
+                else:
+                    out *= (z_max - z_min) / (gt[i+2] - gt[i])
+            return out
+
+        max_attempts = 40 if bbox != None else 20
+
         assert 0 < area_range[0] <= area_range[1] <= 1
         assert 0 < aspect_ratio_range[0] <= aspect_ratio_range[1]
 
@@ -257,6 +274,9 @@ class RandomResizedCrop(object):
         candidate_crop_h = np.round(np.sqrt(target_areas /
                                             aspect_ratios)).astype(np.int32)
 
+        crop_list = []
+        ratio_list = []
+
         for i in range(max_attempts):
             crop_w = candidate_crop_w[i]
             crop_h = candidate_crop_h[i]
@@ -264,11 +284,24 @@ class RandomResizedCrop(object):
                 x_offset = random.randint(0, img_w - crop_w)
                 y_offset = random.randint(0, img_h - crop_h)
                 if bbox != None:
-                    if x_offset <= bbox[0] and x_offset + crop_w >= bbox[2] and y_offset <= bbox[1] and y_offset + crop_h >= bbox[3]:
+                    overlap = calc_over_lab(bbox, [x_offset, y_offset, x_offset + crop_w, y_offset + crop_h])
+                    if overlap >= crop_ratio:
                         return x_offset, y_offset, x_offset + crop_w, y_offset + crop_h
+                    else:
+                        crop_list.append([x_offset, y_offset, x_offset + crop_w, y_offset + crop_h])
+                        ratio_list.append(overlap)
                 else:
                     return x_offset, y_offset, x_offset + crop_w, y_offset + crop_h
 
+        if bbox != None:
+            if len(ratio_list) >= 1:
+                idx = np.argsort(np.array(ratio_list))[-1]
+                return crop_list[idx]
+            else:
+                left, top, right, bottom = random.randint(0, bbox[0] - 1), random.randint(0, bbox[1] - 1), random.randint(bbox[2], img_w - 1),\
+                    random.randint(bbox[3], img_h - 1)
+                return  left, top, right, bottom
+                
         # Fallback
         crop_size = min(img_h, img_w)
         x_offset = (img_w - crop_size) // 2
@@ -288,10 +321,12 @@ class RandomResizedCrop(object):
         
         if results.get('bboxs', None):
             bbox = results['bboxs'][0]
+            results['crop_bbox_ratio'] = []
         else:
             bbox = None
+
         left, top, right, bottom = self.get_crop_bbox(
-            (img_h, img_w), self.area_range, self.aspect_ratio_range, bbox=bbox)
+            (img_h, img_w), self.area_range, self.aspect_ratio_range, bbox=bbox, crop_ratio=self.crop_ratio)
 
         new_h, new_w = bottom - top, right - left
 
@@ -624,6 +659,7 @@ class Resize(object):
             ratios = results['crop_bbox_ratio']
             results['bbox_mask'] = []
             for ratio in ratios:
+                img = results[self.keys][0]
                 mask = np.zeros((new_h, new_w)).astype(np.uint8)
                 mask[int(new_h * ratio[1]):int(new_h * ratio[3]), int(new_w * ratio[0]):int(new_w * ratio[2])] = 1
                 results['bbox_mask'].append(mask)

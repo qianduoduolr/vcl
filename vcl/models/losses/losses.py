@@ -4,7 +4,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ..registry import LOSSES
+from .utils import *
 
+@masked_loss
 def l1_loss(pred, target):
     """L1 loss.
 
@@ -17,7 +19,7 @@ def l1_loss(pred, target):
     """
     return F.l1_loss(pred, target, reduction='none')
 
-
+@masked_loss
 def mse_loss(pred, target):
     """MSE loss.
 
@@ -30,7 +32,7 @@ def mse_loss(pred, target):
     """
     return F.mse_loss(pred, target, reduction='none')
 
-
+@masked_loss
 def charbonnier_loss(pred, target, eps=1e-12):
     """Charbonnier loss.
 
@@ -42,6 +44,19 @@ def charbonnier_loss(pred, target, eps=1e-12):
         Tensor: Calculated Charbonnier loss.
     """
     return torch.sqrt((pred - target)**2 + eps)
+
+@masked_loss
+def kl_loss(pred, target, eps=1e-12):
+    """Charbonnier loss.
+
+    Args:
+        pred (Tensor): Prediction Tensor with shape (n, c, h, w).
+        target ([type]): Target Tensor with shape (n, c, h, w).
+
+    Returns:
+        Tensor: Calculated Charbonnier loss.
+    """
+    return F.kl_div(F.log_softmax(pred, dim=-1), target.softmax(dim=-1), reduction='none')
 
 @LOSSES.register_module()
 class Ce_Loss(nn.Module):
@@ -81,14 +96,7 @@ class Soft_Ce_Loss(nn.Module):
         self.sample_wise = sample_wise
 
     def forward(self, pred, target, weight=None, **kwargs):
-        """Forward Function.
-
-        Args:
-            pred (Tensor): of shape (N, C, H, W). Predicted tensor.
-            target (Tensor): of shape (N, C, H, W). Ground truth tensor.
-            weight (Tensor, optional): of shape (N, C, H, W). Element-wise
-                weights. Default: None.
-        """
+  
         log_likelihood = -F.log_softmax(pred, dim=-1)
         bsz = pred.shape[0]
         if self.reduction == 'mean':
@@ -120,16 +128,22 @@ class Kl_Loss(nn.Module):
             weight (Tensor, optional): of shape (N, C, H, W). Element-wise
                 weights. Default: None.
         """
-        if self.sample_wise:
-            loss = F.kl_div(F.log_softmax(pred, dim=-1), target.softmax(dim=-1), reduction='none')
-            if self.reduction == 'mean':
-                loss = loss.mean(-1)
-            else:
-                loss = loss.sum(-1)
-        else:
-            assert self.reduction != 'none'
-            loss = F.kl_div(F.log_softmax(pred, dim=-1), target.softmax(dim=-1), reduction=self.reduction)
-        return loss * self.loss_weight
+        # if self.sample_wise:
+        #     loss = F.kl_div(F.log_softmax(pred, dim=-1), target.softmax(dim=-1), reduction='none')
+        #     if self.reduction == 'mean':
+        #         loss = loss.mean(-1)
+        #     else:
+        #         loss = loss.sum(-1)
+        # else:
+        #     assert self.reduction != 'none'
+        #     loss = F.kl_div(F.log_softmax(pred, dim=-1), target.softmax(dim=-1), reduction=self.reduction)
+        # return loss * self.loss_weight
+        return self.loss_weight * kl_loss(
+            pred,
+            target,
+            weight,
+            reduction=self.reduction,
+            sample_wise=self.sample_wise)
 
 
 @LOSSES.register_module()
@@ -208,16 +222,22 @@ class MSELoss(nn.Module):
             weight (Tensor, optional): of shape (N, C, H, W). Element-wise
                 weights. Default: None.
         """
-        if self.sample_wise:
-            loss = F.mse_loss(pred, target, reduction='none')
-            if self.reduction == 'mean':
-                loss = loss.mean(-1)
-            else:
-                loss = loss.sum(-1)
-        else:
-            assert self.reduction != 'none'
-            loss = F.mse_loss(pred, target, reduction=self.reduction)
-        return self.loss_weight * loss
+        # if self.sample_wise:
+        #     loss = F.mse_loss(pred, target, reduction='none')
+        #     if self.reduction == 'mean':
+        #         loss = loss.mean(-1)
+        #     else:
+        #         loss = loss.sum(-1)
+        # else:
+        #     assert self.reduction != 'none'
+        #     loss = F.mse_loss(pred, target, reduction=self.reduction)
+        # return self.loss_weight * loss
+        return self.loss_weight * mse_loss(
+            pred,
+            target,
+            weight,
+            reduction=self.reduction,
+            sample_wise=self.sample_wise)
 
 
 

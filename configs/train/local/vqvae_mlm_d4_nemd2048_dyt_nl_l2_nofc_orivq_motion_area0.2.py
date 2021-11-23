@@ -1,6 +1,10 @@
 import os
-exp_name = 'vqvae_mlm_d4_nemd2048_dyt_nl_l2_nofc_orivq_motion'
-docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corr'
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+from vcl.utils import *
+
+exp_name = 'vqvae_mlm_d4_nemd2048_dyt_nl_l2_nofc_orivq_motion_area0.2'
+docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 # model settings
 model = dict(
@@ -11,7 +15,7 @@ model = dict(
     patch_size=-1,
     fc=False,
     temperature=0.1,
-    pretrained_vq='/gdata/lirui/models/vqvae/vqvae_youtube_d4_n2048_c256_embc128',
+    pretrained_vq='/home/lr/models/vqvae/vqvae_youtube_d4_n2048_c256_embc128.pth',
     pretrained=None
 )
 
@@ -76,7 +80,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=16, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -86,19 +90,21 @@ data = dict(
             type=train_dataset_type,
             size=256,
             p=0.7,
-            root='/gdata/lirui/dataset/YouTube-VOS',
-            list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
-            data_prefix='2018',
+            root='/home/lr/dataset/YouTube-VOS',
+            list_path='/home/lr/dataset/YouTube-VOS/2018/train',
+            data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
             mask_ratio=0.15,
-            clip_length=2,
+            clip_length=1,
+            num_clips=2,
             vq_size=32,
             pipeline=train_pipeline,
-            test_mode=False),
+            test_mode=False,
+            crop_ratio=0.2),
 
     test =  dict(
             type=test_dataset_type,
-            root='/gdata/lirui/dataset/DAVIS',
-            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
+            root='/home/lr/dataset/DAVIS',
+            list_path='/home/lr/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -139,11 +145,11 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
+work_dir = f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
+                  checkpoint_path=f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
                 )
 
 
@@ -152,29 +158,6 @@ resume_from = None
 workflow = [('train', 1)]
 
 
-def make_pbs():
-    pbs_data = ""
-    with open('configs/pbs/template.pbs', 'r') as f:
-        for line in f:
-            line = line.replace('exp_name',f'{exp_name}')
-            line = line.replace('docker_name', f'{docker_name}')
-            pbs_data += line
-
-    with open(f'configs/pbs/{exp_name}.pbs',"w") as f:
-        f.write(pbs_data)
-
-def make_local_config():
-    config_data = ""
-    with open(f'configs/train/local/{exp_name}.py', 'r') as f:
-        for line in f:
-            line = line.replace('/gdata/lirui','/gdata/lirui')
-            # line = line.replace('/gdata/lirui/dataset','/gdata/lirui/dataset')
-            config_data += line
-
-    with open(f'configs/train/ypb/{exp_name}.py',"w") as f:
-        f.write(config_data)
-
-
 if __name__ == '__main__':
-    make_pbs()
-    make_local_config()
+    make_pbs(exp_name, docker_name)
+    make_local_config(exp_name)

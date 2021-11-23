@@ -77,7 +77,7 @@ class VOS_dataset_base(BaseDataset):
             for idx in range(clip_length):
                 frame_path = frames_path[offset + idx]
                 frame = mmcv.imread(frame_path, backend=backend, flag=flag, channel_order='rgb')
-            frame_list_all.append(frame)
+                frame_list_all.append(frame)
         return frame_list_all
 
     def _parser_rgb_lmdb(self, offsets, frames_path, clip_length, step=1, flag='color', backend='cv2'):

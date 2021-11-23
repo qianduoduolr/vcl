@@ -95,8 +95,7 @@ class Dist_Tracker(BaseModel):
             predict_att = predict_att.softmax(-1)
 
         losses = {}
-        loss = self.loss(predict_att, target)
-        losses['att_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
+        losses['att_loss'] = self.loss(predict_att, target, weight=mask_query_idx.reshape(-1, 1))
 
         return losses
 

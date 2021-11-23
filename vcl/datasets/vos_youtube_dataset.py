@@ -31,6 +31,7 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
                        list_path, 
                        data_prefix, 
                        clip_length=3,
+                       num_clips=1,
                        pipeline=None, 
                        test_mode=False,
                        split='train',
@@ -45,6 +46,7 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
         self.split = split
         self.year = year
         self.clip_length = clip_length
+        self.num_clips = num_clips
 
         self.load_annotations()
 
@@ -71,59 +73,42 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
         """read frame"""
         frame_list_all = []
         for offset in offsets:
-            frame_list = []
             for idx in range(clip_length):
                 frame_path = frames_path[offset + idx]
                 frame = mmcv.imread(frame_path, backend=backend, flag=flag, channel_order='rgb')
-                frame_list.append(frame)
-            frame_list_all.append(frame_list)
-        return frame_list_all if len(frame_list_all) >= 2 else frame_list_all[0]
+            frame_list_all.append(frame)
+        return frame_list_all
 
-    def __getitem__(self, index):
+    def prepare_train_data(self, idx):
 
-        sample = self.samples[index]
+        sample = self.samples[idx]
         frames_path = sample['frames_path']
         num_frames = sample['num_frames']
 
         frame_idx = random.randint(0, num_frames-1)
 
         # load frame
-        frame = self._parser_rgb_rawframe([frame_idx], frames_path, 1)
+        frames = self._parser_rgb_rawframe([frame_idx], frames_path, 1)
 
-        return self.pipeline(frame)
+        data = {
+            'imgs': frames,
+            'modality': 'RGB',
+            'num_clips': self.num_clips,
+            'num_proposals':1,
+            'clip_len': self.clip_length
+        }
+
+        return self.pipeline(data)
 
 @DATASETS.register_module()
-class VOS_youtube_dataset_rgb_withbbox(VOS_dataset_base):
-    def __init__(self, root,  
-                       list_path, 
-                       data_prefix, 
-                       clip_length=3,
-                       pipeline=None, 
-                       test_mode=False,
-                       split='train',
-                       year='2018',
-                       load_to_ram=False
-                       ):
-        super().__init__(root, list_path, pipeline, test_mode, split)
-
-        self.list_path = list_path
-        self.root = root
-        self.data_prefix = data_prefix
-        self.split = split
-        self.year = year
-        self.clip_length = clip_length
-
-        self.load_annotations()
-
-    def __len__(self):
-        return len(self.samples)
+class VOS_youtube_dataset_rgb_withbbox(VOS_youtube_dataset_rgb):
 
     def load_annotations(self):
         
         self.samples = []
         self.video_dir = osp.join(self.root, self.year, self.data_prefix['RGB'])
         self.mask_dir = osp.join(self.root, self.year, self.data_prefix['ANNO'])
-        self.meta = mmcv.load(self.list_path, 'ytvos_s256_raft.json')[self.split]
+        self.meta = mmcv.load(osp.join(self.list_path, 'ytvos_s256_flow_raft.json'))[self.split]
 
         for vid in self.meta:
             sample = dict()
@@ -132,15 +117,36 @@ class VOS_youtube_dataset_rgb_withbbox(VOS_dataset_base):
             sample['frames_bbox'] = []
             sample['num_frames'] = len(vid['frame'])
             for frame in vid['frame']:
-                sample['frames_path'].append(self.video_dir, vname, frame['img_path'])
-                sample['frames_bbox'].append(frame['objs']['bbox'])
+                sample['frames_path'].append(osp.join(self.video_dir, vname, frame['img_path']))
+                sample['frames_bbox'].append(frame['objs'][0]['bbox'])
 
-        self.samples.append(sample)
+            self.samples.append(sample)
     
     def prepare_train_data(self, idx):
+
         sample = self.samples[idx]
 
+        frames_path = sample['frames_path']
+        frames_bbox = sample['frames_bbox']
+        num_frames = sample['num_frames']
 
+        frame_idx = random.randint(0, num_frames-1)
+
+        # load frame
+        frames = self._parser_rgb_rawframe([frame_idx], frames_path, 1)
+        bboxs = [frames_bbox[frame_idx]]
+
+        data = {
+            'imgs': frames,
+            'bboxs': bboxs,
+            'modality': 'RGB',
+            'num_clips': self.num_clips,
+            'num_proposals':1,
+            'clip_len': self.clip_length
+        }
+
+
+        return self.pipeline(data)
     
 
 
@@ -267,10 +273,10 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
 
 @DATASETS.register_module()
 class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
-    def __init__(self, size, p=0.7, flow_context=3, **kwargs):
+    def __init__(self, size, p=0.7, flow_context=3, crop_ratio=0.6, **kwargs):
         self.flow_context = flow_context
         super().__init__(**kwargs)
-        self.trans = transforms.Compose([ClipRandomSizedCrop(size=size, scale=(0.6, 1)),
+        self.trans = transforms.Compose([ClipRandomSizedCrop(size=size, scale=(crop_ratio, 1)),
                                         ClipRandomHorizontalFlip(p=0.5)]
                                         )
         self.motion_statistic = ClipMotionStatistic(input_size=size, mag_size=self.vq_res)
@@ -327,7 +333,7 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
         num_frames = sample['num_frames']
 
         offset = [ random.randint(0, num_frames-3)]
-        for i in range(self.num_clips):
+        for i in range(self.num_clips - 1):
             offset.append(offset[-1] + 1)
 
         if self.load_to_ram:

@@ -3,6 +3,7 @@ from .backbones import *  # noqa: F401, F403
 from .base import BaseModel
 from .components import *
 from .trackers  import *
+from .vqvae import *
 from .builder import (build, build_backbone, build_loss,
                       build_model)
 from .losses import *  # noqa: F401, F403
