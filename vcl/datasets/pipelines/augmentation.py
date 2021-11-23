@@ -658,10 +658,16 @@ class Resize(object):
         if 'crop_bbox_ratio' in results:
             ratios = results['crop_bbox_ratio']
             results['bbox_mask'] = []
-            for ratio in ratios:
+            for idx, ratio in enumerate(ratios):
                 img = results[self.keys][0]
                 mask = np.zeros((new_h, new_w)).astype(np.uint8)
                 mask[int(new_h * ratio[1]):int(new_h * ratio[3]), int(new_w * ratio[0]):int(new_w * ratio[2])] = 1
+                if results.get('mask_sample_size', None) and idx == len(ratios) - 1:
+                    sample_mask = mmcv.imresize(mask, results['mask_sample_size'], interpolation='nearest')
+                    mask_query_idx = np.zeros(results['mask_sample_size']).reshape(-1)
+                    idxs = np.nonzero(sample_mask.reshape(-1))[0]
+                    mask_query_idx[idxs] = 1
+                    results['mask_query_idx'] = mask_query_idx 
                 results['bbox_mask'].append(mask)
 
         return results

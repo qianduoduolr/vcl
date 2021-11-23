@@ -375,3 +375,59 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
 @DATASETS.register_module()
 class VOS_youtube_dataset_mlm_gt(VOS_youtube_dataset_mlm):
     pass
+
+
+@DATASETS.register_module()
+class VOS_youtube_dataset_mlm_withbbox(VOS_youtube_dataset_mlm):
+    def __init__(self, size, p=1.0, crop_ratio=0.6, **kwargs):
+        super().__init__(**kwargs)
+        self.p = p
+
+    def load_annotations(self):
+        
+        self.samples = []
+        self.video_dir = osp.join(self.root, self.year, self.data_prefix['RGB'])
+        self.mask_dir = osp.join(self.root, self.year, self.data_prefix['ANNO'])
+        self.meta = mmcv.load(osp.join(self.list_path, 'ytvos_s256_flow_raft.json'))[self.split]
+
+        for vid in self.meta:
+            sample = dict()
+            vname = vid["base_path"].split('/')[-1]
+            sample['frames_path'] = []
+            sample['frames_bbox'] = []
+            sample['num_frames'] = len(vid['frame'])
+            for frame in vid['frame']:
+                sample['frames_path'].append(osp.join(self.video_dir, vname, frame['img_path']))
+                sample['frames_bbox'].append(frame['objs'][0]['bbox'])
+
+            self.samples.append(sample)
+    
+    def prepare_train_data(self, idx):
+        sample = self.samples[idx]
+        frames_path = sample['frames_path']
+        frames_bbox = sample['frames_bbox']
+        num_frames = sample['num_frames']
+
+        offset = [ random.randint(0, num_frames-3)]
+        for i in range(self.num_clips - 1):
+            offset.append(offset[-1] + 1)
+
+        if self.load_to_ram:
+            frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
+        else:
+            frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
+        
+        bboxs = [ frames_bbox[offset[0] + i]  for i in range(self.clip_length * self.num_clips)]
+
+        data = {
+            'imgs': frames,
+            'bboxs': bboxs,
+            'mask_ratio': self.mask_ratio,
+            'mask_sample_size': (self.vq_res, self.vq_res),
+            'modality': 'RGB',
+            'num_clips': self.num_clips,
+            'num_proposals':1,
+            'clip_len': self.clip_length
+        }
+
+        return self.pipeline(data)
