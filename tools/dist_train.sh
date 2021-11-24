@@ -9,6 +9,7 @@ unzip -d /dev/shm/2018/train/ /dev/shm/2018/train/JPEGImages_s256.zip
 cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train_all_frames/zip_data/Flows_s256.zip /dev/shm/2018/train_all_frames/
 unzip -d /dev/shm/2018/train_all_frames/ /dev/shm/2018/train_all_frames/Flows_s256.zip
 cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/*.txt /dev/shm/2018/train/
+cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/*.json /dev/shm/2018/train/
 echo "finish cp data"
 
 CONFIG=$1
