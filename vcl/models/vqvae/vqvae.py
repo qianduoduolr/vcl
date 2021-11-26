@@ -13,8 +13,8 @@ from vcl.utils import *
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
-from roi_align import RoIAlign      # RoIAlign module
-from roi_align import CropAndResize # crop_and_resize module
+# from roi_align import RoIAlign      # RoIAlign module
+# from roi_align import CropAndResize # crop_and_resize module
 
 @MODELS.register_module()
 class VQVAE(BaseModel):
