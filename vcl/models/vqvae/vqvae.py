@@ -13,8 +13,8 @@ from vcl.utils import *
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
-# from roi_align import RoIAlign      # RoIAlign module
-# from roi_align import CropAndResize # crop_and_resize module
+from roi_align import RoIAlign      # RoIAlign module
+from roi_align import CropAndResize # crop_and_resize module
 
 @MODELS.register_module()
 class VQVAE(BaseModel):
@@ -210,8 +210,8 @@ class VQCL(BaseModel):
             # undo shuffle
             k = self._batch_unshuffle_ddp(k, idx_unshuffle)
 
-        qs = self.roi_align(q, bbox_q.float(), bbox_index).reshape(bsz, c, -1)
-        ks = self.roi_align(k, bbox_k.float(), bbox_index).reshape(bsz, c, -1)
+        qs = self.roi_align(q.contiguous(), bbox_q.float(), bbox_index).reshape(bsz, c, -1)
+        ks = self.roi_align(k.contiguous(), bbox_k.float(), bbox_index).reshape(bsz, c, -1)
         
         l_pos = torch.einsum('nci,ncj->nij', [qs, ks]).unsqueeze(-1)
         l_neg = torch.einsum('nci,ck->nik', [qs, self.queue.clone().detach()]).unsqueeze(-2).repeat(1, 1, l_pos.shape[-2], 1)
