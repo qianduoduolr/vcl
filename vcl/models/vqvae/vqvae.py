@@ -152,21 +152,22 @@ class VQCL(BaseModel):
         self.K = K
         self.m = m
         self.T = T
+        self.commitment_cost = commitment_cost
 
         self.quantize = Quantize(embed_dim, n_embed, commitment_cost, decay)  # Vector quantization
-        self.encoder_q = build_backbone(backbone)
-        self.encoder_k = build_backbone(backbone)
+        self.backbone = build_backbone(backbone)
+        self.backbone_k = build_backbone(backbone)
 
         crop_height = 4
         crop_width = 4
         self.roi_align = RoIAlign(crop_height, crop_width)
         
         if mlp:  # hack: brute-force replacement
-            dim_mlp = self.encoder_q.feat_dim
-            self.encoder_q.fc = nn.Sequential(nn.Conv2d(dim_mlp, dim_mlp, 1, 1), nn.ReLU(), nn.Conv2d(dim_mlp, embed_dim, 1, 1))
-            self.encoder_k.fc = nn.Sequential(nn.Conv2d(dim_mlp, dim_mlp, 1, 1), nn.ReLU(), nn.Conv2d(dim_mlp, embed_dim, 1, 1))
+            dim_mlp = self.backbone.feat_dim
+            self.backbone.fc = nn.Sequential(nn.Conv2d(dim_mlp, dim_mlp, 1, 1), nn.ReLU(), nn.Conv2d(dim_mlp, embed_dim, 1, 1))
+            self.backbone_k.fc = nn.Sequential(nn.Conv2d(dim_mlp, dim_mlp, 1, 1), nn.ReLU(), nn.Conv2d(dim_mlp, embed_dim, 1, 1))
 
-        for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
+        for param_q, param_k in zip(self.backbone.parameters(), self.backbone_k.parameters()):
             param_k.data.copy_(param_q.data)  # initialize
             param_k.requires_grad = False  # not update by gradient
 
@@ -187,7 +188,7 @@ class VQCL(BaseModel):
         bbox_q = bboxs[:, 0]
         bbox_k = bboxs[:, 1]
 
-        q = self.encoder_q(im_q)
+        q = self.backbone(im_q)
 
         bsz, c, _, _ = q.shape
 
@@ -204,7 +205,7 @@ class VQCL(BaseModel):
             # shuffle for making use of BN
             im_k, idx_unshuffle = self._batch_shuffle_ddp(im_k.contiguous())
 
-            k = self.encoder_k(im_k)  # keys: NxCxHxW
+            k = self.backbone_k(im_k)  # keys: NxCxHxW
             k = nn.functional.normalize(k, dim=1)
 
             # undo shuffle
@@ -230,14 +231,14 @@ class VQCL(BaseModel):
         losses = {}
 
         losses['cts_loss'] = self.loss(logits, labels)
-        losses['commit_loss'] = diff
+        losses['diff_loss'] = diff * self.commitment_cost
 
-        return losses
+        return losses, diff.item()
 
     def train_step(self, data_batch, optimizer, progress_ratio):
 
         # parser loss
-        losses = self(**data_batch, test_mode=False)
+        losses, diff = self(**data_batch, test_mode=False)
         loss, log_vars = self.parse_losses(losses)
 
         # optimizer
@@ -248,6 +249,7 @@ class VQCL(BaseModel):
         optimizer.step()
 
         log_vars.pop('loss')
+        log_vars['diff_item'] = diff
         outputs = dict(
             log_vars=log_vars,
             num_samples=len(data_batch['imgs'])
@@ -261,7 +263,7 @@ class VQCL(BaseModel):
         """
         Momentum update of the key encoder
         """
-        for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
+        for param_q, param_k in zip(self.backbone.parameters(), self.backbone_k.parameters()):
             param_k.data = param_k.data * self.m + param_q.data * (1. - self.m)
 
     @torch.no_grad()

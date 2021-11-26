@@ -1,22 +1,22 @@
 import os
 from random import sample
 import sys
-from vcl.models import backbones
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'train_vqvae_video_d4_nemd32_contrastive'
-docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
+exp_name = 'train_vqvae_video_d4_nemd32_contrastive_commit1.0'
+docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corres'
 
 # model settings
 model = dict(
     type='VQCL',
     backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
-    K=1024,
+    K=65536,
     m=0.999,
     T=0.1,
     embed_dim=128,
     n_embed=32,
+    commitment_cost=1.0,
     loss=dict(type='Ce_Loss',reduction='mean')
 )
 
@@ -79,7 +79,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=16, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -87,8 +87,8 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            root='/home/lr/dataset/YouTube-VOS',
-            list_path='/home/lr/dataset/YouTube-VOS/2018/train',
+            root='/dev/shm',
+            list_path='/dev/shm/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', ANNO='train/Annotations'),
             clip_length=1,
             num_clips=2,
@@ -97,8 +97,8 @@ data = dict(
 
     test =  dict(
             type=test_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -106,23 +106,23 @@ data = dict(
 )
 
 # optimizer
-optimizers = dict(type='SGD', lr=1e-2)
+optimizers = dict(type='SGD', lr=1e-2, momentum=0.9, weight_decay=1e-4)
 
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=200
+max_epoch=800
 lr_config = dict(
     policy='CosineAnnealing',
-    min_lr_ratio=0.001,
+    min_lr_ratio=0.0001,
     by_epoch=False,
-    # warmup='linear',
+    warmup='linear',
     warmup_iters=10,
-    warmup_ratio=0.1,
+    warmup_ratio=0.001,
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=100, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=400, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
@@ -138,11 +138,11 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}'
+work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
+                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
                 )
 
 

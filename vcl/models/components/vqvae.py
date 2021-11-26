@@ -81,7 +81,7 @@ class Quantize(nn.Module):
             self.embed.data.copy_(embed_normalized)
 
         # Commitment loss, used to keep the encoder output close to the codebook
-        diff = self.commitment_cost * (quantize.detach() - z).pow(2).mean()
+        diff =  (quantize.detach() - z).pow(2).mean()
 
         quantize = z + (quantize - z).detach()  # This is added to pass the gradients directly from Z. Basically
         # means that quantization operations have no gradient
