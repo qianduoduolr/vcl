@@ -571,7 +571,10 @@ class ResNet(nn.Module):
             if i in self.out_indices:
                 outs.append(x)
         if len(outs) == 1:
-            return outs[0]
+            if hasattr(self, 'fc'):
+                return self.fc(outs[0])
+            else:
+                return outs[0]
         return tuple(outs)
 
     def forward_block(self, x, index):

@@ -658,16 +658,15 @@ class Resize(object):
         if 'crop_bbox_ratio' in results:
             ratios = results['crop_bbox_ratio']
             results['bbox_mask'] = []
+            results['mask_query_idx'] = []
             for idx, ratio in enumerate(ratios):
                 img = results[self.keys][0]
                 mask = np.zeros((new_h, new_w)).astype(np.uint8)
                 mask[int(new_h * ratio[1]):int(new_h * ratio[3]), int(new_w * ratio[0]):int(new_w * ratio[2])] = 1
-                if results.get('mask_sample_size', None) and idx == len(ratios) - 1:
+                if results.get('mask_sample_size', None):
                     sample_mask = mmcv.imresize(mask, results['mask_sample_size'], interpolation='nearest')
-                    mask_query_idx = np.zeros(results['mask_sample_size']).reshape(-1)
-                    idxs = np.nonzero(sample_mask.reshape(-1))[0]
-                    mask_query_idx[idxs] = 1
-                    results['mask_query_idx'] = mask_query_idx 
+                    results['mask_query_idx'].append(sample_mask)
+                
                 results['bbox_mask'].append(mask)
 
         return results
@@ -743,6 +742,7 @@ class Flip(object):
         results['flip_direction'] = self.direction
 
         if not self.lazy:
+            results['bboxs'] = []
             for i, img in enumerate(results[self.keys]):
                 is_new_clip = not self.same_across_clip and i % results[
                     'clip_len'] == 0 and i > 0
@@ -765,8 +765,24 @@ class Flip(object):
                     mmcv.imflip_(img, self.direction)
                     if results.get('bbox_mask', None):
                         mmcv.imflip_(results['bbox_mask'][i], self.direction)
+                        mmcv.imflip_(results['mask_query_idx'][i], self.direction)
                     if 'grids' in results:
                         mmcv.imflip_(results['grids'][i], self.direction)
+
+                if results.get('bbox_mask', None):
+                    size = results['mask_sample_size']
+                    ratio = results['crop_bbox_ratio'][i]
+
+                    if not flip:
+                        bbox = np.array([size[1] * ratio[0], size[0] * ratio[1], \
+                                                size[1] * ratio[2], size[0] * ratio[3]])
+                    else:
+                        ratio_x = sorted([1- ratio[0], 1-ratio[2]])
+                        ratio_y = sorted([1- ratio[1], 1-ratio[3]])
+                        bbox = np.array([size[1] * ratio_x[0], size[0] * ratio_y[0], \
+                                                size[1] * ratio_x[1], size[0] * ratio_y[1]])
+                    results['bboxs'].append(bbox)
+
             if flip:
                 lt = len(results[self.keys])
                 for i in range(0, lt, 2):
@@ -774,9 +790,12 @@ class Flip(object):
                     # inverted when doing horizontal flip
                     if modality == 'Flow':
                         results[self.keys][i] = mmcv.iminvert(results[self.keys][i])
-
             else:
                 results[self.keys] = list(results[self.keys])
+
+            if results.get('bbox_mask', None):
+                results['mask_query_idx'] = results['mask_query_idx'][-1].reshape(-1)
+            
         else:
             lazyop = results['lazy']
             if lazyop['flip']:

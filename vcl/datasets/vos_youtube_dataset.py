@@ -130,21 +130,24 @@ class VOS_youtube_dataset_rgb_withbbox(VOS_youtube_dataset_rgb):
         frames_bbox = sample['frames_bbox']
         num_frames = sample['num_frames']
 
-        frame_idx = random.randint(0, num_frames-1)
+        offsets = [ random.randint(0, num_frames-1) for i in range(self.num_clips) ]
 
         # load frame
-        frames = self._parser_rgb_rawframe([frame_idx], frames_path, 1)
-        bboxs = [frames_bbox[frame_idx]]
+        frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length)
+        bboxs = []
+        for offset in offsets:
+            for i in range(self.clip_length):
+                bboxs.append(frames_bbox[offset+i])
 
         data = {
             'imgs': frames,
             'bboxs': bboxs,
+            'mask_sample_size': (32, 32),
             'modality': 'RGB',
             'num_clips': self.num_clips,
             'num_proposals':1,
             'clip_len': self.clip_length
         }
-
 
         return self.pipeline(data)
     

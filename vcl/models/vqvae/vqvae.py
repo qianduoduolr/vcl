@@ -13,6 +13,8 @@ from vcl.utils import *
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
+from roi_align import RoIAlign      # RoIAlign module
+from roi_align import CropAndResize # crop_and_resize module
 
 @MODELS.register_module()
 class VQVAE(BaseModel):
@@ -126,3 +128,201 @@ class VQVAE(BaseModel):
         )
 
         return outputs
+
+
+@MODELS.register_module()
+class VQCL(BaseModel):
+    def __init__(
+        self,
+        backbone,
+        K,
+        m=0.999,
+        T=0.01,
+        embed_dim=128,
+        n_embed=4096,
+        commitment_cost=0.25,
+        decay=0.99,
+        loss=None,
+        mlp=True,
+        train_cfg=None,
+        test_cfg=None,
+    ):
+        super().__init__()
+
+        self.K = K
+        self.m = m
+        self.T = T
+
+        self.quantize = Quantize(embed_dim, n_embed, commitment_cost, decay)  # Vector quantization
+        self.encoder_q = build_backbone(backbone)
+        self.encoder_k = build_backbone(backbone)
+
+        crop_height = 4
+        crop_width = 4
+        self.roi_align = RoIAlign(crop_height, crop_width)
+        
+        if mlp:  # hack: brute-force replacement
+            dim_mlp = self.encoder_q.feat_dim
+            self.encoder_q.fc = nn.Sequential(nn.Conv2d(dim_mlp, dim_mlp, 1, 1), nn.ReLU(), nn.Conv2d(dim_mlp, embed_dim, 1, 1))
+            self.encoder_k.fc = nn.Sequential(nn.Conv2d(dim_mlp, dim_mlp, 1, 1), nn.ReLU(), nn.Conv2d(dim_mlp, embed_dim, 1, 1))
+
+        for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
+            param_k.data.copy_(param_q.data)  # initialize
+            param_k.requires_grad = False  # not update by gradient
+
+        # create the queue
+        self.register_buffer("queue", torch.randn(embed_dim, K))
+        self.queue = nn.functional.normalize(self.queue, dim=0).cuda()
+
+        self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
+
+        self.loss = build_loss(loss)
+
+    
+    def forward_train(self, imgs, bboxs=None, jitter_imgs=None):
+    
+        im_q = imgs[:, 0, 0]
+        im_k = imgs[:, 0, 1]
+
+        bbox_q = bboxs[:, 0]
+        bbox_k = bboxs[:, 1]
+
+        q = self.encoder_q(im_q)
+
+        bsz, c, _, _ = q.shape
+
+        bbox_index = torch.arange(bsz,dtype=torch.int).reshape(-1).cuda()
+
+        q = nn.functional.normalize(q, dim=1)
+
+        # Vector quantization
+        quant, diff, ind, embed = self.quantize(q.permute(0, 2, 3, 1))
+
+        with torch.no_grad():
+            self._momentum_update_key_encoder()
+
+            # shuffle for making use of BN
+            im_k, idx_unshuffle = self._batch_shuffle_ddp(im_k.contiguous())
+
+            k = self.encoder_k(im_k)  # keys: NxCxHxW
+            k = nn.functional.normalize(k, dim=1)
+
+            # undo shuffle
+            k = self._batch_unshuffle_ddp(k, idx_unshuffle)
+
+        qs = self.roi_align(q, bbox_q.float(), bbox_index).reshape(bsz, c, -1)
+        ks = self.roi_align(k, bbox_k.float(), bbox_index).reshape(bsz, c, -1)
+        
+        l_pos = torch.einsum('nci,ncj->nij', [qs, ks]).unsqueeze(-1)
+        l_neg = torch.einsum('nci,ck->nik', [qs, self.queue.clone().detach()]).unsqueeze(-2).repeat(1, 1, l_pos.shape[-2], 1)
+
+        logits = torch.cat([l_pos, l_neg], dim=-1).reshape(-1, self.K+1)
+
+        # apply temperature
+        logits /= self.T
+
+        # labels: positive key indicators
+        labels = torch.zeros(logits.shape[0], dtype=torch.long).cuda().unsqueeze(1)
+
+        # dequeue and enqueue
+        self._dequeue_and_enqueue(ks.permute(0,2,1).reshape(-1, c))
+
+        losses = {}
+
+        losses['cts_loss'] = self.loss(logits, labels)
+        losses['commit_loss'] = diff
+
+        return losses
+
+    def train_step(self, data_batch, optimizer, progress_ratio):
+
+        # parser loss
+        losses = self(**data_batch, test_mode=False)
+        loss, log_vars = self.parse_losses(losses)
+
+        # optimizer
+        optimizer.zero_grad()
+
+        loss.backward()
+
+        optimizer.step()
+
+        log_vars.pop('loss')
+        outputs = dict(
+            log_vars=log_vars,
+            num_samples=len(data_batch['imgs'])
+        )
+
+        return outputs
+    
+
+    @torch.no_grad()
+    def _momentum_update_key_encoder(self):
+        """
+        Momentum update of the key encoder
+        """
+        for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
+            param_k.data = param_k.data * self.m + param_q.data * (1. - self.m)
+
+    @torch.no_grad()
+    def _dequeue_and_enqueue(self, keys):
+        # gather keys before updating queue
+        keys = concat_all_gather(keys)
+
+        batch_size = keys.shape[0]
+
+        ptr = int(self.queue_ptr)
+        assert self.K % batch_size == 0  # for simplicity
+
+        # replace the keys at ptr (dequeue and enqueue)
+        self.queue[:, ptr:ptr + batch_size] = keys.T
+        ptr = (ptr + batch_size) % self.K  # move pointer
+
+        self.queue_ptr[0] = ptr
+
+    @torch.no_grad()
+    def _batch_shuffle_ddp(self, x):
+        """
+        Batch shuffle, for making use of BatchNorm.
+        *** Only support DistributedDataParallel (DDP) model. ***
+        """
+        # gather from all gpus
+        batch_size_this = x.shape[0]
+        x_gather = concat_all_gather(x)
+        batch_size_all = x_gather.shape[0]
+
+        num_gpus = batch_size_all // batch_size_this
+
+        # random shuffle index
+        idx_shuffle = torch.randperm(batch_size_all).cuda()
+
+        # broadcast to all gpus
+        torch.distributed.broadcast(idx_shuffle, src=0)
+
+        # index for restoring
+        idx_unshuffle = torch.argsort(idx_shuffle)
+
+        # shuffled index for this gpu
+        gpu_idx = torch.distributed.get_rank()
+        idx_this = idx_shuffle.view(num_gpus, -1)[gpu_idx]
+
+        return x_gather[idx_this], idx_unshuffle
+
+    @torch.no_grad()
+    def _batch_unshuffle_ddp(self, x, idx_unshuffle):
+        """
+        Undo batch shuffle.
+        *** Only support DistributedDataParallel (DDP) model. ***
+        """
+        # gather from all gpus
+        batch_size_this = x.shape[0]
+        x_gather = concat_all_gather(x)
+        batch_size_all = x_gather.shape[0]
+
+        num_gpus = batch_size_all // batch_size_this
+
+        # restored index for this gpu
+        gpu_idx = torch.distributed.get_rank()
+        idx_this = idx_unshuffle.view(num_gpus, -1)[gpu_idx]
+
+        return x_gather[idx_this]
