@@ -13,8 +13,7 @@ from vcl.utils import *
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
-from roi_align import RoIAlign      # RoIAlign module
-from roi_align import CropAndResize # crop_and_resize module
+from torchvision.ops import roi_align
 
 @MODELS.register_module()
 class VQVAE(BaseModel):
@@ -160,7 +159,7 @@ class VQCL(BaseModel):
 
         crop_height = 4
         crop_width = 4
-        self.roi_align = RoIAlign(crop_height, crop_width)
+        # self.roi_align = roi_align(crop_height, crop_width)
         
         if mlp:  # hack: brute-force replacement
             dim_mlp = self.backbone.feat_dim
@@ -192,7 +191,7 @@ class VQCL(BaseModel):
 
         bsz, c, _, _ = q.shape
 
-        bbox_index = torch.arange(bsz,dtype=torch.int).reshape(-1).cuda()
+        bbox_index = torch.arange(bsz,dtype=torch.float).reshape(-1,1).cuda()
 
         q = nn.functional.normalize(q, dim=1)
 
@@ -211,8 +210,11 @@ class VQCL(BaseModel):
             # undo shuffle
             k = self._batch_unshuffle_ddp(k, idx_unshuffle)
 
-        qs = self.roi_align(q.contiguous(), bbox_q.float(), bbox_index).reshape(bsz, c, -1)
-        ks = self.roi_align(k.contiguous(), bbox_k.float(), bbox_index).reshape(bsz, c, -1)
+        bboxs_q = torch.cat([bbox_index, bbox_q.float()], dim=1)
+        bboxs_k = torch.cat([bbox_index, bbox_k.float()], dim=1)
+
+        qs = roi_align(q.contiguous(), bboxs_q.float(), output_size=(4,4)).reshape(bsz, c, -1)
+        ks = roi_align(k.contiguous(), bboxs_k.float(), output_size=(4,4)).reshape(bsz, c, -1)
         
         l_pos = torch.einsum('nci,ncj->nij', [qs, ks]).unsqueeze(-1)
         l_neg = torch.einsum('nci,ck->nik', [qs, self.queue.clone().detach()]).unsqueeze(-2).repeat(1, 1, l_pos.shape[-2], 1)

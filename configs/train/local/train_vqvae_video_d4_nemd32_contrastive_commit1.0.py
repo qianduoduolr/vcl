@@ -11,7 +11,7 @@ docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corres'
 model = dict(
     type='VQCL',
     backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
-    K=65536,
+    K=16384,
     m=0.999,
     T=0.1,
     embed_dim=128,
