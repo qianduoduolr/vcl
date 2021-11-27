@@ -1,5 +1,6 @@
 from ..registry import COMPONENTS
 from ..builder import build_components, build_loss
+from mmcv.cnn import ConvModule, build_norm_layer, build_plugin_layer
 import torch
 import torch.nn as nn
 

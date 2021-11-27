@@ -143,8 +143,10 @@ class VQCL(BaseModel):
         decay=0.99,
         loss=None,
         mlp=True,
+        cluster=False,
         train_cfg=None,
         test_cfg=None,
+        pretrained=None
     ):
         super().__init__()
 
@@ -152,6 +154,7 @@ class VQCL(BaseModel):
         self.m = m
         self.T = T
         self.commitment_cost = commitment_cost
+        self.cluster = cluster
 
         self.quantize = Quantize(embed_dim, n_embed, commitment_cost, decay)  # Vector quantization
         self.backbone = build_backbone(backbone)
@@ -178,7 +181,59 @@ class VQCL(BaseModel):
 
         self.loss = build_loss(loss)
 
+        if pretrained is not None:
+            self.init_weights(pretrained)
+
     
+    def init_weights(self, pretrained):
+        self.backbone.pretrained = pretrained
+        self.backbone.init_weights()
+
+    def forward(self, test_mode, **kwargs):
+        """Forward function for base model.
+
+        Args:
+            imgs (Tensor): Input image(s).
+            labels (Tensor): Ground-truth label(s).
+            test_mode (bool): Whether in test mode.
+            kwargs (dict): Other arguments.
+
+        Returns:
+            Tensor: Forward results.
+        """
+
+        if test_mode:
+            return self.forward_test(**kwargs)
+
+        if not self.cluster:
+            return self.forward_train(**kwargs)
+        else:
+            return self.forward_cluster(**kwargs)
+
+    def forward_cluster(self, imgs, bboxs=None, jitter_imgs=None):
+        im_q = imgs[:, 0, 0]
+
+        with torch.no_grad():
+            q = self.backbone(im_q)
+
+        bsz, c, _, _ = q.shape
+
+        bbox_index = torch.arange(bsz,dtype=torch.float).reshape(-1,1).cuda()
+
+        # q = nn.functional.normalize(q, dim=1).permute(0, 2, 3, 1)
+
+        q_all = concat_all_gather(q.permute(0, 2, 3, 1).contiguous())
+
+        # Vector quantization
+        quant, diff, ind, embed = self.quantize(q_all)
+
+        losses = {}
+
+        losses['diff_loss'] = diff * self.commitment_cost
+
+        return losses, diff.item()
+
+
     def forward_train(self, imgs, bboxs=None, jitter_imgs=None):
     
         im_q = imgs[:, 0, 0]
@@ -244,11 +299,12 @@ class VQCL(BaseModel):
         loss, log_vars = self.parse_losses(losses)
 
         # optimizer
-        optimizer.zero_grad()
+        if not self.cluster:
+            optimizer.zero_grad()
+            
+            loss.backward()
 
-        loss.backward()
-
-        optimizer.step()
+            optimizer.step()
 
         log_vars.pop('loss')
         log_vars['diff_item'] = diff
@@ -330,3 +386,131 @@ class VQCL(BaseModel):
         idx_this = idx_unshuffle.view(num_gpus, -1)[gpu_idx]
 
         return x_gather[idx_this]
+
+    def encode(self, x):
+        """
+        Encodes and quantizes an input tensor using VQ-VAE algorithm
+        :param x: input tensor
+        :return: encoder output, quantized map, commitment loss, codebook indices, codebook embedding
+        """
+        # Encoding
+        enc = self.backbone(x).permute(0, 2, 3, 1)
+
+        # Vector quantization
+        quant, diff, ind, embed = self.quantize(enc)
+
+        # Converting back the quantized map to B x C x H x W
+        quant = quant.permute(0, 3, 1, 2)
+
+        return enc, quant, diff, ind, embed
+
+@MODELS.register_module()
+class VQCL_v2(BaseModel):
+    def __init__(
+        self,
+        backbone,
+        embed_dim=128,
+        n_embed=4096,
+        commitment_cost=0.25,
+        decay=0.99,
+        sim_siam_head=None,
+        loss=None,
+
+        train_cfg=None,
+        test_cfg=None,
+        pretrained=None
+    ):
+        super().__init__()
+
+        self.commitment_cost = commitment_cost
+
+        self.quantize = Quantize(embed_dim, n_embed, commitment_cost, decay)  # Vector quantization
+        self.backbone = build_backbone(backbone)
+        self.quantize_conv = nn.Conv2d(self.backbone.feat_dim, embed_dim, 1)  # Dimension reduction to embedding size
+
+        self.cts_loss = build_loss(loss)
+
+        if sim_siam_head is not None:
+            self.head = build_components(sim_siam_head)
+            self.head.init_weights()
+        else:
+            self.head = None
+
+        if pretrained is not None:
+            self.init_weights(pretrained)
+
+
+
+    def forward_train(self, imgs, bboxs=None, jitter_imgs=None):
+    
+        im_q = imgs[:, 0, 0]
+        im_k = imgs[:, 0, 1]
+
+        q = self.backbone(im_q)
+        k = self.backbone(im_k)
+
+        bsz, c, _, _ = q.shape
+
+        q_emb = self.quantize_conv(q).permute(0, 2, 3, 1)
+        quant, diff, ind, embed = self.quantize(q_emb)
+    
+        losses = {}
+
+        losses['cts_loss'] = self.forward_img_head(q, k)
+        losses['diff'] = diff * self.commitment_cost
+
+        return losses, diff.item()
+
+    def train_step(self, data_batch, optimizer, progress_ratio):
+
+        # parser loss
+        losses, diff = self(**data_batch, test_mode=False)
+        loss, log_vars = self.parse_losses(losses)
+
+        # optimizer
+        optimizer.zero_grad()
+        
+        loss.backward()
+
+        optimizer.step()
+
+        log_vars.pop('loss')
+        log_vars['diff_item'] = diff
+        outputs = dict(
+            log_vars=log_vars,
+            num_samples=len(data_batch['imgs'])
+        )
+
+        return outputs
+    
+
+    def encode(self, x):
+        """
+        Encodes and quantizes an input tensor using VQ-VAE algorithm
+        :param x: input tensor
+        :return: encoder output, quantized map, commitment loss, codebook indices, codebook embedding
+        """
+        # Encoding
+        enc = self.backbone(x).permute(0, 2, 3, 1)
+
+        # Vector quantization
+        quant, diff, ind, embed = self.quantize(enc)
+
+        # Converting back the quantized map to B x C x H x W
+        quant = quant.permute(0, 3, 1, 2)
+
+        return enc, quant, diff, ind, embed
+
+    def forward_img_head(self, x1, x2):
+
+        if isinstance(x1, tuple):
+            x1 = x1[-1]
+        if isinstance(x2, tuple):
+            x2 = x2[-1]
+
+        z1, p1 = self.head(x1)
+        z2, p2 = self.head(x2)
+        
+        loss = self.cts_loss(p1, z2.detach()) * 0.5 + self.cts_loss(p2, z1.detach()) * 0.5
+
+        return loss

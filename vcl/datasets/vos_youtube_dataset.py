@@ -69,26 +69,16 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
                 sample['num_frames'] = int(num_frames)
                 self.samples.append(sample)
 
-    def _parser_rgb_rawframe(self, offsets, frames_path, clip_length, step=1, flag='color', backend='cv2'):
-        """read frame"""
-        frame_list_all = []
-        for offset in offsets:
-            for idx in range(clip_length):
-                frame_path = frames_path[offset + idx]
-                frame = mmcv.imread(frame_path, backend=backend, flag=flag, channel_order='rgb')
-            frame_list_all.append(frame)
-        return frame_list_all
-
     def prepare_train_data(self, idx):
 
         sample = self.samples[idx]
         frames_path = sample['frames_path']
         num_frames = sample['num_frames']
 
-        frame_idx = random.randint(0, num_frames-1)
+        offsets = [ random.randint(0, num_frames-1) for i in range(self.num_clips) ]
 
         # load frame
-        frames = self._parser_rgb_rawframe([frame_idx], frames_path, 1)
+        frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length)
 
         data = {
             'imgs': frames,
