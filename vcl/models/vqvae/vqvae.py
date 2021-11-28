@@ -1,6 +1,7 @@
 import mmcv
 from mmcv.runner import auto_fp16, load_checkpoint
 from dall_e  import map_pixels, unmap_pixels, load_model
+from torch import distributed
 
 from ..base import BaseModel
 from ..components import *
@@ -452,7 +453,7 @@ class VQCL_v2(BaseModel):
         bsz, c, _, _ = q.shape
 
         q_emb = self.quantize_conv(q).permute(0, 2, 3, 1)
-        quant, diff, ind, embed = self.quantize(q_emb)
+        quant, diff, ind, embed = self.quantize(q_emb.contiguous(), distributed=True)
     
         losses = {}
 

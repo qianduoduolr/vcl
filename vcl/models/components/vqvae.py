@@ -11,6 +11,7 @@ from functools    import partial
 
 from ..builder import build_components
 from ..registry import COMPONENTS
+from vcl.utils import *
 
 logit_laplace_eps: float = 0.1
 
@@ -44,12 +45,16 @@ class Quantize(nn.Module):
         self.register_buffer("cluster_size", torch.zeros(n_embed))
         self.register_buffer("embed_avg", embed.clone())
 
-    def forward(self, z):
+    def forward(self, z, distributed=False):
         """
         :param z: Encoder output
         :return: Quantized tensor
         """
-        flatten = z.reshape(-1, self.dim)  # Converting the z input to a [N x D] tensor, where D is embedding dimension
+        if not distributed:
+            flatten = z.reshape(-1, self.dim)  # Converting the z input to a [N x D] tensor, where D is embedding dimension
+        else:
+            flatten = concat_all_gather(z.reshape(-1, self.dim))
+            z = concat_all_gather(z)
         dist = (
                 flatten.pow(2).sum(1, keepdim=True)
                 - 2 * flatten @ self.embed
@@ -59,10 +64,6 @@ class Quantize(nn.Module):
         embed_onehot = F.one_hot(embed_ind, self.n_embed).type(flatten.dtype)  # Assigns the actual codes according
         # their closest indices, with flattened
         embed_ind = embed_ind.view(*z.shape[:-1])  # B x H x W tensor with the indices of their nearest code
-
-        # embed_ind = F.interpolate(embed_ind.float().unsqueeze(1),
-        #             size=[32,32],
-        #             mode='nearest').squeeze(1).long()
 
         quantize = F.embedding(embed_ind, self.embed.transpose(0, 1))  # B x H x W x D quantized tensor
 
