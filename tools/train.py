@@ -86,7 +86,7 @@ def main():
     # cp code to work_dir
     if distributed:
         file_path = osp.dirname(osp.dirname(osp.abspath(__file__)))
-        os.system(f"rsync -avP --exlude={'output','.git'} {file_path} {cfg.work_dir}/")
+        os.system(f"rsync -avP --exclude 'output' --exclude '.git' {file_path} {cfg.work_dir}/")
 
     # init the logger before other steps
     timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
