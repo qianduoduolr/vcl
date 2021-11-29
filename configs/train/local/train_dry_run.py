@@ -4,6 +4,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirna
 from vcl.utils import *
 
 exp_name = 'vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_notsame'
+exp_name_old = 'vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox'
+
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 # model settings
@@ -157,7 +159,7 @@ work_dir = f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
+                  checkpoint_path=f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name_old}/epoch_{max_epoch}.pth'
                 )
 
 
