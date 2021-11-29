@@ -314,6 +314,8 @@ class VQVAE(nn.Module):
         commitment_cost=0.25,
         decay=0.99,
         newed=False,
+        train_cfg=None,
+        test_cfg=None
     ):
         """
         :param in_channel: input channels
