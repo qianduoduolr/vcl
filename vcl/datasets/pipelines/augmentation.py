@@ -357,7 +357,7 @@ class RandomResizedCrop(object):
                         bbox = None
                     left, top, right, bottom = self.get_crop_bbox(
                         (img_h, img_w), self.area_range,
-                        self.aspect_ratio_range, bbox=bbox)
+                        self.aspect_ratio_range, bbox=bbox, crop_ratio=self.crop_ratio)
                     new_h, new_w = bottom - top, right - left
 
                 results['crop_bbox'] = np.array([left, top, right, bottom])
