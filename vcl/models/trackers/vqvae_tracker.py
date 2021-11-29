@@ -10,7 +10,7 @@ from dall_e  import map_pixels, unmap_pixels, load_model
 from vcl.models.losses.losses import Ce_Loss
 
 from ..base import BaseModel
-from ..builder import build_backbone, build_loss, build_components
+from ..builder import build_backbone, build_loss, build_components, build_model
 from ..registry import MODELS
 from vcl.utils.helpers import *
 from vcl.utils import *
@@ -66,7 +66,7 @@ class Vqvae_Tracker(BaseModel):
 
         self.vq_type = vqvae.type
         if vqvae.type != 'DALLE_Encoder':
-            self.vqvae = build_components(vqvae).cuda()
+            self.vqvae = build_model(vqvae).cuda()
             _ = load_checkpoint(self.vqvae, pretrained_vq, map_location='cpu')
             logger.info('load pretrained VQVAE successfully')
             self.vq_emb = self.vqvae.quantize.embed
@@ -109,14 +109,9 @@ class Vqvae_Tracker(BaseModel):
 
         # vqvae tokenize for query frame
         with torch.no_grad():
-            if self.vq_type == 'VQVAE':
-                self.vqvae.eval()
-                _, quant, diff, ind, embed = self.vq_enc(imgs[:, 0, -1])
-                ind = ind.reshape(-1, 1).long().detach()
-            else:
-                self.vq_enc.eval()
-                ind = self.vq_enc(imgs[:, 0, -1])
-                ind = torch.argmax(ind, axis=1).reshape(-1, 1).long().detach()
+            self.vqvae.eval()
+            _, quant, diff, ind, embed = self.vq_enc(imgs[:, 0, -1])
+            ind = ind.reshape(-1, 1).long().detach()
 
         if jitter_imgs is not None:
             imgs = jitter_imgs
