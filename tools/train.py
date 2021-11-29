@@ -19,7 +19,7 @@ from vcl.utils import collect_env, get_root_logger
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train an editor')
-    parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/local/vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_notsame.py')
+    parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/local/vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_random.py')
     parser.add_argument('--work-dir', help='the dir to save logs and models')
     parser.add_argument(
         '--resume-from', help='the checkpoint file to resume from')
@@ -86,8 +86,7 @@ def main():
     # cp code to work_dir
     if distributed:
         file_path = osp.dirname(osp.dirname(osp.abspath(__file__)))
-        # os.system(f"rsync -a --exclude='{file_path}/.git' {file_path} {cfg.work_dir}")
-        os.system(f"cp -r {file_path} {cfg.work_dir}")
+        os.system(f"rsync -avP --exlude={'output','.git'} {file_path} {cfg.work_dir}/")
 
     # init the logger before other steps
     timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
