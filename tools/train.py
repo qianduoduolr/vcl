@@ -12,7 +12,7 @@ from mmcv import Config
 from mmcv.runner import init_dist
 
 from vcl.apis import set_random_seed, train_model
-from vcl.datasets import build_dataset6
+from vcl.datasets import build_dataset
 from vcl.models import build_model
 from vcl.utils import collect_env, get_root_logger
 
