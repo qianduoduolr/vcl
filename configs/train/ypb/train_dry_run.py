@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_notsame'
+exp_name = 'vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_random'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 # model settings
@@ -38,7 +38,7 @@ test_cfg = dict(
     output_dir='eval_results')
 
 # dataset settings
-train_dataset_type = 'VOS_youtube_dataset_mlm_withbbox'
+train_dataset_type = 'VOS_youtube_dataset_mlm_withbbox_random'
 
 val_dataset_type = None
 test_dataset_type = 'VOS_davis_dataset_test'
@@ -51,11 +51,9 @@ img_norm_cfg = dict(
 #     mean=[0, 0, 0], std=[255, 255, 255], to_bgr=False)
 
 train_pipeline = [
-    dict(type='RandomResizedCrop', area_range=(0.6,1.0), aspect_ratio_range=(1.5, 2.0),same_across_clip=False,
-        same_on_clip=False),
+    dict(type='RandomResizedCrop', area_range=(0.6,1.0), aspect_ratio_range=(1.5, 2.0),),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
-    dict(type='Flip', flip_ratio=0.5, same_across_clip=False,
-        same_on_clip=False),
+    dict(type='Flip', flip_ratio=0.5),
     dict(
         type='ColorJitter',
         brightness=0.7,
@@ -103,8 +101,7 @@ data = dict(
             list_path='/dev/shm/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
             mask_ratio=0.15,
-            clip_length=1,
-            num_clips=2,
+            clip_length=2,
             vq_size=32,
             pipeline=train_pipeline,
             test_mode=False),
