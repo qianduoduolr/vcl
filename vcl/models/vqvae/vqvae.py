@@ -815,7 +815,7 @@ class VQCL_v2(BaseModel):
         bsz, c, _, _ = q.shape
 
         q_emb = self.quantize_conv(q).permute(0, 2, 3, 1)
-        quant, diff, ind, embed = self.quantize(q_emb.contiguous(), distributed=True)
+        quant, diff, ind, embed = self.quantize(q_emb.contiguous(), distributed=False)
     
         losses = {}
 
