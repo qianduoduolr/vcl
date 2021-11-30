@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_random_0.5'
+exp_name = 'vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_random'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 # model settings
@@ -96,7 +96,7 @@ data = dict(
             dict(
             type=train_dataset_type,
             size=256,
-            p=0.5,
+            p=0.8,
             root='/dev/shm',
             list_path='/dev/shm/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
@@ -124,7 +124,7 @@ optimizers = dict(
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=800
+max_epoch=3200
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,
@@ -134,7 +134,7 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=400, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=800, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
