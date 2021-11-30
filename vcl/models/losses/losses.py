@@ -128,16 +128,6 @@ class Kl_Loss(nn.Module):
             weight (Tensor, optional): of shape (N, C, H, W). Element-wise
                 weights. Default: None.
         """
-        # if self.sample_wise:
-        #     loss = F.kl_div(F.log_softmax(pred, dim=-1), target.softmax(dim=-1), reduction='none')
-        #     if self.reduction == 'mean':
-        #         loss = loss.mean(-1)
-        #     else:
-        #         loss = loss.sum(-1)
-        # else:
-        #     assert self.reduction != 'none'
-        #     loss = F.kl_div(F.log_softmax(pred, dim=-1), target.softmax(dim=-1), reduction=self.reduction)
-        # return loss * self.loss_weight
         return self.loss_weight * kl_loss(
             pred,
             target,
