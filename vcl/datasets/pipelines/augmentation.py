@@ -794,6 +794,8 @@ class Flip(object):
                 results[self.keys] = list(results[self.keys])
 
             if results.get('bbox_mask', None):
+                img = img
+                a = results['mask_query_idx'][-1]
                 results['mask_query_idx'] = results['mask_query_idx'][-1].reshape(-1)
             
         else:
