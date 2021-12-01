@@ -16,7 +16,7 @@ model = dict(
                with_norm=True, spatial_type='avg'),loss=dict(type='CosineSimLoss', negative=False), embed_dim=128,
                n_embed=32, commitment_cost=1.0,),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
-    patch_size=7,
+    patch_size=11,
     fc=True,
     temperature=0.1,
     pretrained_vq='/home/lr/models/vqvae/vqvae_youtube_d4_n32_c256_embc128_byol_commit1.0.pth',
@@ -87,7 +87,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=6, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=4, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
