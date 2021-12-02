@@ -475,15 +475,13 @@ class Vqvae_Tracker_v2(BaseModel):
     def non_local_attention(self, tar, refs, bsz):
 
         refs = torch.stack(refs, 2)
-        _, feat_dim, w_, h_ = tar.shape
+        _, feat_dim, t, _, _ = refs.shape
 
         refs = refs.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
         tar = tar.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
 
         att = torch.einsum("bic,bjc -> bij", (tar, refs))
         att = F.softmax(att, dim=-1)
-
-        # a = att[0,32,:].reshape(32,32).detach().cpu().numpy()
 
         out = torch.matmul(att, refs).reshape(-1, feat_dim)
 
