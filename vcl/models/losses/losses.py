@@ -103,6 +103,11 @@ class Soft_Ce_Loss(nn.Module):
             loss = torch.sum(torch.mul(log_likelihood, target.softmax(dim=-1))) / bsz
         else:
             loss = torch.sum(torch.mul(log_likelihood, target.softmax(dim=-1)), dim=-1)
+
+        if weight is not None:
+            weight = weight.view(-1)
+            loss = (loss * weight).sum() / weight.sum()
+
         return loss * self.loss_weight
 
 

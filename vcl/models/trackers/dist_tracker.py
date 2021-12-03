@@ -1,10 +1,11 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import numbers
+from os import stat_result
 import os.path as osp
 from collections import *
 
 import mmcv
-from mmcv.runner import auto_fp16, load_checkpoint
+from mmcv.runner import auto_fp16, load_state_dict, load_checkpoint
 
 from ..base import BaseModel
 from ..builder import build_backbone, build_loss
@@ -51,6 +52,7 @@ class Dist_Tracker(BaseModel):
         self.patch_size = patch_size
         self.moment = moment
         self.dilated_search = dilated_search
+        self.pretrained = pretrained
 
         logger = get_root_logger()
 
@@ -59,10 +61,17 @@ class Dist_Tracker(BaseModel):
 
         # loss
         self.loss = build_loss(loss)
+        
+        if self.pretrained is not None:
+            self.init_weights()
+    
+    def init_weights(self):
+        _ = load_checkpoint(self, self.pretrained, map_location='cpu', revise_keys=[(r'^backbone', 'backbone_t')])
+
 
     def forward_train(self, imgs, mask_query_idx, jitter_imgs=None, progress_ratio=0.0):
 
-        bsz, num_clips, t, c, h, w = imgs.shape
+        bsz, num_clips, t, c, h, w = jitter_imgs.shape
         mask_query_idx = mask_query_idx.bool()
 
         tar = self.backbone(jitter_imgs[:,0,-1])
