@@ -32,11 +32,11 @@ class Vqvae_Tracker(BaseModel):
                  pretrained_vq,
                  temperature,
                  sim_siam_head=None,
+                 multi_head_weight=[1.0],
                  ce_loss=None,
                  mse_loss=None,
                  cts_loss=None,
                  fc=True,
-                 online_mining=False,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None
@@ -51,10 +51,15 @@ class Vqvae_Tracker(BaseModel):
             pretrained ([type], optional): [description]. Defaults to None.
         """
         super(Vqvae_Tracker, self).__init__()
+        if not isinstance(vqvae, list):
+            vqvae = list([vqvae])
+            pretrained_vq = list([pretrained_vq])
 
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
         self.patch_size = patch_size
+        self.num_head = len(vqvae)
+        self.multi_head_weight = multi_head_weight
 
         logger = get_root_logger()
 
@@ -65,16 +70,19 @@ class Vqvae_Tracker(BaseModel):
         else:
             self.head = None
 
-        self.vq_type = vqvae.type
-        if vqvae.type != 'DALLE_Encoder':
-            self.vqvae = build_model(vqvae).cuda()
-            _ = load_checkpoint(self.vqvae, pretrained_vq, map_location='cpu')
-            logger.info('load pretrained VQVAE successfully')
-            self.vq_emb = self.vqvae.quantize.embed
-            self.n_embed = vqvae.n_embed
-            self.vq_t = temperature
-            self.vq_enc = self.vqvae.encode
+        self.vq_type = vqvae[0].type
+        if self.vq_type != 'DALLE_Encoder':
+            for idx, i in enumerate(range(len(vqvae))):
+                i = str(i).replace('0', '')
+                setattr(self, f'vqvae{i}', build_model(vqvae[idx]).cuda())
+                _ = load_checkpoint(getattr(self, f'vqvae{i}'), pretrained_vq[idx], map_location='cpu')
+                logger.info(f'load {i}th pretrained VQVAE successfully')
+                setattr(self, f'vq_emb{i}', getattr(self, f'vqvae{i}').quantize.embed)
+                setattr(self, f'n_embed{i}', vqvae[idx].n_embed)
+                setattr(self, f'vq_t{i}', temperature)
+                setattr(self, f'vq_enc{i}', getattr(self, f'vqvae{i}').encode)
         else:
+            assert self.num_head == 1
             self.vq_enc = load_model(pretrained_vq).cuda()
             self.n_embed = self.vq_enc.vocab_size
             logger.info('load pretrained VQVAE successfully')
@@ -96,9 +104,10 @@ class Vqvae_Tracker(BaseModel):
 
         # fc
         self.fc = fc
-
         if self.fc:
-            self.predictor = nn.Linear(self.backbone.feat_dim, self.n_embed)
+            for i in range(len(vqvae)):
+                i = str(i).replace('0', '')
+                setattr(self, f'predictor{i}', nn.Linear(self.backbone.feat_dim, getattr(self, f'n_embed{i}')))
         else:
             self.embedding_layer = nn.Linear(self.backbone.feat_dim, self.vq_emb.shape[0])
 
@@ -110,9 +119,15 @@ class Vqvae_Tracker(BaseModel):
 
         # vqvae tokenize for query frame
         with torch.no_grad():
-            self.vqvae.eval()
-            _, quant, diff, ind, embed = self.vq_enc(imgs[:, 0, -1])
-            ind = ind.reshape(-1, 1).long().detach()
+            out_ind= []
+            for i in range(self.num_head):
+                i = str(i).replace('0', '')
+                vqvae = getattr(self, f'vqvae{i}')
+                vq_enc = getattr(self, f'vq_enc{i}')
+                vqvae.eval()
+                _, _, _, ind, _ = vq_enc(imgs[:, 0, -1])
+                ind = ind.reshape(-1, 1).long().detach()
+                out_ind.append(ind)
 
         if jitter_imgs is not None:
             imgs = jitter_imgs
@@ -131,19 +146,11 @@ class Vqvae_Tracker(BaseModel):
         losses = {}
 
         if self.ce_loss:
-            if self.fc:
-                predict = self.predictor(out)
-            else:
-                if out.shape[-1] != self.vq_emb.shape[0]:
-                    predict = self.embedding_layer(out)
-                else:
-                    predict = out
-                predict = nn.functional.normalize(predict, dim=-1)
-                predict = torch.mm(predict, nn.functional.normalize(self.vq_emb, dim=0))
-                predict = torch.div(predict, self.vq_t)
-
-            loss = self.ce_loss(predict, ind)
-            losses['ce_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
+            for idx, i in enumerate(range(self.num_head)):
+                i = str(i).replace('0', '')
+                predict = getattr(self, f'predictor{i}')(out)
+                loss = self.ce_loss(predict, out_ind[idx])
+                losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
 
         if self.mse_loss:
             losses['mse_loss'] = self.mse_loss(out, tar.permute(0,3,1,2).reshape(out.shape), mask_query_idx.reshape(-1,1))
