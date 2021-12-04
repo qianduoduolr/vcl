@@ -33,9 +33,10 @@ class Vqvae_Tracker(BaseModel):
                  temperature,
                  sim_siam_head=None,
                  ce_loss=None,
-                 l2_loss=None,
+                 mse_loss=None,
                  cts_loss=None,
                  fc=True,
+                 online_mining=False,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None
@@ -80,7 +81,7 @@ class Vqvae_Tracker(BaseModel):
 
         # loss
         self.ce_loss = build_loss(ce_loss) if ce_loss else None
-        self.l2_loss = build_loss(l2_loss) if l2_loss else None
+        self.mse_loss = build_loss(mse_loss) if mse_loss else None
         self.cts_loss = build_loss(cts_loss) if cts_loss else None
 
         # corr
@@ -123,9 +124,9 @@ class Vqvae_Tracker(BaseModel):
         refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
 
         if self.patch_size != -1:
-            out, _ = self.local_attention(tar, refs, bsz, t)
+            out, att = self.local_attention(tar, refs, bsz, t)
         else:
-            out, _ = self.non_local_attention(tar, refs, bsz)
+            out, att = self.non_local_attention(tar, refs, bsz)
 
         losses = {}
 
@@ -144,17 +145,11 @@ class Vqvae_Tracker(BaseModel):
             loss = self.ce_loss(predict, ind)
             losses['ce_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
 
-        if self.l2_loss:
-            predict = self.embedding_layer(out)
-            predict = nn.functional.normalize(predict, dim=-1)
-            embeds = torch.index_select(self.vq_emb, dim=1, index=ind.view(-1)).permute(1,0)
-            embeds = nn.functional.normalize(embeds, dim=-1)
-            losses['l2_loss'] = (self.l2_loss(predict, embeds) * mask_query_idx.reshape(-1,1)).sum() / mask_query_idx.sum()
+        if self.mse_loss:
+            losses['mse_loss'] = self.mse_loss(out, tar.permute(0,3,1,2).reshape(out.shape), mask_query_idx.reshape(-1,1))
 
         if self.cts_loss:
             losses['cts_loss'] = self.forward_img_head(tar, refs[-1])
-        else:
-            pass
 
         return losses
 
