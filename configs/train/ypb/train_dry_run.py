@@ -4,12 +4,12 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'train_vqvae_video_d4_nemd64_contrastive_byol_commit1.0_mse'
-docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corres'
+exp_name = 'train_dry_run'
+docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='VQCL_v4',
+    type='VQCL_v2',
     backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
     sim_siam_head=dict(
         type='SimSiamHead',
@@ -24,10 +24,9 @@ model = dict(
         with_norm=True,
         spatial_type='avg'),
     loss=dict(type='CosineSimLoss', negative=False),
-    mse_loss=dict(type='MSELoss', reduction='mean'),
     embed_dim=128,
-    n_embed=64,
-    commitment_cost=1.0,
+    n_embed=32,
+    commitment_cost=0.25,
 )
 
 # model training and testing settings
@@ -90,7 +89,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=64, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -122,7 +121,7 @@ optimizers = dict(type='SGD', lr=0.05, momentum=0.9, weight_decay=0.0001)
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=3200
+max_epoch=32
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0,
@@ -133,7 +132,7 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=800, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=80000, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
@@ -153,7 +152,8 @@ work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
+                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth',
+                  dry_run=True
                 )
 
 
