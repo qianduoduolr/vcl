@@ -786,6 +786,7 @@ class VQCL_v2(BaseModel):
         super().__init__()
 
         self.commitment_cost = commitment_cost
+        self.embed_dim = embed_dim
 
         self.quantize = Quantize(embed_dim, n_embed, commitment_cost, decay)  # Vector quantization
         self.backbone = build_backbone(backbone)
@@ -987,8 +988,8 @@ class VQCL_v4(VQCL_v2):
         quant_k, diff2, ind, embed = self.quantize(k_emb.contiguous(), distributed=False)
         quant_k = quant_k.permute(0, 3, 1, 2)
 
-        dec_q = self.decode(quant_q)
-        dec_k = self.decode(quant_k)
+        dec_q = self.dec(quant_q)
+        dec_k = self.dec(quant_k)
         
         diff = diff1 + diff2
 

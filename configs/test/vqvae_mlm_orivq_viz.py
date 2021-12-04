@@ -3,7 +3,7 @@ exp_name = 'vqvae_mlm'
 # model settings
 model = dict(
     type='Vqvae_Tracker',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(2, )),
     vqvae=dict(type='VQVAE', downsample=4, n_embed=2048, channel=512, n_res_channel=128, embed_dim=512, newed=True),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
     l2_loss = None,
