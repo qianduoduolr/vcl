@@ -146,6 +146,7 @@ class Vqvae_Tracker(BaseModel):
         losses = {}
 
         if self.ce_loss:
+
             for idx, i in enumerate(range(self.num_head)):
                 i = str(i).replace('0', '')
                 predict = getattr(self, f'predictor{i}')(out)

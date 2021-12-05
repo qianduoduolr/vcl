@@ -3,27 +3,14 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'vqvae_mlm_d4_nemd32-1024_byol_dyt_nl_l2_fc_orivq_withbbox_random_0.5'
+exp_name = 'pixel_tracker_withbbox_random'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 # model settings
 model = dict(
-    type='Vqvae_Tracker',
+    type='Pixel_Tracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
-    vqvae=[dict(type='VQCL_v2', backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
-               sim_siam_head=dict(type='SimSiamHead', in_channels=512, num_projection_fcs=3, projection_mid_channels=512,
-               projection_out_channels=512, num_predictor_fcs=2, predictor_mid_channels=128, predictor_out_channels=512,
-               with_norm=True, spatial_type='avg'),loss=dict(type='CosineSimLoss', negative=False), embed_dim=128,
-               n_embed=32, commitment_cost=1.0,),
-            dict(type='VQVAE', downsample=4, n_embed=1024, channel=256, n_res_channel=128, embed_dim=128)],
-    ce_loss=dict(type='Ce_Loss',reduction='none'),
-    multi_head_weight=[1.0,2.0],
-    patch_size=-1,
-    fc=True,
     temperature=0.1,
-    pretrained_vq=['/home/lr/models/vqvae/vqvae_youtube_d4_n32_c256_embc128_byol_commit1.0.pth',
-                    '/home/lr/models/vqvae/vqvae_youtube_d4_n1024_c256_embc128.pth'],
-    pretrained=None
 )
 
 # model training and testing settings
@@ -90,7 +77,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=16, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=12, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -99,12 +86,12 @@ data = dict(
             dict(
             type=train_dataset_type,
             size=256,
-            p=0.5,
+            p=0.8,
             root='/home/lr/dataset/YouTube-VOS',
             list_path='/home/lr/dataset/YouTube-VOS/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
             mask_ratio=0.15,
-            clip_length=2,
+            clip_length=3,
             vq_size=32,
             pipeline=train_pipeline,
             test_mode=False),
@@ -122,8 +109,7 @@ data = dict(
 # optimizer
 optimizers = dict(
     backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-    predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-    predictor1=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
     )
 # learning policy
 # total_iters = 200000
