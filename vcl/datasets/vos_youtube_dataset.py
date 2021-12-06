@@ -107,6 +107,8 @@ class VOS_youtube_dataset_rgb_withbbox(VOS_youtube_dataset_rgb):
             sample['frames_path'] = []
             sample['frames_bbox'] = []
             sample['num_frames'] = len(vid['frame'])
+            if sample['num_frames'] < self.clip_length:
+                continue
             for frame in vid['frame']:
                 sample['frames_path'].append(osp.join(self.video_dir, vname, frame['img_path']))
                 sample['frames_bbox'].append(frame['objs'][0]['bbox'])
@@ -197,6 +199,8 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
                 sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
                 sample['masks_path'] = sorted(glob.glob(osp.join(self.mask_dir, vname, '*.png')))
                 sample['num_frames'] = int(num_frames)
+                if sample['num_frames'] < self.clip_length:
+                    continue
                 if self.load_to_ram:
                     sample['frames'] = self._parser_rgb_rawframe([0], sample['frames_path'], sample['num_frames'], step=1)
                 self.samples.append(sample)
@@ -293,7 +297,8 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
                 sample['num_frames'] = int(num_frames) - 1
                 sample['flows_path'] = []
                 flows_path_all = sorted(glob.glob(osp.join(self.flows_dir, vname, '*.jpg')))
-
+                if sample['num_frames'] < self.clip_length:
+                    continue
                 if self.load_to_ram:
                     sample['frames'] = self._parser_rgb_rawframe([0], sample['frames_path'], sample['num_frames'], step=1)
                     sample['flows'] = self._parser_rgb_rawframe([0], flows_path_all, sample['num_frames'], step=1)
@@ -383,6 +388,8 @@ class VOS_youtube_dataset_mlm_withbbox(VOS_youtube_dataset_mlm):
             sample['frames_path'] = []
             sample['frames_bbox'] = []
             sample['num_frames'] = len(vid['frame'])
+            if sample['num_frames'] < self.clip_length:
+                continue
             for frame in vid['frame']:
                 sample['frames_path'].append(osp.join(self.video_dir, vname, frame['img_path']))
                 sample['frames_bbox'].append(frame['objs'][0]['bbox'])
