@@ -65,6 +65,7 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
             for idx, line in enumerate(f.readlines()):
                 sample = dict()
                 vname, num_frames = line.strip('\n').split()
+                if int(num_frames) < self.clip_length: continue
                 sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
                 sample['num_frames'] = int(num_frames)
                 self.samples.append(sample)
@@ -75,7 +76,7 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
         frames_path = sample['frames_path']
         num_frames = sample['num_frames']
 
-        offsets = [ random.randint(0, num_frames-1) for i in range(self.num_clips) ]
+        offsets = [ random.randint(0, num_frames-self.clip_length) for i in range(self.num_clips) ]
 
         # load frame
         frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length)
@@ -120,7 +121,7 @@ class VOS_youtube_dataset_rgb_withbbox(VOS_youtube_dataset_rgb):
         frames_bbox = sample['frames_bbox']
         num_frames = sample['num_frames']
 
-        offsets = [ random.randint(0, num_frames-1) for i in range(self.num_clips) ]
+        offsets = [ random.randint(0, num_frames-self.clip_length) for i in range(self.num_clips) ]
 
         # load frame
         frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length)
@@ -236,9 +237,7 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
         frames_path = sample['frames_path']
         num_frames = sample['num_frames']
 
-        offset = [ random.randint(0, num_frames-3)]
-        for i in range(self.num_clips - 1):
-            offset.append(offset[-1] + 1)
+        offset = [ random.randint(0, num_frames-self.clip_length) for i in self.num_clips]
 
         if self.load_to_ram:
             frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
@@ -325,9 +324,7 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
         flows_path = sample['flows_path']
         num_frames = sample['num_frames']
 
-        offset = [ random.randint(0, num_frames-3)]
-        for i in range(self.num_clips - 1):
-            offset.append(offset[-1] + 1)
+        offset = [ random.randint(0, num_frames-self.clip_length) for i in self.num_clips]
 
         if self.load_to_ram:
             frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
@@ -396,9 +393,7 @@ class VOS_youtube_dataset_mlm_withbbox(VOS_youtube_dataset_mlm):
         frames_bbox = sample['frames_bbox']
         num_frames = sample['num_frames']
 
-        offset = [ random.randint(0, num_frames-3)]
-        for i in range(self.num_clips - 1):
-            offset.append(offset[-1] + 1)
+        offset = [ random.randint(0, num_frames-self.clip_length) for i in self.num_clips]
 
         if self.load_to_ram:
             frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
@@ -452,9 +447,7 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
         frames_bbox = sample['frames_bbox']
         num_frames = sample['num_frames']
 
-        offset = [ random.randint(0, num_frames-3)]
-        for i in range(self.num_clips - 1):
-            offset.append(offset[-1] + 1)
+        offset = [ random.randint(0, num_frames-self.clip_length) for i in self.num_clips]
 
         if self.load_to_ram:
             frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]

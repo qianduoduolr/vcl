@@ -3,13 +3,14 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'pixel_tracker_withbbox_random'
-docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
+exp_name = 'pixel_tracker_thres0.9_eps0.01'
+docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
     type='Pixel_Tracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
+    thres=0.9,
     temperature=0.1,
 )
 
@@ -28,7 +29,7 @@ test_cfg = dict(
     output_dir='eval_results')
 
 # dataset settings
-train_dataset_type = 'VOS_youtube_dataset_mlm_withbbox_random'
+train_dataset_type = 'VOS_youtube_dataset_rgb'
 
 val_dataset_type = None
 test_dataset_type = 'VOS_davis_dataset_test'
@@ -41,25 +42,14 @@ img_norm_cfg = dict(
 #     mean=[0, 0, 0], std=[255, 255, 255], to_bgr=False)
 
 train_pipeline = [
-    dict(type='RandomResizedCrop', area_range=(0.6,1.0), aspect_ratio_range=(1.5, 2.0),),
+    # dict(type='RandomResizedCrop', area_range=(0.6,1.0), aspect_ratio_range=(1.5, 2.0),),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
     dict(type='Flip', flip_ratio=0.5),
-    dict(
-        type='ColorJitter',
-        brightness=0.7,
-        contrast=0.7,
-        saturation=0.7,
-        hue=0.3,
-        p=0.9,
-        same_across_clip=False,
-        same_on_clip=False,
-        output_keys='jitter_imgs'),
+    
     dict(type='Normalize', **img_norm_cfg),
-    dict(type='Normalize', **img_norm_cfg, keys='jitter_imgs'),
     dict(type='FormatShape', input_format='NPTCHW'),
-    dict(type='FormatShape', input_format='NPTCHW', keys='jitter_imgs'),
-    dict(type='Collect', keys=['imgs', 'jitter_imgs', 'mask_query_idx'], meta_keys=[]),
-    dict(type='ToTensor', keys=['imgs', 'jitter_imgs', 'mask_query_idx'])
+    dict(type='Collect', keys=['imgs'], meta_keys=[]),
+    dict(type='ToTensor', keys=['imgs'])
 ]
 
 val_pipeline = [
@@ -77,7 +67,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=12, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=16, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -85,21 +75,17 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            size=256,
-            p=0.8,
-            root='/home/lr/dataset/YouTube-VOS',
-            list_path='/home/lr/dataset/YouTube-VOS/2018/train',
+            root='/dev/shm',
+            list_path='/dev/shm/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
-            mask_ratio=0.15,
-            clip_length=3,
-            vq_size=32,
+            clip_length=6,
             pipeline=train_pipeline,
             test_mode=False),
 
     test =  dict(
             type=test_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -108,9 +94,9 @@ data = dict(
 
 # optimizer
 optimizers = dict(
-    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-    predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    type='Adam', lr=0.0005, betas=(0.9, 0.999)
     )
+
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
@@ -140,11 +126,11 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}'
+work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
+                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
                 )
 
 

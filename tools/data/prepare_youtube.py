@@ -4,10 +4,10 @@ import os.path as osp
 import mmcv
 
 year = '2018'
-imset = ['train','test']
+imset = ['train_all_frames','test_all_frames', 'valid_all_frames']
 
 resolution = '480p'
-root = '/home/lr/dataset/YouTube-VOS'
+root = '/home/lr/dataset/YouTube-VOS/2018'
 
 
 for mode in imset:
