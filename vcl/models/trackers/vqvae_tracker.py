@@ -117,6 +117,8 @@ class Vqvae_Tracker(BaseModel):
 
     def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
 
+        bsz, num_clips, t, c, h, w = imgs.shape
+
         # vqvae tokenize for query frame
         with torch.no_grad():
             out_ind= []
@@ -126,14 +128,13 @@ class Vqvae_Tracker(BaseModel):
                 vq_enc = getattr(self, f'vq_enc{i}')
                 vqvae.eval()
                 _, _, _, ind, _ = vq_enc(imgs[:, 0, -1])
-                ind = ind.reshape(-1, 1).long().detach()
+                ind = ind.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
                 out_ind.append(ind)
 
         if jitter_imgs is not None:
             imgs = jitter_imgs
 
-        bsz, num_clips, t, c, h, w = imgs.shape
-        mask_query_idx = mask_query_idx.bool()
+        mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
 
         tar = self.backbone(imgs[:,0,-1])
         refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
@@ -141,20 +142,20 @@ class Vqvae_Tracker(BaseModel):
         if self.patch_size != -1:
             out, att = self.local_attention(tar, refs, bsz, t)
         else:
-            out, att = self.non_local_attention(tar, refs, bsz)
+            out, att = self.non_local_attention_split(tar, refs, bsz)
 
         losses = {}
 
         if self.ce_loss:
-
             for idx, i in enumerate(range(self.num_head)):
                 i = str(i).replace('0', '')
-                predict = getattr(self, f'predictor{i}')(out)
+                predict = getattr(self, f'predictor{i}')(out.flatten(0,2))
                 loss = self.ce_loss(predict, out_ind[idx])
                 losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
 
-        if self.mse_loss:
-            losses['mse_loss'] = self.mse_loss(out, tar.permute(0,3,1,2).reshape(out.shape), mask_query_idx.reshape(-1,1))
+        if self.mse_loss and t > 2:
+            out_roll = torch.roll(out, 1, dims=1)
+            losses['mse_loss'] = self.mse_loss(out.flatten(0,2), out_roll.flatten(0,2), mask_query_idx.reshape(-1,1))
 
         if self.cts_loss:
             losses['cts_loss'] = self.forward_img_head(tar, refs[-1])
@@ -252,10 +253,26 @@ class Vqvae_Tracker(BaseModel):
 
         return out, att
     
+    def non_local_attention_split(self, tar, refs, bsz):
+
+        refs = torch.stack(refs, 1)
+        _, t, feat_dim, w_, h_ = refs.shape
+
+        # refs = refs.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
+        # tar = tar.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
+        tar = tar.flatten(2).permute(0, 2, 1)
+        refs = refs.flatten(3).permute(0, 1, 3, 2)
+        att = torch.einsum("bic,btjc -> btij", (tar, refs))
+        att = F.softmax(att, dim=-1)
+
+        out = torch.matmul(att, refs)
+
+        return out, att
+    
     def non_local_attention(self, tar, refs, bsz):
 
         refs = torch.stack(refs, 2)
-        _, feat_dim, w_, h_ = tar.shape
+        _, feat_dim, t, _, _ = refs.shape
 
         refs = refs.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
         tar = tar.reshape(bsz, feat_dim, -1).permute(0, 2, 1)

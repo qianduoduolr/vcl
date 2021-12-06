@@ -169,12 +169,12 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
         self.year = year
         self.load_to_ram = load_to_ram
 
-        self.load_annotations()
         self.clip_length = clip_length
         self.num_clips = num_clips
         self.vq_res = vq_size
         self.mask_ratio = mask_ratio
 
+        self.load_annotations()
 
     def load_annotations(self):
         
@@ -237,7 +237,8 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
         frames_path = sample['frames_path']
         num_frames = sample['num_frames']
 
-        offset = [ random.randint(0, num_frames-self.clip_length) for i in self.num_clips]
+        offset = [ random.randint(0, num_frames-self.clip_length) for i in range(self.num_clips)]
+
 
         if self.load_to_ram:
             frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
@@ -324,7 +325,8 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
         flows_path = sample['flows_path']
         num_frames = sample['num_frames']
 
-        offset = [ random.randint(0, num_frames-self.clip_length) for i in self.num_clips]
+        offset = [ random.randint(0, num_frames-self.clip_length) for i in range(self.num_clips)]
+
 
         if self.load_to_ram:
             frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
@@ -393,7 +395,8 @@ class VOS_youtube_dataset_mlm_withbbox(VOS_youtube_dataset_mlm):
         frames_bbox = sample['frames_bbox']
         num_frames = sample['num_frames']
 
-        offset = [ random.randint(0, num_frames-self.clip_length) for i in self.num_clips]
+        offset = [ random.randint(0, num_frames-self.clip_length) for i in range(self.num_clips)]
+
 
         if self.load_to_ram:
             frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
@@ -435,6 +438,8 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
             sample['frames_path'] = []
             sample['frames_bbox'] = []
             sample['num_frames'] = len(vid['frame'])
+            if sample['num_frames'] < self.clip_length:
+                continue
             for frame in vid['frame']:
                 sample['frames_path'].append(osp.join(self.video_dir, vname, frame['img_path']))
                 sample['frames_bbox'].append(frame['objs'][0]['bbox'])
@@ -447,7 +452,7 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
         frames_bbox = sample['frames_bbox']
         num_frames = sample['num_frames']
 
-        offset = [ random.randint(0, num_frames-self.clip_length) for i in self.num_clips]
+        offset = [ random.randint(0, num_frames-self.clip_length) for i in range(self.num_clips)]
 
         if self.load_to_ram:
             frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
