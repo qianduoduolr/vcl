@@ -10,16 +10,17 @@ docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corres'
 # model settings
 model = dict(
     type='VQCL',
-    backbone=dict(type='ResNet', depth=50, strides=(1, 2, 1, 1), out_indices=(3, )),
+    backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
     K=16384,
     m=0.999,
     T=0.1,
-    embed_dim=128,
+    mlp=False,
+    embed_dim=512,
     n_embed=32,
-    commitment_cost=0.0,
+    commitment_cost=1.0,
     cluster=True,
     loss=dict(type='Ce_Loss',reduction='mean', loss_weight=0.0),
-    pretrained='/home/lr/models/ssl/vcl/vfs_pretrain/r50_nc_sgd_cos_100e_r5_1xNx2_k400-d7ce3ad0.pth'
+    pretrained='/home/lr/models/ssl/vcl/vfs_pretrain/r18_nc_sgd_cos_100e_r2_1xNx8_k400-db1a4c0d.pth'
 )
 
 # model training and testing settings
@@ -93,7 +94,7 @@ data = dict(
             list_path='/home/lr/dataset/YouTube-VOS/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', ANNO='train/Annotations'),
             clip_length=1,
-            num_clips=2,
+            num_clips=1,
             pipeline=train_pipeline
             ),
 
@@ -108,7 +109,7 @@ data = dict(
 )
 
 # optimizer
-optimizers = dict(type='SGD', lr=1e-2, momentum=0.9, weight_decay=1e-4)
+optimizers = dict(quantize_conv=dict(type='SGD', lr=1e-3, momentum=0.9, weight_decay=1e-4))
 
 # learning policy
 # total_iters = 200000
@@ -124,7 +125,7 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=2, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=10, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
