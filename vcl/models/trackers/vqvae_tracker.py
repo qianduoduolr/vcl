@@ -258,8 +258,6 @@ class Vqvae_Tracker(BaseModel):
         refs = torch.stack(refs, 1)
         _, t, feat_dim, w_, h_ = refs.shape
 
-        # refs = refs.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
-        # tar = tar.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
         tar = tar.flatten(2).permute(0, 2, 1)
         refs = refs.flatten(3).permute(0, 1, 3, 2)
         att = torch.einsum("bic,btjc -> btij", (tar, refs))
@@ -491,6 +489,163 @@ class Vqvae_Tracker_v2(BaseModel):
 
         return outputs
 
+    
+    def non_local_attention(self, tar, refs, bsz):
+
+        refs = torch.stack(refs, 2)
+        _, feat_dim, t, _, _ = refs.shape
+
+        refs = refs.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
+        tar = tar.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
+
+        att = torch.einsum("bic,bjc -> bij", (tar, refs))
+        att = F.softmax(att, dim=-1)
+
+        out = torch.matmul(att, refs).reshape(-1, feat_dim)
+
+        return out, att
+
+
+@MODELS.register_module()
+class Vqvae_Tracker_V3(BaseModel):
+
+    def __init__(self,
+                 backbone,
+                 vqvae,
+                 patch_size,
+                 pretrained_vq,
+                 multi_head_weight=[1.0],
+                 mse_loss=None,
+                 train_cfg=None,
+                 test_cfg=None,
+                 pretrained=None
+                 ):
+        """ Space-Time Memory Network for Video Object Segmentation
+
+        Args:
+            depth ([type]): ResNet depth for encoder
+            pixel_loss ([type]): loss option
+            train_cfg ([type], optional): [description]. Defaults to None.
+            test_cfg ([type], optional): [description]. Defaults to None.
+            pretrained ([type], optional): [description]. Defaults to None.
+        """
+        super(Vqvae_Tracker_V3, self).__init__()
+
+        self.train_cfg = train_cfg
+        self.test_cfg = test_cfg
+        self.patch_size = patch_size
+        self.num_head = len(vqvae)
+        self.multi_head_weight = multi_head_weight
+
+        logger = get_root_logger()
+
+        self.backbone = build_backbone(backbone)
+
+        self.vq_type = vqvae.type
+        if self.vq_type != 'DALLE_Encoder':
+            self.vqvae =  build_model(vqvae).cuda()
+            _ = load_checkpoint(self.vqvae, pretrained_vq, map_location='cpu')
+            logger.info(f'load pretrained VQVAE successfully')
+            self.vq_enc = self.vqvae.encode
+            self.vq_dec = self.vqvae.decode
+        else:
+            assert self.num_head == 1
+            self.vq_enc = load_model(pretrained_vq).cuda()
+            self.n_embed = self.vq_enc.vocab_size
+            logger.info('load pretrained VQVAE successfully')
+
+        # loss
+        self.mse_loss = build_loss(mse_loss) if mse_loss else None
+
+        # corr
+        if patch_size != -1:
+            from spatial_correlation_sampler import SpatialCorrelationSampler
+            self.correlation_sampler = SpatialCorrelationSampler(
+                kernel_size=1,
+                patch_size=patch_size,
+                stride=1,
+                padding=0,
+                dilation=1)
+
+        # fc
+        if pretrained:
+            _ = load_checkpoint(self, pretrained, map_location='cpu')
+            logger.info('load pretrained model successfully')
+
+    def forward_train(self, imgs, jitter_imgs=None):
+
+        bsz, num_clips, t, c, h, w = imgs.shape
+
+        embeds = []
+        with torch.no_grad():
+            self.vqvae.eval()
+            for i in range(t):
+                embed, quant, _, ind, _ = self.vq_enc(imgs[:, 0, i])
+                embeds.append(embed.flatten(1,2))
+
+        embeds_refs = torch.stack(embeds[:-1], 1)
+
+        tar = self.backbone(jitter_imgs[:,0,-1])
+        refs = list([self.backbone(jitter_imgs[:,0,i]) for i in range(t-1)])
+
+        if self.patch_size != -1:
+            out, att = self.local_attention(tar, refs, bsz, t)
+        else:
+            out, att = self.non_local_attention_split(tar, refs, bsz)
+
+        losses = {}
+
+        trans_embeds = torch.einsum('btij,btjc->btic', [att, embeds_refs])
+        trans_embeds = trans_embeds.flatten(0,1).reshape(-1, *embed.shape[1:])
+        trans_quants = self.vq_enc(trans_embeds, encoding=False)[1]
+        decs = self.vq_dec(trans_quants)
+
+        losses['mse_loss'] = self.mse_loss(decs, imgs[:, 0, :-1].flatten(0,1))
+
+        return losses
+
+    def forward(self, test_mode=False, **kwargs):
+
+        if test_mode:
+            return self.forward_test(**kwargs)
+
+        return self.forward_train(**kwargs)
+
+    def train_step(self, data_batch, optimizer, progress_ratio):
+
+        # parser loss
+        losses = self(**data_batch, test_mode=False)
+        loss, log_vars = self.parse_losses(losses)
+
+        # optimizer
+        for k,opz in optimizer.items():
+            opz.zero_grad()
+
+        loss.backward()
+        for k,opz in optimizer.items():
+            opz.step()
+
+        log_vars.pop('loss')
+        outputs = dict(
+            log_vars=log_vars,
+            num_samples=len(data_batch['imgs'])
+        )
+
+        return outputs
+    
+    def non_local_attention_split(self, tar, refs, bsz):
+
+        refs = torch.stack(refs, 1)
+        _, t, feat_dim, w_, h_ = refs.shape
+
+        tar = tar.flatten(2).permute(0, 2, 1)
+        refs = refs.flatten(3).permute(0, 1, 3, 2)
+        att = torch.einsum("bic,btjc -> btij", (tar, refs))
+        att = F.softmax(att, dim=-1)
+
+        out = torch.matmul(att, refs)
+
+        return out, att
     
     def non_local_attention(self, tar, refs, bsz):
 

@@ -347,17 +347,19 @@ class VQVAE(nn.Module):
 
         return dec, diff
 
-    def encode(self, x):
+    def encode(self, x, encoding=True):
         """
         Encodes and quantizes an input tensor using VQ-VAE algorithm
         :param x: input tensor
         :return: encoder output, quantized map, commitment loss, codebook indices, codebook embedding
         """
         # Encoding
-        enc = self.enc(x)
-
-        # Convolution before quantization and converting to B x H x W x C
-        enc = self.quantize_conv(enc).permute(0, 2, 3, 1)
+        if encoding:
+            enc = self.enc(x)
+            # Convolution before quantization and converting to B x H x W x C
+            enc = self.quantize_conv(enc).permute(0, 2, 3, 1)
+        else:
+            enc = x
 
         # Vector quantization
         quant, diff, ind, embed = self.quantize(enc)
@@ -536,6 +538,9 @@ class VQCL(BaseModel):
             param_k.data.copy_(param_q.data)  # initialize
             param_k.requires_grad = False  # not update by gradient
 
+        if cluster:
+            self.quantize_conv = nn.Conv2d(self.backbone.feat_dim, embed_dim, 1)  # Dimension reduction to embedding size
+
         # create the queue
         self.register_buffer("queue", torch.randn(embed_dim, K))
         self.queue = nn.functional.normalize(self.queue, dim=0).cuda()
@@ -580,19 +585,16 @@ class VQCL(BaseModel):
             q = self.backbone(im_q)
 
         bsz, c, _, _ = q.shape
-
-        bbox_index = torch.arange(bsz,dtype=torch.float).reshape(-1,1).cuda()
-
-        # q = nn.functional.normalize(q, dim=1).permute(0, 2, 3, 1)
-
-        q_all = concat_all_gather(q.permute(0, 2, 3, 1).contiguous())
+        # q = self.quantize_conv(q)
 
         # Vector quantization
-        quant, diff, ind, embed = self.quantize(q_all)
+        quant, diff, ind, embed = self.quantize(q.permute(0, 2, 3, 1))
 
         losses = {}
 
         losses['diff_loss'] = diff * self.commitment_cost
+
+        print(diff.item())
 
         return losses, diff.item()
 
@@ -662,12 +664,12 @@ class VQCL(BaseModel):
         loss, log_vars = self.parse_losses(losses)
 
         # optimizer
-        if not self.cluster:
-            optimizer.zero_grad()
-            
-            loss.backward()
+        for k,opz in optimizer.items():
+            opz.zero_grad()
 
-            optimizer.step()
+        loss.backward()
+        for k,opz in optimizer.items():
+            opz.step()
 
         log_vars.pop('loss')
         log_vars['diff_item'] = diff
