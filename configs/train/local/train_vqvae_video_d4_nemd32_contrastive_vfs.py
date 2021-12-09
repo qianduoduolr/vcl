@@ -15,7 +15,7 @@ model = dict(
     m=0.999,
     T=0.1,
     mlp=False,
-    embed_dim=512,
+    embed_dim=128,
     n_embed=32,
     commitment_cost=1.0,
     cluster=True,
@@ -82,7 +82,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=64, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -109,7 +109,7 @@ data = dict(
 )
 
 # optimizer
-optimizers = dict(quantize_conv=dict(type='SGD', lr=1e-3, momentum=0.9, weight_decay=1e-4))
+optimizers = dict(quantize_conv=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)))
 
 # learning policy
 # total_iters = 200000
@@ -119,13 +119,13 @@ lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.0001,
     by_epoch=False,
-    warmup='linear',
+    # warmup='linear',
     warmup_iters=10,
     warmup_ratio=0.001,
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=10, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=20, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(

@@ -599,8 +599,8 @@ class Vqvae_Tracker_V3(BaseModel):
         trans_embeds = trans_embeds.flatten(0,1).reshape(-1, *embed.shape[1:])
         trans_quants = self.vq_enc(trans_embeds, encoding=False)[1]
         decs = self.vq_dec(trans_quants)
-
-        losses['mse_loss'] = self.mse_loss(decs, imgs[:, 0, :-1].flatten(0,1))
+        target = imgs[:,0,-1:].repeat(1,t-1,1,1,1).flatten(0,1)
+        losses['mse_loss'] = self.mse_loss(decs, target)
 
         return losses
 

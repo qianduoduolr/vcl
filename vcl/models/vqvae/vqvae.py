@@ -520,6 +520,7 @@ class VQCL(BaseModel):
         self.T = T
         self.commitment_cost = commitment_cost
         self.cluster = cluster
+        self.embed_dim = embed_dim
 
         self.quantize = Quantize(embed_dim, n_embed, commitment_cost, decay)  # Vector quantization
         self.backbone = build_backbone(backbone)
@@ -585,7 +586,9 @@ class VQCL(BaseModel):
             q = self.backbone(im_q)
 
         bsz, c, _, _ = q.shape
-        # q = self.quantize_conv(q)
+        q = self.quantize_conv(q)
+
+        # q = self.PCA(q, self.embed_dim)
 
         # Vector quantization
         quant, diff, ind, embed = self.quantize(q.permute(0, 2, 3, 1))
@@ -663,13 +666,13 @@ class VQCL(BaseModel):
         losses, diff = self(**data_batch, test_mode=False)
         loss, log_vars = self.parse_losses(losses)
 
-        # optimizer
-        for k,opz in optimizer.items():
-            opz.zero_grad()
+        # # optimizer
+        # for k,opz in optimizer.items():
+        #     opz.zero_grad()
 
-        loss.backward()
-        for k,opz in optimizer.items():
-            opz.step()
+        # loss.backward()
+        # for k,opz in optimizer.items():
+        #     opz.step()
 
         log_vars.pop('loss')
         log_vars['diff_item'] = diff
@@ -680,6 +683,17 @@ class VQCL(BaseModel):
 
         return outputs
     
+    def PCA(self, X, embed_dim):
+        bsz, c, h, w = X.shape
+        X = X.permute(0, 2, 3, 1).flatten(0,2).detach().cpu().numpy()
+        X_new = X - np.mean(X, axis=0)
+        # SVD
+        U, Sigma, Vh = np.linalg.svd(X_new, full_matrices=False, compute_uv=True)
+        X_pca_svd = np.dot(X_new, (Vh.T)[:,:embed_dim])
+        X_out = torch.from_numpy(X_pca_svd).cuda()
+        out = X_out.reshape(bsz, h, w, embed_dim)
+
+        return out.permute(0, 3, 1, 2)
 
     @torch.no_grad()
     def _momentum_update_key_encoder(self):
@@ -759,10 +773,10 @@ class VQCL(BaseModel):
         :return: encoder output, quantized map, commitment loss, codebook indices, codebook embedding
         """
         # Encoding
-        enc = self.backbone(x).permute(0, 2, 3, 1)
+        enc = self.backbone(x)
 
-        # Vector quantization
-        quant, diff, ind, embed = self.quantize(enc)
+        q_emb = self.quantize_conv(enc).permute(0, 2, 3, 1)
+        quant, diff, ind, embed = self.quantize(q_emb.contiguous(), distributed=False)
 
         # Converting back the quantized map to B x C x H x W
         quant = quant.permute(0, 3, 1, 2)
