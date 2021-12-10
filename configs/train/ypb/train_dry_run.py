@@ -1,20 +1,31 @@
 import os
+from random import sample
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'vqvae_d4_nemd2048_withbbox_mse'
-docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
+exp_name = 'train_vqvae_video_d4_nemd32_contrastive_byol_commit1.0_2'
+docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corres'
 
 # model settings
 model = dict(
-    type='Vqvae_Tracker_V3',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
-    vqvae=dict(type='VQVAE', downsample=4, n_embed=2048, channel=256, n_res_channel=128, embed_dim=128),
-    pretrained_vq='/gdata/lirui/models/vqvae/vqvae_youtube_d4_n2048_c256_embc128.pth',
-    patch_size=-1,
-    mse_loss=dict(type='MSELoss',reduction='mean', loss_weight=1),
-    pretrained=None
+    type='VQCL_v2',
+    backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
+    sim_siam_head=dict(
+        type='SimSiamHead',
+        in_channels=512,
+        num_projection_fcs=3,
+        projection_mid_channels=512,
+        projection_out_channels=512,
+        num_predictor_fcs=2,
+        predictor_mid_channels=128,
+        predictor_out_channels=512,
+        with_norm=True,
+        spatial_type='avg'),
+    loss=dict(type='CosineSimLoss', negative=False),
+    embed_dim=128,
+    n_embed=32,
+    commitment_cost=1.0,
 )
 
 # model training and testing settings
@@ -32,7 +43,7 @@ test_cfg = dict(
     output_dir='eval_results')
 
 # dataset settings
-train_dataset_type = 'VOS_youtube_dataset_rgb_withbbox'
+train_dataset_type = 'VOS_youtube_dataset_rgb'
 
 val_dataset_type = None
 test_dataset_type = 'VOS_davis_dataset_test'
@@ -43,27 +54,14 @@ img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
 
 train_pipeline = [
-    dict(type='RandomResizedCrop', area_range=(0.6,1.0), aspect_ratio_range=(1.5, 2.0),same_across_clip=False,
+    dict(type='RandomResizedCrop', area_range=(0.2,1.0), same_across_clip=False,
         same_on_clip=False),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
-    dict(type='Flip', flip_ratio=0.5, same_across_clip=False,
-        same_on_clip=False),
-    dict(
-        type='ColorJitter',
-        brightness=0.7,
-        contrast=0.7,
-        saturation=0.7,
-        hue=0.3,
-        p=0.9,
-        same_across_clip=False,
-        same_on_clip=False,
-        output_keys='jitter_imgs'),
+    dict(type='Flip', flip_ratio=0.5, same_across_clip=False, same_on_clip=False),
     dict(type='Normalize', **img_norm_cfg),
-    dict(type='Normalize', **img_norm_cfg, keys='jitter_imgs'),
     dict(type='FormatShape', input_format='NPTCHW'),
-    dict(type='FormatShape', input_format='NPTCHW', keys='jitter_imgs'),
-    dict(type='Collect', keys=['imgs', 'jitter_imgs'], meta_keys=[]),
-    dict(type='ToTensor', keys=['imgs', 'jitter_imgs'])
+    dict(type='Collect', keys=['imgs'], meta_keys=[]),
+    dict(type='ToTensor', keys=['imgs'])
 ]
 
 val_pipeline = [
@@ -108,23 +106,23 @@ data = dict(
 )
 
 # optimizer
-optimizers = dict(
-    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-    )
+optimizers = dict(type='SGD', lr=0.05, momentum=0.9, weight_decay=0.0001)
+
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=800
+max_epoch=12800
 lr_config = dict(
     policy='CosineAnnealing',
-    min_lr_ratio=0.001,
+    min_lr_ratio=0,
     by_epoch=False,
-    warmup_iters=10,
-    warmup_ratio=0.1,
+    warmup='linear',
+    warmup_iters=100,
+    warmup_ratio=0.00001,
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=400, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=6400, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
@@ -151,6 +149,7 @@ eval_config= dict(
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
+
 
 
 if __name__ == '__main__':
