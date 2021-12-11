@@ -586,7 +586,8 @@ class VQCL(BaseModel):
             q = self.backbone(im_q)
 
         bsz, c, _, _ = q.shape
-        q = self.quantize_conv(q)
+
+        # q = self.quantize_conv(q)
 
         # q = self.PCA(q, self.embed_dim)
 
@@ -969,87 +970,3 @@ class VQCL_v3(VQCL_v2):
         loss = self.cts_loss(p1, z2.detach()) * 0.5 + self.cts_loss(p2, z1.detach()) * 0.5
 
         return loss
-    
-
-@MODELS.register_module()
-class VQCL_v4(VQCL_v2):
-    def __init__(
-        self,
-        in_channel=3,
-        channel=256,
-        n_res_block=2,
-        n_res_channel=128,
-        mse_loss=None,
-        **kwargs
-    ):
-        super().__init__(**kwargs)
-        self.dec = Decoder(self.embed_dim, in_channel, channel, n_res_block, n_res_channel, 4)
-        self.mse_loss = build_loss(mse_loss)
-
-    def forward_train(self, imgs, bboxs=None, jitter_imgs=None):
-    
-        im_q = imgs[:, 0, 0]
-        im_k = imgs[:, 0, 1]
-
-        q = self.backbone(im_q)
-        k = self.backbone(im_k)
-
-        bsz, c, _, _ = q.shape
-
-        q_emb = self.quantize_conv(q).permute(0, 2, 3, 1)
-        quant_q, diff1, ind, embed = self.quantize(q_emb.contiguous(), distributed=False)
-        quant_q = quant_q.permute(0, 3, 1, 2)
-
-        k_emb = self.quantize_conv(k).permute(0, 2, 3, 1)
-        quant_k, diff2, ind, embed = self.quantize(k_emb.contiguous(), distributed=False)
-        quant_k = quant_k.permute(0, 3, 1, 2)
-
-        dec_q = self.dec(quant_q)
-        dec_k = self.dec(quant_k)
-        
-        diff = diff1 + diff2
-
-        losses = {}
-
-        losses['cts_loss'] = self.forward_img_head(q, k, self.head)
-        losses['rec_loss'] = self.mse_loss(dec_q, im_q) + self.mse_loss(dec_k, im_k)
-        losses['diff'] = diff * self.commitment_cost
-
-        return losses, diff.item()
-
-    def train_step(self, data_batch, optimizer, progress_ratio):
-
-        # parser loss
-        losses, diff = self(**data_batch, test_mode=False)
-        loss, log_vars = self.parse_losses(losses)
-
-        # optimizer
-        optimizer.zero_grad()
-        
-        loss.backward()
-
-        optimizer.step()
-
-        log_vars.pop('loss')
-        log_vars['diff_item'] = diff
-        outputs = dict(
-            log_vars=log_vars,
-            num_samples=len(data_batch['imgs'])
-        )
-
-        return outputs
-
-    def forward_img_head(self, x1, x2, head):
-
-        if isinstance(x1, tuple):
-            x1 = x1[-1]
-        if isinstance(x2, tuple):
-            x2 = x2[-1]
-
-        z1, p1 = head(x1)
-        z2, p2 = head(x2)
-        
-        loss = self.cts_loss(p1, z2.detach()) * 0.5 + self.cts_loss(p2, z1.detach()) * 0.5
-
-        return loss
-    

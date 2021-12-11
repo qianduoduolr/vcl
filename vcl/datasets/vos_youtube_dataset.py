@@ -67,6 +67,7 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
                 vname, num_frames = line.strip('\n').split()
                 if int(num_frames) < self.clip_length: continue
                 sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
+                sample['masks_path'] = sorted(glob.glob(osp.join(self.mask_dir, vname, '*.png')))
                 sample['num_frames'] = int(num_frames)
                 self.samples.append(sample)
 
@@ -87,7 +88,7 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
             'num_clips': self.num_clips,
             'num_proposals':1,
             'clip_len': self.clip_length
-        }
+        } 
 
         return self.pipeline(data)
 
@@ -158,6 +159,7 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
                        vq_size=32,
                        pipeline=None, 
                        test_mode=False,
+                       with_mask=False,
                        split='train',
                        year='2018',
                        load_to_ram=False
@@ -170,6 +172,7 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
         self.data_prefix = data_prefix
         self.year = year
         self.load_to_ram = load_to_ram
+        self.with_mask = with_mask
 
         self.clip_length = clip_length
         self.num_clips = num_clips
@@ -239,6 +242,7 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
         
         sample = self.samples[idx]
         frames_path = sample['frames_path']
+        masks_path = sample['masks_path']
         num_frames = sample['num_frames']
 
         offset = [ random.randint(0, num_frames-self.clip_length) for i in range(self.num_clips)]
@@ -248,6 +252,9 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
             frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
         else:
             frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
+
+        if self.with_mask:
+            masks = self._parser_rgb_rawframe(offset, masks_path, self.clip_length, step=1, backend='pillow', flag='unchanged')
 
         mask_num = int(self.vq_res * self.vq_res * self.mask_ratio)
         mask_query_idx = np.zeros(self.vq_res * self.vq_res)
@@ -264,6 +271,8 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
             'num_proposals':1,
             'clip_len': self.clip_length
         }
+        if self.with_mask:
+            data['masks'] = masks
 
         return self.pipeline(data)
 

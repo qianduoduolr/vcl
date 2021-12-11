@@ -15,9 +15,10 @@ model = dict(
     m=0.999,
     T=0.1,
     mlp=False,
-    embed_dim=128,
-    n_embed=16,
+    embed_dim=512,
+    n_embed=32,
     commitment_cost=1.0,
+    decay=0.1,
     cluster=True,
     loss=dict(type='Ce_Loss',reduction='mean', loss_weight=0.0),
     pretrained='/home/lr/models/ssl/vcl/vfs_pretrain/r18_nc_sgd_cos_100e_r2_1xNx8_k400-db1a4c0d.pth'

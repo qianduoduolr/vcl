@@ -363,11 +363,17 @@ class RandomResizedCrop(object):
                 results['crop_bbox'] = np.array([left, top, right, bottom])
                 results['img_shape'] = (new_h, new_w)
                 results[self.keys][i] = img[top:bottom, left:right]
+
                 if results.get('bboxs', None):
                     results['crop_bbox_ratio'].append(self.get_ratio(results, left, top, new_w, new_h, i))
+                
                 if 'grids' in results:
                     grid = results['grids'][i]
                     results['grids'][i] = grid[top:bottom, left:right]
+
+                if results.get('masks', None):
+                    mask = results['masks'][i]
+                    results['masks'][i] = mask[top:bottom, left:right]
         else:
             lazyop = results['lazy']
             if lazyop['flip']:
@@ -668,6 +674,18 @@ class Resize(object):
                     results['mask_query_idx'].append(sample_mask)
                 
                 results['bbox_mask'].append(mask)
+        
+        if 'masks' in results:
+            if results['masks'][0].dtype == np.uint8:
+                results['masks'] = [ mmcv.imresize(
+                    mask, (32, 32),
+                    interpolation='nearest',
+                    backend='pillow') for mask in results['masks']]
+            else:
+                results['masks'] = [ mmcv.imresize(
+                    mask, (32, 32),
+                    interpolation='bilinear',
+                    backend='cv2') for mask in results['masks'] ]
 
         return results
 
@@ -782,6 +800,10 @@ class Flip(object):
                         bbox = np.array([size[1] * ratio_x[0], size[0] * ratio_y[0], \
                                                 size[1] * ratio_x[1], size[0] * ratio_y[1]])
                     results['bboxs'].append(bbox)
+                
+                if 'masks' in results:
+                    if flip:
+                        mmcv.imflip_(results['masks'][i])
 
             if flip:
                 lt = len(results[self.keys])
@@ -794,8 +816,6 @@ class Flip(object):
                 results[self.keys] = list(results[self.keys])
 
             if results.get('bbox_mask', None):
-                img = img
-                a = results['mask_query_idx'][-1]
                 results['mask_query_idx'] = results['mask_query_idx'][-1].reshape(-1)
             
         else:
