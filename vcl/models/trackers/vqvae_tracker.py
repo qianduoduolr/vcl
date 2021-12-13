@@ -41,14 +41,7 @@ class Vqvae_Tracker(BaseModel):
                  test_cfg=None,
                  pretrained=None
                  ):
-        """ Space-Time Memory Network for Video Object Segmentation
-
-        Args:
-            depth ([type]): ResNet depth for encoder
-            pixel_loss ([type]): loss option
-            train_cfg ([type], optional): [description]. Defaults to None.
-            test_cfg ([type], optional): [description]. Defaults to None.
-            pretrained ([type], optional): [description]. Defaults to None.
+        """ original vqvae tracker
         """
         super(Vqvae_Tracker, self).__init__()
         if not isinstance(vqvae, list):
@@ -255,7 +248,9 @@ class Vqvae_Tracker(BaseModel):
     
     def non_local_attention_split(self, tar, refs, bsz):
 
-        refs = torch.stack(refs, 1)
+        if isinstance(refs, list):
+            refs = torch.stack(refs, 1)
+
         _, t, feat_dim, w_, h_ = refs.shape
 
         tar = tar.flatten(2).permute(0, 2, 1)
@@ -269,7 +264,9 @@ class Vqvae_Tracker(BaseModel):
     
     def non_local_attention(self, tar, refs, bsz):
 
-        refs = torch.stack(refs, 2)
+        if isinstance(refs, list):
+            refs = torch.stack(refs, 2)
+
         _, feat_dim, t, _, _ = refs.shape
 
         refs = refs.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
@@ -313,14 +310,7 @@ class Vqvae_Tracker_V3(BaseModel):
                  test_cfg=None,
                  pretrained=None
                  ):
-        """ Space-Time Memory Network for Video Object Segmentation
-
-        Args:
-            depth ([type]): ResNet depth for encoder
-            pixel_loss ([type]): loss option
-            train_cfg ([type], optional): [description]. Defaults to None.
-            test_cfg ([type], optional): [description]. Defaults to None.
-            pretrained ([type], optional): [description]. Defaults to None.
+        """ add mse_loss 
         """
         super(Vqvae_Tracker_V3, self).__init__()
 
@@ -471,14 +461,7 @@ class Vqvae_Tracker_V2(BaseModel):
                  test_cfg=None,
                  pretrained=None
                  ):
-        """ Space-Time Memory Network for Video Object Segmentation
-
-        Args:
-            depth ([type]): ResNet depth for encoder
-            pixel_loss ([type]): loss option
-            train_cfg ([type], optional): [description]. Defaults to None.
-            test_cfg ([type], optional): [description]. Defaults to None.
-            pretrained ([type], optional): [description]. Defaults to None.
+        """ use mask annotations as vq ce_loss label
         """
         super(Vqvae_Tracker_V2, self).__init__()
         if not isinstance(vqvae, list):
@@ -642,14 +625,7 @@ class Vqvae_Tracker_V4(BaseModel):
                  test_cfg=None,
                  pretrained=None
                  ):
-        """ Space-Time Memory Network for Video Object Segmentation
-
-        Args:
-            depth ([type]): ResNet depth for encoder
-            pixel_loss ([type]): loss option
-            train_cfg ([type], optional): [description]. Defaults to None.
-            test_cfg ([type], optional): [description]. Defaults to None.
-            pretrained ([type], optional): [description]. Defaults to None.
+        """ combine mse_loss and vq ce_loss
         """
         super(Vqvae_Tracker_V4, self).__init__()
         if not isinstance(vqvae, list):
@@ -812,3 +788,81 @@ class Vqvae_Tracker_V4(BaseModel):
 
         return out, att
     
+
+@MODELS.register_module()
+class Vqvae_Tracker_V5(Vqvae_Tracker):
+
+    def __init__(self,
+                 l1_loss=None,
+                 **kwargs
+                 ):
+        """ original vqvae tracker
+        """
+        super(Vqvae_Tracker_V5, self).__init__(**kwargs)
+        
+        self.l1_loss = build_loss(l1_loss)
+
+    def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
+        bsz, num_clips, t, c, h, w = imgs.shape
+
+        # vqvae tokenize for query frame
+        with torch.no_grad():
+            out_ind= []
+            for i in range(self.num_head):
+                i = str(i).replace('0', '')
+                vqvae = getattr(self, f'vqvae{i}')
+                vq_enc = getattr(self, f'vq_enc{i}')
+                vqvae.eval()
+                _, _, _, ind, _ = vq_enc(imgs[:, 0, -1])
+                ind = ind.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
+                out_ind.append(ind)
+
+        if jitter_imgs is not None:
+            imgs = jitter_imgs
+
+        mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
+
+        tar = self.backbone(imgs[:,0,-1])
+        refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
+        refs_cross_video = refs[0]
+
+        out, att = self.non_local_attention_split(tar, refs, bsz)
+        out_cross_video, att_cross_video = self.non_local_attention(tar, refs_cross_video, bsz)
+
+        losses = {}
+
+        if self.ce_loss:
+            for idx, i in enumerate(range(self.num_head)):
+                i = str(i).replace('0', '')
+                predict = getattr(self, f'predictor{i}')(out.flatten(0,2))
+                predict_cross_video = getattr(self, f'predictor{i}')(out_cross_video)
+                loss = self.ce_loss(predict, out_ind[idx])
+                loss_cross_video = self.ce_loss(predict_cross_video, out_ind[idx])
+                losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
+                losses[f'ce{i}_cross_loss'] = (loss_cross_video * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
+
+        if self.l1_loss:
+            label = torch.zeros(*att_cross_video.shape).cuda()
+            m = torch.eye(bsz).cuda()
+            m = (1 - m)[:,:,None,None].repeat(1,1,*att_cross_video.shape[-2:])
+            losses['l1_loss'] = self.l1_loss(att_cross_video, label, weight=m)
+
+        return losses
+
+    
+    def non_local_attention(self, tar, refs, bsz):
+
+        bsz, feat_dim, _, _ = refs.shape
+
+        tar = tar.flatten(2).permute(0, 2, 1)
+        refs = refs.flatten(2).permute(0, 2, 1)
+
+        refs = refs.unsqueeze(0).repeat(bsz, 1, 1, 1)
+
+        att = torch.einsum("bic,btjc -> btij", (tar, refs))
+        att_ = att.permute(0, 2, 1, 3).flatten(2)
+        att_ = F.softmax(att_, -1)
+
+        out =  torch.einsum('bij,bjc -> bic', [att_, refs.flatten(1,2)]).reshape(-1, feat_dim)
+
+        return out, att
