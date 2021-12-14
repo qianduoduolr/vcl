@@ -306,6 +306,7 @@ class Vqvae_Tracker_V3(BaseModel):
                  pretrained_vq,
                  multi_head_weight=[1.0],
                  mse_loss=None,
+                 l1_loss=None,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None
@@ -339,6 +340,7 @@ class Vqvae_Tracker_V3(BaseModel):
 
         # loss
         self.mse_loss = build_loss(mse_loss) if mse_loss else None
+        self.l1_loss = build_loss(l1_loss) if mse_loss else None
 
         # corr
         if patch_size != -1:
@@ -367,14 +369,15 @@ class Vqvae_Tracker_V3(BaseModel):
                 embeds.append(embed.flatten(1,2))
 
         embeds_refs = torch.stack(embeds[:-1], 1)
+        embeds_refs_cross = embeds[0].flatten(0,1).unsqueeze(0).repeat(bsz, 1, 1)
+
 
         tar = self.backbone(jitter_imgs[:,0,-1])
         refs = list([self.backbone(jitter_imgs[:,0,i]) for i in range(t-1)])
+        refs_cross_video = refs[0]  
 
-        if self.patch_size != -1:
-            out, att = self.local_attention(tar, refs, bsz, t)
-        else:
-            out, att = self.non_local_attention_split(tar, refs, bsz)
+        out, att = self.non_local_attention_split(tar, refs, bsz)
+        att_cross_video_, att_cross_video = self.non_local_attention(tar, refs_cross_video, bsz)
 
         losses = {}
 
@@ -382,8 +385,22 @@ class Vqvae_Tracker_V3(BaseModel):
         trans_embeds = trans_embeds.flatten(0,1).reshape(-1, *embed.shape[1:])
         trans_quants = self.vq_enc(trans_embeds, encoding=False)[1]
         decs = self.vq_dec(trans_quants)
+
+        trans_embeds_cross = torch.einsum('bik,bkc->bic', [att_cross_video_, embeds_refs_cross])
+        trans_embeds_cross = trans_embeds_cross.reshape(-1, *embed.shape[1:])
+        trans_quants_cross = self.vq_enc(trans_embeds_cross, encoding=False)[1]
+        decs_cross = self.vq_dec(trans_quants_cross)
+
         target = imgs[:,0,-1:].repeat(1,t-1,1,1,1).flatten(0,1)
         losses['mse_loss'] = self.mse_loss(decs, target)
+
+        if self.l1_loss:
+            label = torch.zeros(*att_cross_video.shape).cuda()
+            m = torch.eye(bsz).cuda()
+            m = (1 - m)[:,:,None,None].repeat(1,1,*att_cross_video.shape[-2:])
+            losses['l1_loss'] = self.l1_loss(att_cross_video, label, weight=m)
+        
+            losses['cross_loss'] = self.mse_loss(decs_cross, decs)
 
         return losses
 
@@ -432,18 +449,20 @@ class Vqvae_Tracker_V3(BaseModel):
     
     def non_local_attention(self, tar, refs, bsz):
 
-        refs = torch.stack(refs, 2)
-        _, feat_dim, t, _, _ = refs.shape
+        bsz, feat_dim, _, _ = refs.shape
 
-        refs = refs.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
-        tar = tar.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
+        tar = tar.flatten(2).permute(0, 2, 1)
+        refs = refs.flatten(2).permute(0, 2, 1)
 
-        att = torch.einsum("bic,bjc -> bij", (tar, refs))
-        att = F.softmax(att, dim=-1)
+        refs = refs.unsqueeze(0).repeat(bsz, 1, 1, 1)
 
-        out = torch.matmul(att, refs).reshape(-1, feat_dim)
+        att = torch.einsum("bic,btjc -> btij", (tar, refs))
+        att_ = att.permute(0, 2, 1, 3).flatten(2)
+        att_ = F.softmax(att_, -1)
 
-        return out, att
+        return att_, att
+    
+    
 
 
 @MODELS.register_module()
@@ -558,25 +577,6 @@ class Vqvae_Tracker_V2(BaseModel):
         )
 
         return outputs
-
-    def local_attention(self, tar, refs, bsz, t):
-
-        _, feat_dim, w_, h_ = tar.shape
-        corrs = []
-        for i in range(t-1):
-            corr = self.correlation_sampler(tar.contiguous(), refs[i].contiguous()).reshape(bsz, -1, w_, h_)
-            corrs.append(corr)
-
-        corrs = torch.cat(corrs, 1)
-        att = F.softmax(corrs, 1).unsqueeze(1)
-
-        unfold_fs = list([ F.unfold(ref, kernel_size=self.patch_size, \
-            padding=int((self.patch_size-1)/2)).reshape(bsz, feat_dim, -1, w_, h_) for ref in refs])
-        unfold_fs = torch.cat(unfold_fs, 2)
-
-        out = (unfold_fs * att).sum(2).reshape(bsz, feat_dim, -1).permute(0,2,1).reshape(-1, feat_dim)
-
-        return out, att
     
     def non_local_attention_split(self, tar, refs, bsz):
 
