@@ -27,7 +27,7 @@ do
     # check exp name
     while read line 
     do   
-        TASK="/gdata/lirui/project/vcl/configs/train/ypb/$line"
+        TASK="/gdata/lirui/project/vcl/configs/train/ypb/$line.py"
         if [[ ${CONFIGS[@]/${TASK}/} != ${CONFIGS[@]} ]]
         then
             echo " "$TASK"  has run before ! "
