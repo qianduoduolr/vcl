@@ -1,16 +1,39 @@
 #!/bin/bash 
+CONFIG="/gdata/lirui/project/vcl/configs/train/ypb/train_dry_run.py"
+CONFIG_RUN="none"
+CONFIGS=("none")
 key="exp_name"
-CONFIG="none"
-for variable in {1..100000}
-do
+COUNT=0
+DRY_RUN_FREQ=2
+
+for variable in {1..3}
+do   
+     echo 'start training'
+
+     # check exp name
      while read line 
      do   
-          n=${line: 0 : 8 }
-          if [ "$n" = "$key" ];then
-               CONFIG=$line
-               break	
+          TASK="/gdata/lirui/project/vcl/configs/train/ypb/$line.py"
+          if [[ ${CONFIGS[@]/${TASK}/} != ${CONFIGS[@]} ]]
+          then
+               echo " "$TASK"  has run before ! "
+               r=`expr $COUNT % $DRY_RUN_FREQ`
+               if [ "$r" = "0" ]
+               then 
+                    echo "run "$CONFIG""
+               fi
+          else
+               echo "run "$TASK" "
+               if [ $TASK = $CONFIG ]
+               then
+                    echo "none"
+               else
+                    CONFIGS+=($TASK)
+               fi
           fi
-     done < /home/lr/project/vcl/configs/train/local/train_dry_run.py
-     CONFIG="/gdata/lirui/project/vcl/configs/train/ypb/"${CONFIG:12:-1}".py"
-     echo $CONFIG
-done
+          COUNT=`expr $COUNT + 1`
+     done < /home/lr/project/vcl/configs/train/local/task.txt
+
+     echo "finished"
+
+done  
