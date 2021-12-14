@@ -68,5 +68,5 @@ do
         COUNT=`expr $COUNT + 1`
     done < /gdata/lirui/project/vcl/configs/train/ypb/task.txt
 
-     echo "end cycle"
+    echo "end cycle"
 done
