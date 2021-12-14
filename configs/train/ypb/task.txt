@@ -1,1 +1,1 @@
-train_dry_run
+vqvae_d4_nemd2048_withbbox_mse_inter_intra
