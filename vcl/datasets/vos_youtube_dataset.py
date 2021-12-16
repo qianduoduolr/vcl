@@ -115,6 +115,7 @@ class VOS_youtube_dataset_rgb_withbbox(VOS_youtube_dataset_rgb):
                 sample['frames_bbox'].append(frame['objs'][0]['bbox'])
 
             self.samples.append(sample)
+        self.samples = self.samples[:64]
     
     def prepare_train_data(self, idx):
 

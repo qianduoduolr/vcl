@@ -296,8 +296,9 @@ class Decoder_my(nn.Module):
     def forward(self, z):
         return self.blocks(z)
 
+
 @MODELS.register_module()
-class VQVAE(nn.Module):
+class VQVAE(BaseModel):
     """
         Vector Quantized Variational Autoencoder. This networks includes a encoder which maps an
         input image to a discrete latent space, and a decoder to maps the latent map back to the input domain
@@ -305,17 +306,18 @@ class VQVAE(nn.Module):
     def __init__(
         self,
         in_channel=3,
-        channel=128,
+        channel=256,
         n_res_block=2,
-        n_res_channel=64,
+        n_res_channel=128,
         downsample=1,
-        embed_dim=64,
+        embed_dim=128,
         n_embed=4096,
         commitment_cost=0.25,
         decay=0.99,
+        loss=None,
         newed=False,
         train_cfg=None,
-        test_cfg=None
+        test_cfg=None,
     ):
         """
         :param in_channel: input channels
@@ -336,30 +338,24 @@ class VQVAE(nn.Module):
         else:
             self.enc = Encoder(in_channel, channel, n_res_block, n_res_channel, downsample)
             self.dec = Decoder(embed_dim, in_channel, channel, n_res_block, n_res_channel, downsample)
-            
+
         self.quantize_conv = nn.Conv2d(channel, embed_dim, 1)  # Dimension reduction to embedding size
         self.quantize = Quantize(embed_dim, n_embed, commitment_cost, decay)  # Vector quantization
-        
 
-    def forward(self, x):
-        _, quant, diff, _, _ = self.encode(x)
-        dec = self.decode(quant)
+        self.loss = build_loss(loss)
 
-        return dec, diff
 
-    def encode(self, x, encoding=True):
+    def encode(self, x):
         """
         Encodes and quantizes an input tensor using VQ-VAE algorithm
         :param x: input tensor
         :return: encoder output, quantized map, commitment loss, codebook indices, codebook embedding
         """
         # Encoding
-        if encoding:
-            enc = self.enc(x)
-            # Convolution before quantization and converting to B x H x W x C
-            enc = self.quantize_conv(enc).permute(0, 2, 3, 1)
-        else:
-            enc = x
+        enc = self.enc(x)
+
+        # Convolution before quantization and converting to B x H x W x C
+        enc = self.quantize_conv(enc).permute(0, 2, 3, 1)
 
         # Vector quantization
         quant, diff, ind, embed = self.quantize(enc)
@@ -379,119 +375,40 @@ class VQVAE(nn.Module):
 
         return dec
 
+    def forward_train(self, imgs, bbox_mask=None, jitter_imgs=None):
 
-# @MODELS.register_module()
-# class VQVAE(BaseModel):
-#     """
-#         Vector Quantized Variational Autoencoder. This networks includes a encoder which maps an
-#         input image to a discrete latent space, and a decoder to maps the latent map back to the input domain
-#     """
-#     def __init__(
-#         self,
-#         in_channel=3,
-#         channel=256,
-#         n_res_block=2,
-#         n_res_channel=128,
-#         downsample=1,
-#         embed_dim=128,
-#         n_embed=4096,
-#         commitment_cost=0.25,
-#         decay=0.99,
-#         loss=None,
-#         newed=False,
-#         train_cfg=None,
-#         test_cfg=None,
-#     ):
-#         """
-#         :param in_channel: input channels
-#         :param channel: convolution channels
-#         :param n_res_block: number of residual blocks for the encoder and the decoder
-#         :param n_res_channel: number of intermediate channels of the residual block
-#         :param downsample: times of downsample and upsample in the encoder and the decoder
-#         :param embed_dim: embedding dimensions
-#         :param n_embed: number of embeddings in the codebook
-#         :param commitment_cost: cost of commitment loss
-#         :param decay: weight decay for exponential updating
-#         """
-#         super().__init__()
+        img = imgs[:, 0, 0]
 
-#         if newed:
-#             self.enc = Encoder_my(in_channel, channel, n_res_block, n_res_channel, downsample)
-#             self.dec = Decoder_my(embed_dim, in_channel, channel, n_res_block, n_res_channel, downsample)
-#         else:
-#             self.enc = Encoder(in_channel, channel, n_res_block, n_res_channel, downsample)
-#             self.dec = Decoder(embed_dim, in_channel, channel, n_res_block, n_res_channel, downsample)
+        _, quant, diff, _, _ = self.encode(img)
+        dec = self.decode(quant)
 
-#         self.quantize_conv = nn.Conv2d(channel, embed_dim, 1)  # Dimension reduction to embedding size
-#         self.quantize = Quantize(embed_dim, n_embed, commitment_cost, decay)  # Vector quantization
+        losses = {}
 
-#         self.loss = build_loss(loss)
+        losses['rec_loss'] = self.loss(dec, img, bbox_mask)
+        losses['commit_loss'] = diff
 
+        return losses
 
-#     def encode(self, x):
-#         """
-#         Encodes and quantizes an input tensor using VQ-VAE algorithm
-#         :param x: input tensor
-#         :return: encoder output, quantized map, commitment loss, codebook indices, codebook embedding
-#         """
-#         # Encoding
-#         enc = self.enc(x)
+    def train_step(self, data_batch, optimizer, progress_ratio):
 
-#         # Convolution before quantization and converting to B x H x W x C
-#         enc = self.quantize_conv(enc).permute(0, 2, 3, 1)
+        # parser loss
+        losses = self(**data_batch, test_mode=False)
+        loss, log_vars = self.parse_losses(losses)
 
-#         # Vector quantization
-#         quant, diff, ind, embed = self.quantize(enc)
+        # optimizer
+        optimizer.zero_grad()
 
-#         # Converting back the quantized map to B x C x H x W
-#         quant = quant.permute(0, 3, 1, 2)
+        loss.backward()
 
-#         return enc, quant, diff, ind, embed
+        optimizer.step()
 
-#     def decode(self, quant):
-#         """
-#         Decodes quantized map
-#         :param quant: quantized map
-#         :return: decoded tensor in input space
-#         """
-#         dec = self.dec(quant)  # Decodes to input space
+        log_vars.pop('loss')
+        outputs = dict(
+            log_vars=log_vars,
+            num_samples=len(data_batch['imgs'])
+        )
 
-#         return dec
-
-#     def forward_train(self, imgs, bbox_mask=None, jitter_imgs=None):
-
-#         img = imgs[:, 0, 0]
-
-#         _, quant, diff, _, _ = self.encode(img)
-#         dec = self.decode(quant)
-
-#         losses = {}
-
-#         losses['rec_loss'] = self.loss(dec, img, bbox_mask)
-#         losses['commit_loss'] = diff
-
-#         return losses
-
-#     def train_step(self, data_batch, optimizer, progress_ratio):
-
-#         # parser loss
-#         losses = self(**data_batch, test_mode=False)
-#         loss, log_vars = self.parse_losses(losses)
-
-#         # optimizer
-#         optimizer.zero_grad()
-
-#         loss.backward()
-
-#         optimizer.step()
-
-#         log_vars.pop('loss')
-#         outputs = dict(
-#             log_vars=log_vars,
-#             num_samples=len(data_batch['imgs'])
-#         )
-
-#         return outputs
+        return outputs
 
 
 @MODELS.register_module()
@@ -970,3 +887,165 @@ class VQCL_v3(VQCL_v2):
         loss = self.cts_loss(p1, z2.detach()) * 0.5 + self.cts_loss(p2, z1.detach()) * 0.5
 
         return loss
+
+
+
+@MODELS.register_module()
+class VQCL_v4(VQCL_v2):
+    def __init__(
+        self,
+        in_channel=3,
+        channel=256,
+        n_res_block=2,
+        n_res_channel=128,
+        mse_loss=None,
+        **kwargs
+    ):
+        super().__init__(**kwargs)
+        self.dec = Decoder(self.embed_dim, in_channel, channel, n_res_block, n_res_channel, 4)
+        self.mse_loss = build_loss(mse_loss)
+
+    def forward_train(self, imgs, bboxs=None, jitter_imgs=None):
+    
+        im_q = imgs[:, 0, 0]
+        im_k = imgs[:, 0, 1]
+
+        q = self.backbone(im_q)
+        k = self.backbone(im_k)
+
+        bsz, c, _, _ = q.shape
+
+        q_emb = self.quantize_conv(q).permute(0, 2, 3, 1)
+        quant_q, diff1, ind, embed = self.quantize(q_emb.contiguous(), distributed=False)
+        quant_q = quant_q.permute(0, 3, 1, 2)
+
+        k_emb = self.quantize_conv(k).permute(0, 2, 3, 1)
+        quant_k, diff2, ind, embed = self.quantize(k_emb.contiguous(), distributed=False)
+        quant_k = quant_k.permute(0, 3, 1, 2)
+
+        dec_q = self.dec(quant_q)
+        dec_k = self.dec(quant_k)
+        
+        diff = diff1
+
+        losses = {}
+
+        losses['cts_loss'] = self.forward_img_head(q, k, self.head)
+        losses['rec_loss'] = self.mse_loss(dec_q, im_q) + self.mse_loss(dec_k, im_k)
+        losses['diff'] = diff * self.commitment_cost
+
+        return losses, diff.item()
+
+    def train_step(self, data_batch, optimizer, progress_ratio):
+
+        # parser loss
+        losses, diff = self(**data_batch, test_mode=False)
+        loss, log_vars = self.parse_losses(losses)
+
+        # optimizer
+        optimizer.zero_grad()
+        
+        loss.backward()
+
+        optimizer.step()
+
+        log_vars.pop('loss')
+        log_vars['diff_item'] = diff
+        outputs = dict(
+            log_vars=log_vars,
+            num_samples=len(data_batch['imgs'])
+        )
+
+        return outputs
+
+    def forward_img_head(self, x1, x2, head):
+
+        if isinstance(x1, tuple):
+            x1 = x1[-1]
+        if isinstance(x2, tuple):
+            x2 = x2[-1]
+
+        z1, p1 = head(x1)
+        z2, p2 = head(x2)
+        
+        loss = self.cts_loss(p1, z2.detach()) * 0.5 + self.cts_loss(p2, z1.detach()) * 0.5
+
+        return loss
+
+
+@MODELS.register_module()
+class VQVAE_V2(VQVAE):
+    """
+        Vector Quantized Variational Autoencoder. This networks includes a encoder which maps an
+        input image to a discrete latent space, and a decoder to maps the latent map back to the input domain
+    """
+    def __init__(self,
+        **kwargs
+    ):
+        super().__init__(**kwargs)
+        self.name = 'video'
+
+    def forward_train(self, imgs):
+
+        bsz, num_clips, t, c, h, w = imgs.shape
+
+        tar = self.enc(imgs[:,0,-1])
+        ref = self.enc(imgs[:,0,0])
+
+        out, att = self.non_local_attention(tar, ref, bsz)
+
+        _, quant, diff, _, _ = self.encode(out)
+        dec = self.decode(quant)
+
+        losses = {}
+
+        losses['rec_loss'] = self.loss(dec, imgs[:, 0, -1])
+        losses['commit_loss'] = diff
+
+        return losses
+
+    def encode(self, x, encoding=False):
+        """
+        Encodes and quantizes an input tensor using VQ-VAE algorithm
+        :param x: input tensor
+        :return: encoder output, quantized map, commitment loss, codebook indices, codebook embedding
+        """
+        # Encoding
+        if encoding:
+            enc = self.enc(x)
+            # Convolution before quantization and converting to B x H x W x C
+            enc = self.quantize_conv(enc).permute(0, 2, 3, 1)
+        else:
+            enc = self.quantize_conv(x).permute(0, 2, 3, 1)
+
+        # Vector quantization
+        quant, diff, ind, embed = self.quantize(enc)
+
+        # Converting back the quantized map to B x C x H x W
+        quant = quant.permute(0, 3, 1, 2)
+
+        return enc, quant, diff, ind, embed
+
+    def decode(self, quant):
+        """
+        Decodes quantized map
+        :param quant: quantized map
+        :return: decoded tensor in input space
+        """
+        dec = self.dec(quant)  # Decodes to input space
+
+        return dec
+
+    
+    def non_local_attention(self, tar, ref, bsz):
+
+        _, feat_dim, w_, h_ = ref.shape
+
+        tar = tar.flatten(2).permute(0, 2, 1)
+        ref = ref.flatten(2).permute(0, 2, 1)
+        att = torch.einsum("bic,bjc -> bij", (tar, ref))
+        att = F.softmax(att, dim=-1)
+
+        out = torch.matmul(att, ref).reshape(bsz,  w_, h_, -1).permute(0, 3, 1, 2)
+
+        return out, att

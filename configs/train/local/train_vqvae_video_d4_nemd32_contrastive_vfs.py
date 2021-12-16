@@ -82,7 +82,7 @@ val_pipeline = [
 
 # demo_pipeline = None
 data = dict(
-    workers_per_gpu=2,
+    workers_per_gpu=0,
     train_dataloader=dict(samples_per_gpu=64, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
@@ -115,7 +115,7 @@ optimizers = dict(quantize_conv=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)))
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=100
+max_epoch=1000
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.0001,
@@ -126,11 +126,11 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=20, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=2000000, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
-    interval=100,
+    interval=10,
     hooks=[
         dict(type='TextLoggerHook', by_epoch=False),
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
