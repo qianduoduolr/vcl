@@ -994,7 +994,7 @@ class VQVAE_V2(VQVAE):
 
         out, att = self.non_local_attention(tar, ref, bsz)
 
-        _, quant, diff, _, _ = self.encode(out)
+        _, quant, diff, _, _ = self.encode(out, encoding=False)
         dec = self.decode(quant)
 
         losses = {}
@@ -1004,7 +1004,7 @@ class VQVAE_V2(VQVAE):
 
         return losses
 
-    def encode(self, x, encoding=False):
+    def encode(self, x, encoding=True):
         """
         Encodes and quantizes an input tensor using VQ-VAE algorithm
         :param x: input tensor
