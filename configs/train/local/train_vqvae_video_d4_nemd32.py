@@ -12,9 +12,9 @@ model = dict(
     type='VQVAE',
     downsample=4, 
     n_embed=32, 
-    channel=256, 
-    n_res_channel=128, 
-    embed_dim=128,
+    channel=128, 
+    n_res_channel=64, 
+    embed_dim=64,
     loss=dict(type='MSELoss',reduction='mean', sample_wise=True)
 )
 
@@ -33,7 +33,7 @@ test_cfg = dict(
     output_dir='eval_results')
 
 # dataset settings
-train_dataset_type = 'VOS_youtube_dataset_rgb_withbbox'
+train_dataset_type = 'VOS_youtube_dataset_rgb'
 
 val_dataset_type = None
 test_dataset_type = 'VOS_davis_dataset_test'
@@ -49,8 +49,8 @@ train_pipeline = [
     dict(type='Flip', flip_ratio=0.5),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='FormatShape', input_format='NPTCHW'),
-    dict(type='Collect', keys=['imgs', 'bbox_mask'], meta_keys=[]),
-    dict(type='ToTensor', keys=['imgs', 'bbox_mask'])
+    dict(type='Collect', keys=['imgs'], meta_keys=[]),
+    dict(type='ToTensor', keys=['imgs'])
 ]
 
 val_pipeline = [
@@ -115,7 +115,7 @@ checkpoint_config = dict(interval=100, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
-    interval=100,
+    interval=10,
     hooks=[
         dict(type='TextLoggerHook', by_epoch=False),
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),

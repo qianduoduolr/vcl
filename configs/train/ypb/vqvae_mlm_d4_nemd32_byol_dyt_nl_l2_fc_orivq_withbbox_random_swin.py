@@ -3,24 +3,24 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_random_crossvideo'
-docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
+exp_name = 'vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_random_swin'
+docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 # model settings
 model = dict(
-    type='Vqvae_Tracker_V5',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
+    type='Vqvae_Tracker',
+    backbone=dict(type='SwinTransformer',img_size=256, window_size=8, num_classes=-1, downsample_rate=[0,1,1,1], \
+                merges=[True,False,False,False], num_heads=[3,6,12,12], depths=[2,2,2,2]),
     vqvae=dict(type='VQCL_v2', backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
                sim_siam_head=dict(type='SimSiamHead', in_channels=512, num_projection_fcs=3, projection_mid_channels=512,
                projection_out_channels=512, num_predictor_fcs=2, predictor_mid_channels=128, predictor_out_channels=512,
                with_norm=True, spatial_type='avg'),loss=dict(type='CosineSimLoss', negative=False), embed_dim=128,
                n_embed=32, commitment_cost=1.0,),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
-    l1_loss=dict(type='L1Loss', reduction='mean', sample_wise=True),
     patch_size=-1,
     fc=True,
     temperature=0.1,
-    pretrained_vq='/home/lr/models/vqvae/vqvae_youtube_d4_n32_c256_embc128_byol_commit1.0.pth',
+    pretrained_vq='/gdata/lirui/models/vqvae/vqvae_youtube_d4_n32_c256_embc128_byol_commit1.0.pth',
     pretrained=None
 )
 
@@ -31,8 +31,8 @@ test_cfg = dict(
     precede_frames=20,
     topk=10,
     temperature=0.07,
-    strides=(1, 2, 1, 1),
-    out_indices=(3, ),
+    merges=[True,False,False,False], num_heads=[3,6,12,12],
+    out_indices=[3],
     neighbor_range=24,
     with_first=True,
     with_first_neighbor=True,
@@ -88,7 +88,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=4, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -98,8 +98,8 @@ data = dict(
             type=train_dataset_type,
             size=256,
             p=0.8,
-            root='/home/lr/dataset/YouTube-VOS',
-            list_path='/home/lr/dataset/YouTube-VOS/2018/train',
+            root='/dev/shm',
+            list_path='/dev/shm/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
             mask_ratio=0.15,
             clip_length=2,
@@ -109,8 +109,8 @@ data = dict(
 
     test =  dict(
             type=test_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -119,8 +119,8 @@ data = dict(
 
 # optimizer
 optimizers = dict(
-    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-    predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    backbone=dict(type='Adam', lr=5e-4, betas=(0.9, 0.999)),
+    predictor=dict(type='Adam', lr=5e-4, betas=(0.9, 0.999))
     )
 # learning policy
 # total_iters = 200000
@@ -151,11 +151,11 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}'
+work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
+                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
                 )
 
 
