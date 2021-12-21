@@ -90,7 +90,7 @@ class DistributedDataParallelWrapper(nn.Module):
                                 broadcast_buffers=broadcast_buffers,
                                 find_unused_parameters=find_unused_parameters,
                                 **kwargs)
-                module._modules[name_] = module_
+                    module._modules[name_] = module_ # seems there exists a bug  !! note 
             else:
                 module = MMDistributedDataParallel(
                     module.cuda(),

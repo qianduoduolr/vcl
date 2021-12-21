@@ -158,11 +158,10 @@ eval_config= dict(
                   checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
                 )
 
-
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
-
+find_unused_parameters = True
 
 if __name__ == '__main__':
     make_pbs(exp_name, docker_name)

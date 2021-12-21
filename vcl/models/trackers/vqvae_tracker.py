@@ -148,7 +148,7 @@ class Vqvae_Tracker(BaseModel):
 
         if self.mse_loss:
             raise NotImplementedError
-
+        
         return losses
 
     def forward_test(self, imgs, mask_query_idx,

@@ -539,9 +539,9 @@ class SwinTransformer(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool1d(1)
         self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
-        self.apply(self._init_weights)
+        self.apply(self.init_weights)
 
-    def _init_weights(self, m):
+    def init_weights(self, m):
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
@@ -574,7 +574,7 @@ class SwinTransformer(nn.Module):
                 x_ = x.transpose(1,2).reshape(bsz, -1, s, s)
                 outs.append(x_)
 
-        x = self.norm(x)  # B L C
+        # x = self.norm(x)  # B L C
         x = self.avgpool(x.transpose(1, 2))  # B C 1
         x = torch.flatten(x, 1)
         outs.append(x)
