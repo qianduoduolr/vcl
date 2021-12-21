@@ -329,6 +329,7 @@ class VQVAE(BaseModel):
         :param n_embed: number of embeddings in the codebook
         :param commitment_cost: cost of commitment loss
         :param decay: weight decay for exponential updating
+        
         """
         super().__init__()
 
@@ -375,7 +376,7 @@ class VQVAE(BaseModel):
 
         return dec
 
-    def forward_train(self, imgs, bbox_mask=None, jitter_imgs=None):
+    def forward_train(self, imgs):
 
         img = imgs[:, 0, 0]
 
@@ -384,31 +385,11 @@ class VQVAE(BaseModel):
 
         losses = {}
 
-        losses['rec_loss'] = self.loss(dec, img, bbox_mask)
+        losses['rec_loss'] = self.loss(dec, img)
         losses['commit_loss'] = diff
 
         return losses
 
-    def train_step(self, data_batch, optimizer, progress_ratio):
-
-        # parser loss
-        losses = self(**data_batch, test_mode=False)
-        loss, log_vars = self.parse_losses(losses)
-
-        # optimizer
-        optimizer.zero_grad()
-
-        loss.backward()
-
-        optimizer.step()
-
-        log_vars.pop('loss')
-        outputs = dict(
-            log_vars=log_vars,
-            num_samples=len(data_batch['imgs'])
-        )
-
-        return outputs
 
 
 @MODELS.register_module()
@@ -739,7 +720,7 @@ class VQCL_v2(BaseModel):
 
 
 
-    def forward_train(self, imgs, bboxs=None, jitter_imgs=None):
+    def forward_train(self, imgs):
     
         im_q = imgs[:, 0, 0]
         im_k = imgs[:, 0, 1]
@@ -888,8 +869,6 @@ class VQCL_v3(VQCL_v2):
 
         return loss
 
-
-
 @MODELS.register_module()
 class VQCL_v4(VQCL_v2):
     def __init__(
@@ -1001,7 +980,7 @@ class VQVAE_V2(VQVAE):
 
         losses['rec_loss'] = self.loss(dec, imgs[:, 0, -1])
         losses['commit_loss'] = diff
-
+        
         return losses
 
     def encode(self, x, encoding=True):

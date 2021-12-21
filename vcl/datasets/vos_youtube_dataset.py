@@ -65,11 +65,17 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
             for idx, line in enumerate(f.readlines()):
                 sample = dict()
                 vname, num_frames = line.strip('\n').split()
+                
+                if vname != '2bf545c2f5':
+                    continue
+                    
                 if int(num_frames) < self.clip_length: continue
                 sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
                 sample['masks_path'] = sorted(glob.glob(osp.join(self.mask_dir, vname, '*.png')))
                 sample['num_frames'] = int(num_frames)
                 self.samples.append(sample)
+        
+        self.samples = [self.samples[0] for i in range(3000)]
 
     def prepare_train_data(self, idx):
 

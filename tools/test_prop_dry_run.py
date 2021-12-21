@@ -136,11 +136,10 @@ def main():
         if 'torchvision_pretrained' in eval_config:
             model.backbone.pretrained = eval_config['torchvision_pretrained']
             eval_config.pop('torchvision_pretrained')
-    elif cfg.model.backbone.type == 'Vq_Swin':
+    elif cfg.model.backbone.type == 'SwinTransformer':
         model = mmcv.ConfigDict(type='VanillaTracker', backbone=cfg.model.backbone)
-    elif cfg.model.backbone.type == 'Vq_Res':
-        model = mmcv.ConfigDict(type='VanillaTracker', backbone=cfg.model.backbone)
-        model.backbone.res_blocks.out_indices = args.out_indices
+        model.backbone.out_indices = args.out_indices
+        
 
 
     model = build_model(model, train_cfg=None, test_cfg=cfg.test_cfg)

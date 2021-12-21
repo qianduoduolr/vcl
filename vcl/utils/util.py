@@ -31,11 +31,15 @@ def tensor2img(tensor, out_type=np.uint8, min_max=(0, 1), norm_mode='0-1'):
     if norm_mode == '0-1':
         tensor = tensor.squeeze().float().cpu() # clamp
         tensor = (tensor - min_max[0]) / (min_max[1] - min_max[0])  # to range [0,1]
-    else:
+    elif norm_mode == 'mean-std':
         tensor = tensor.squeeze().float().cpu() # clamp
         mean=torch.tensor([123.675, 116.28, 103.53]).reshape(3,1,1)
         std=torch.tensor([58.395, 57.12, 57.375]).reshape(3,1,1)
         tensor = (tensor * std) + mean
+        tensor = tensor.clamp(0,255)
+    else:
+        tensor = tensor.squeeze().float().cpu().clamp(0, 1)
+        tensor = tensor * 255
 
     n_dim = tensor.dim()
     if n_dim == 4:

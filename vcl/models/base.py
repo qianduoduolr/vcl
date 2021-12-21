@@ -42,7 +42,7 @@ class BaseModel(nn.Module, metaclass=ABCMeta):
         All subclass should overwrite it.
         """
 
-    def forward(self, test_mode, **kwargs):
+    def forward(self, test_mode=False, **kwargs):
         """Forward function for base model.
 
         Args:
@@ -60,11 +60,37 @@ class BaseModel(nn.Module, metaclass=ABCMeta):
 
         return self.forward_train(**kwargs)
 
+
     def train_step(self, data_batch, optimizer, progress_ratio):
         """Abstract method for one training step.
 
         All subclass should overwrite it.
         """
+        # parser loss
+        losses = self(**data_batch, test_mode=False)
+        loss, log_vars = self.parse_losses(losses)
+
+        # optimizer
+        if isinstance(optimizer, dict):
+            for k,opz in optimizer.items():
+                opz.zero_grad()
+
+            loss.backward()
+            for k,opz in optimizer.items():
+                opz.step()
+        else:
+            optimizer.zero_grad()
+
+            loss.backward()
+            optimizer.step()
+
+        log_vars.pop('loss')
+        outputs = dict(
+            log_vars=log_vars,
+            num_samples=len(data_batch['imgs'])
+        )
+
+        return outputs
 
     def val_step(self, data_batch, **kwargs):
         """Abstract method for one validation step.

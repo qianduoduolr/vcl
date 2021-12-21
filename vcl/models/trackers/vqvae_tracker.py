@@ -6,8 +6,10 @@ from collections import *
 import mmcv
 from mmcv.runner import auto_fp16, load_checkpoint
 from dall_e  import map_pixels, unmap_pixels, load_model
+from vcl.models.common.correlation import frame_transform
 
 from vcl.models.losses.losses import Ce_Loss
+from vcl.models.common.correlation import *
 
 from ..base import BaseModel
 from ..builder import build_backbone, build_loss, build_components, build_model
@@ -35,7 +37,6 @@ class Vqvae_Tracker(BaseModel):
                  multi_head_weight=[1.0],
                  ce_loss=None,
                  mse_loss=None,
-                 cts_loss=None,
                  fc=True,
                  train_cfg=None,
                  test_cfg=None,
@@ -83,7 +84,6 @@ class Vqvae_Tracker(BaseModel):
         # loss
         self.ce_loss = build_loss(ce_loss) if ce_loss else None
         self.mse_loss = build_loss(mse_loss) if mse_loss else None
-        self.cts_loss = build_loss(cts_loss) if cts_loss else None
 
         # corr
         if patch_size != -1:
@@ -120,7 +120,7 @@ class Vqvae_Tracker(BaseModel):
                 vqvae = getattr(self, f'vqvae{i}')
                 vq_enc = getattr(self, f'vq_enc{i}')
                 vqvae.eval()
-                _, _, _, ind, _ = vq_enc(imgs[:, 0, -1])
+                emb, _, _, ind, _ = vq_enc(imgs[:, 0, -1])
                 ind = ind.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
                 out_ind.append(ind)
 
@@ -133,25 +133,21 @@ class Vqvae_Tracker(BaseModel):
         refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
 
         if self.patch_size != -1:
-            out, att = self.local_attention(tar, refs, bsz, t)
+            out, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
         else:
-            out, att = self.non_local_attention_split(tar, refs, bsz)
+            out, att = non_local_attention(tar, refs, per_ref=True)
 
         losses = {}
 
         if self.ce_loss:
             for idx, i in enumerate(range(self.num_head)):
                 i = str(i).replace('0', '')
-                predict = getattr(self, f'predictor{i}')(out.flatten(0,2))
+                predict = getattr(self, f'predictor{i}')(out)
                 loss = self.ce_loss(predict, out_ind[idx])
                 losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
 
-        if self.mse_loss and t > 2:
-            out_roll = torch.roll(out, 1, dims=1)
-            losses['mse_loss'] = self.mse_loss(out.flatten(0,2), out_roll.flatten(0,2), mask_query_idx.reshape(-1,1))
-
-        if self.cts_loss:
-            losses['cts_loss'] = self.forward_img_head(tar, refs[-1])
+        if self.mse_loss:
+            raise NotImplementedError
 
         return losses
 
@@ -173,9 +169,7 @@ class Vqvae_Tracker(BaseModel):
                 ind = self.vqvae(imgs[:, 0, -1])
                 ind = torch.argmax(ind, axis=1).reshape(-1, 1).long().detach()
 
-
-        out, att = self.non_local_attention(tar, refs, bsz)
-
+        out, att = non_local_attention(tar, refs)
 
         visualize_att(imgs, att, iteration, mask_query_idx, tar.shape[-1], self.patch_size, dst_path=save_path, norm_mode='mean-std')
 
@@ -198,102 +192,88 @@ class Vqvae_Tracker(BaseModel):
         else:
             return None
 
-    def forward(self, test_mode=False, **kwargs):
+@MODELS.register_module()
+class Vqvae_Tracker_V2(BaseModel):
 
-        if test_mode:
-            return self.forward_test(**kwargs)
+    def __init__(self,
+                 backbone,
+                 vqvae,
+                 patch_size,
+                 pretrained_vq,
+                 temperature,
+                 ce_loss=None,
+                 fc=True,
+                 train_cfg=None,
+                 test_cfg=None,
+                 pretrained=None
+                 ):
+        """ use mask annotations as vq ce_loss label
+        """
+        super(Vqvae_Tracker_V2, self).__init__()
+        if not isinstance(vqvae, list):
+            vqvae = list([vqvae])
+            pretrained_vq = list([pretrained_vq])
 
-        return self.forward_train(**kwargs)
+        self.train_cfg = train_cfg
+        self.test_cfg = test_cfg
+        self.patch_size = patch_size
+        self.num_head = len(vqvae)
 
-    def train_step(self, data_batch, optimizer, progress_ratio):
+        logger = get_root_logger()
 
-        # parser loss
-        losses = self(**data_batch, test_mode=False)
-        loss, log_vars = self.parse_losses(losses)
+        self.backbone = build_backbone(backbone)
 
-        # optimizer
-        for k,opz in optimizer.items():
-            opz.zero_grad()
+        # loss
+        self.ce_loss = build_loss(ce_loss) if ce_loss else None
 
-        loss.backward()
-        for k,opz in optimizer.items():
-            opz.step()
+        # corr
+        if patch_size != -1:
+            from spatial_correlation_sampler import SpatialCorrelationSampler
+            self.correlation_sampler = SpatialCorrelationSampler(
+                kernel_size=1,
+                patch_size=patch_size,
+                stride=1,
+                padding=0,
+                dilation=1)
 
-        log_vars.pop('loss')
-        outputs = dict(
-            log_vars=log_vars,
-            num_samples=len(data_batch['imgs'])
-        )
+        # fc
+        self.fc = fc
+        if self.fc:
+            for i in range(len(vqvae)):
+                i = str(i).replace('0', '')
+                setattr(self, f'predictor{i}', nn.Linear(self.backbone.feat_dim, 16))
+        else:
+            raise NotImplementedError
 
-        return outputs
+        if pretrained:
+            _ = load_checkpoint(self, pretrained, map_location='cpu')
+            logger.info('load pretrained model successfully')
 
-    def local_attention(self, tar, refs, bsz, t):
+    def forward_train(self, imgs, mask_query_idx, masks):
 
-        _, feat_dim, w_, h_ = tar.shape
-        corrs = []
-        for i in range(t-1):
-            corr = self.correlation_sampler(tar.contiguous(), refs[i].contiguous()).reshape(bsz, -1, w_, h_)
-            corrs.append(corr)
+        bsz, num_clips, t, c, h, w = imgs.shape
 
-        corrs = torch.cat(corrs, 1)
-        att = F.softmax(corrs, 1).unsqueeze(1)
+        mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
+        out_ind = [ masks[:,-1:].repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach() ]
 
-        unfold_fs = list([ F.unfold(ref, kernel_size=self.patch_size, \
-            padding=int((self.patch_size-1)/2)).reshape(bsz, feat_dim, -1, w_, h_) for ref in refs])
-        unfold_fs = torch.cat(unfold_fs, 2)
+        tar = self.backbone(imgs[:,0,-1])
+        refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
 
-        out = (unfold_fs * att).sum(2).reshape(bsz, feat_dim, -1).permute(0,2,1).reshape(-1, feat_dim)
+        if self.patch_size != -1:
+            out, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
+        else:
+            out, att = non_local_attention(tar, refs, per_ref=True)
 
-        return out, att
-    
-    def non_local_attention_split(self, tar, refs, bsz):
+        losses = {}
 
-        if isinstance(refs, list):
-            refs = torch.stack(refs, 1)
+        if self.ce_loss:
+            for idx, i in enumerate(range(self.num_head)):
+                i = str(i).replace('0', '')
+                predict = getattr(self, f'predictor{i}')(out)
+                loss = self.ce_loss(predict, out_ind[idx])
+                losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
 
-        _, t, feat_dim, w_, h_ = refs.shape
-
-        tar = tar.flatten(2).permute(0, 2, 1)
-        refs = refs.flatten(3).permute(0, 1, 3, 2)
-        att = torch.einsum("bic,btjc -> btij", (tar, refs))
-        att = F.softmax(att, dim=-1)
-
-        out = torch.matmul(att, refs)
-
-        return out, att
-    
-    def non_local_attention(self, tar, refs, bsz):
-
-        if isinstance(refs, list):
-            refs = torch.stack(refs, 2)
-
-        _, feat_dim, t, _, _ = refs.shape
-
-        refs = refs.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
-        tar = tar.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
-
-        att = torch.einsum("bic,bjc -> bij", (tar, refs))
-        att = F.softmax(att, dim=-1)
-
-        out = torch.matmul(att, refs).reshape(-1, feat_dim)
-
-        return out, att
-
-
-    def forward_img_head(self, x1, x2):
-
-        if isinstance(x1, tuple):
-            x1 = x1[-1]
-        if isinstance(x2, tuple):
-            x2 = x2[-1]
-
-        z1, p1 = self.head(x1)
-        z2, p2 = self.head(x2)
-        
-        loss = self.cts_loss(p1, z2.detach()) * 0.5 + self.cts_loss(p2, z1.detach()) * 0.5
-
-        return loss
-
+        return losses
 
 
 @MODELS.register_module()
@@ -374,10 +354,10 @@ class Vqvae_Tracker_V3(BaseModel):
 
         tar = self.backbone(jitter_imgs[:,0,-1])
         refs = list([self.backbone(jitter_imgs[:,0,i]) for i in range(t-1)])
-        refs_cross_video = refs[0]  
+        refs_cross_video = [refs[0] for i in range(bsz)] 
 
-        out, att = self.non_local_attention_split(tar, refs, bsz)
-        att_cross_video_, att_cross_video = self.non_local_attention(tar, refs_cross_video, bsz)
+        out, att = non_local_attention(tar, refs, per_ref=True)
+        out, att_cross_video_, att_cross_video = non_local_attention(tar, refs_cross_video, per_ref=False)
 
         losses = {}
 
@@ -404,208 +384,6 @@ class Vqvae_Tracker_V3(BaseModel):
 
         return losses
 
-    def forward(self, test_mode=False, **kwargs):
-
-        if test_mode:
-            return self.forward_test(**kwargs)
-
-        return self.forward_train(**kwargs)
-
-    def train_step(self, data_batch, optimizer, progress_ratio):
-
-        # parser loss
-        losses = self(**data_batch, test_mode=False)
-        loss, log_vars = self.parse_losses(losses)
-
-        # optimizer
-        for k,opz in optimizer.items():
-            opz.zero_grad()
-
-        loss.backward()
-        for k,opz in optimizer.items():
-            opz.step()
-
-        log_vars.pop('loss')
-        outputs = dict(
-            log_vars=log_vars,
-            num_samples=len(data_batch['imgs'])
-        )
-
-        return outputs
-    
-    def non_local_attention_split(self, tar, refs, bsz):
-
-        refs = torch.stack(refs, 1)
-        _, t, feat_dim, w_, h_ = refs.shape
-
-        tar = tar.flatten(2).permute(0, 2, 1)
-        refs = refs.flatten(3).permute(0, 1, 3, 2)
-        att = torch.einsum("bic,btjc -> btij", (tar, refs))
-        att = F.softmax(att, dim=-1)
-
-        out = torch.matmul(att, refs)
-
-        return out, att
-    
-    def non_local_attention(self, tar, refs, bsz):
-
-        bsz, feat_dim, _, _ = refs.shape
-
-        tar = tar.flatten(2).permute(0, 2, 1)
-        refs = refs.flatten(2).permute(0, 2, 1)
-
-        refs = refs.unsqueeze(0).repeat(bsz, 1, 1, 1)
-
-        att = torch.einsum("bic,btjc -> btij", (tar, refs))
-        att_ = att.permute(0, 2, 1, 3).flatten(2)
-        att_ = F.softmax(att_, -1)
-
-        return att_, att
-    
-    
-
-
-@MODELS.register_module()
-class Vqvae_Tracker_V2(BaseModel):
-
-    def __init__(self,
-                 backbone,
-                 vqvae,
-                 patch_size,
-                 pretrained_vq,
-                 temperature,
-                 ce_loss=None,
-                 fc=True,
-                 train_cfg=None,
-                 test_cfg=None,
-                 pretrained=None
-                 ):
-        """ use mask annotations as vq ce_loss label
-        """
-        super(Vqvae_Tracker_V2, self).__init__()
-        if not isinstance(vqvae, list):
-            vqvae = list([vqvae])
-            pretrained_vq = list([pretrained_vq])
-
-        self.train_cfg = train_cfg
-        self.test_cfg = test_cfg
-        self.patch_size = patch_size
-        self.num_head = len(vqvae)
-
-        logger = get_root_logger()
-
-        self.backbone = build_backbone(backbone)
-
-        # loss
-        self.ce_loss = build_loss(ce_loss) if ce_loss else None
-
-        # corr
-        if patch_size != -1:
-            from spatial_correlation_sampler import SpatialCorrelationSampler
-            self.correlation_sampler = SpatialCorrelationSampler(
-                kernel_size=1,
-                patch_size=patch_size,
-                stride=1,
-                padding=0,
-                dilation=1)
-
-        # fc
-        self.fc = fc
-        if self.fc:
-            for i in range(len(vqvae)):
-                i = str(i).replace('0', '')
-                setattr(self, f'predictor{i}', nn.Linear(self.backbone.feat_dim, 16))
-        else:
-            raise NotImplementedError
-
-        if pretrained:
-            _ = load_checkpoint(self, pretrained, map_location='cpu')
-            logger.info('load pretrained model successfully')
-
-    def forward_train(self, imgs, mask_query_idx, masks):
-
-        bsz, num_clips, t, c, h, w = imgs.shape
-
-        mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
-        out_ind = [ masks[:,-1:].repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach() ]
-
-        tar = self.backbone(imgs[:,0,-1])
-        refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
-
-        if self.patch_size != -1:
-            out, att = self.local_attention(tar, refs, bsz, t)
-        else:
-            out, att = self.non_local_attention_split(tar, refs, bsz)
-
-        losses = {}
-
-        if self.ce_loss:
-            for idx, i in enumerate(range(self.num_head)):
-                i = str(i).replace('0', '')
-                predict = getattr(self, f'predictor{i}')(out.flatten(0,2))
-                loss = self.ce_loss(predict, out_ind[idx])
-                losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
-
-        return losses
-
-
-    def forward(self, test_mode=False, **kwargs):
-
-        if test_mode:
-            return self.forward_test(**kwargs)
-
-        return self.forward_train(**kwargs)
-
-    def train_step(self, data_batch, optimizer, progress_ratio):
-
-        # parser loss
-        losses = self(**data_batch, test_mode=False)
-        loss, log_vars = self.parse_losses(losses)
-
-        # optimizer
-        for k,opz in optimizer.items():
-            opz.zero_grad()
-
-        loss.backward()
-        for k,opz in optimizer.items():
-            opz.step()
-
-        log_vars.pop('loss')
-        outputs = dict(
-            log_vars=log_vars,
-            num_samples=len(data_batch['imgs'])
-        )
-
-        return outputs
-    
-    def non_local_attention_split(self, tar, refs, bsz):
-
-        refs = torch.stack(refs, 1)
-        _, t, feat_dim, w_, h_ = refs.shape
-
-        tar = tar.flatten(2).permute(0, 2, 1)
-        refs = refs.flatten(3).permute(0, 1, 3, 2)
-        att = torch.einsum("bic,btjc -> btij", (tar, refs))
-        att = F.softmax(att, dim=-1)
-
-        out = torch.matmul(att, refs)
-
-        return out, att
-    
-    def non_local_attention(self, tar, refs, bsz):
-
-        refs = torch.stack(refs, 2)
-        _, feat_dim, t, _, _ = refs.shape
-
-        refs = refs.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
-        tar = tar.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
-
-        att = torch.einsum("bic,bjc -> bij", (tar, refs))
-        att = F.softmax(att, dim=-1)
-
-        out = torch.matmul(att, refs).reshape(-1, feat_dim)
-
-        return out, att
 
 @MODELS.register_module()
 class Vqvae_Tracker_V4(BaseModel):
@@ -722,14 +500,15 @@ class Vqvae_Tracker_V4(BaseModel):
         refs = list([self.backbone(jitter_imgs[:,0,i]) for i in range(t-1)])
 
         if self.patch_size != -1:
-            out, att = self.local_attention(tar, refs, bsz, t)
+            out, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
         else:
-            out, att = self.non_local_attention_split(tar, refs, bsz)
+            out, att = non_local_attention(tar, refs, per_ref=True)
+
 
         losses = {}
 
         if self.ce_loss:
-            predict = self.predictor(out.flatten(0,2))
+            predict = self.predictor(out)
             loss = self.ce_loss(predict, out_ind[0])
             losses['ce_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
 
@@ -742,51 +521,7 @@ class Vqvae_Tracker_V4(BaseModel):
             losses['mse_loss'] = self.mse_loss(decs, target)
 
         return losses
-
-
-    def forward(self, test_mode=False, **kwargs):
-
-        if test_mode:
-            return self.forward_test(**kwargs)
-
-        return self.forward_train(**kwargs)
-
-    def train_step(self, data_batch, optimizer, progress_ratio):
-
-        # parser loss
-        losses = self(**data_batch, test_mode=False)
-        loss, log_vars = self.parse_losses(losses)
-
-        # optimizer
-        for k,opz in optimizer.items():
-            opz.zero_grad()
-
-        loss.backward()
-        for k,opz in optimizer.items():
-            opz.step()
-
-        log_vars.pop('loss')
-        outputs = dict(
-            log_vars=log_vars,
-            num_samples=len(data_batch['imgs'])
-        )
-
-        return outputs
-
     
-    def non_local_attention_split(self, tar, refs, bsz):
-
-        refs = torch.stack(refs, 1)
-        _, t, feat_dim, w_, h_ = refs.shape
-
-        tar = tar.flatten(2).permute(0, 2, 1)
-        refs = refs.flatten(3).permute(0, 1, 3, 2)
-        att = torch.einsum("bic,btjc -> btij", (tar, refs))
-        att = F.softmax(att, dim=-1)
-
-        out = torch.matmul(att, refs)
-
-        return out, att
     
 
 @MODELS.register_module()
@@ -796,7 +531,7 @@ class Vqvae_Tracker_V5(Vqvae_Tracker):
                  l1_loss=None,
                  **kwargs
                  ):
-        """ original vqvae tracker
+        """ ce_loss with cross video/sparstity constrant
         """
         super(Vqvae_Tracker_V5, self).__init__(**kwargs)
         
@@ -824,17 +559,17 @@ class Vqvae_Tracker_V5(Vqvae_Tracker):
 
         tar = self.backbone(imgs[:,0,-1])
         refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
-        refs_cross_video = refs[0]
+        refs_cross_video = [refs[0] for i in range(bsz)]
 
-        out, att = self.non_local_attention_split(tar, refs, bsz)
-        out_cross_video, att_cross_video = self.non_local_attention(tar, refs_cross_video, bsz)
+        out, att = non_local_attention(tar, refs, per_ref=True)
+        out_cross_video, _, att_cross_video = non_local_attention(tar, refs_cross_video, per_ref=False)
 
         losses = {}
 
         if self.ce_loss:
             for idx, i in enumerate(range(self.num_head)):
                 i = str(i).replace('0', '')
-                predict = getattr(self, f'predictor{i}')(out.flatten(0,2))
+                predict = getattr(self, f'predictor{i}')(out)
                 predict_cross_video = getattr(self, f'predictor{i}')(out_cross_video)
                 loss = self.ce_loss(predict, out_ind[idx])
                 loss_cross_video = self.ce_loss(predict_cross_video, out_ind[idx])
@@ -848,21 +583,3 @@ class Vqvae_Tracker_V5(Vqvae_Tracker):
             losses['l1_loss'] = self.l1_loss(att_cross_video, label, weight=m)
 
         return losses
-
-    
-    def non_local_attention(self, tar, refs, bsz):
-
-        bsz, feat_dim, _, _ = refs.shape
-
-        tar = tar.flatten(2).permute(0, 2, 1)
-        refs = refs.flatten(2).permute(0, 2, 1)
-
-        refs = refs.unsqueeze(0).repeat(bsz, 1, 1, 1)
-
-        att = torch.einsum("bic,btjc -> btij", (tar, refs))
-        att_ = att.permute(0, 2, 1, 3).flatten(2)
-        att_ = F.softmax(att_, -1)
-
-        out =  torch.einsum('bij,bjc -> bic', [att_, refs.flatten(1,2)]).reshape(-1, feat_dim)
-
-        return out, att

@@ -5,17 +5,28 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirna
 from vcl.utils import *
 
 exp_name = 'train_vqvae_video_d4_nemd32'
-docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
+docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='VQVAE',
-    downsample=4, 
-    n_embed=32, 
-    channel=128, 
-    n_res_channel=64, 
-    embed_dim=64,
-    loss=dict(type='MSELoss',reduction='mean', sample_wise=True)
+    type='VQCL_v2',
+    backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
+    sim_siam_head=dict(
+        type='SimSiamHead',
+        in_channels=512,
+        # norm_cfg=dict(type='SyncBN'),
+        num_projection_fcs=3,
+        projection_mid_channels=512,
+        projection_out_channels=512,
+        num_predictor_fcs=2,
+        predictor_mid_channels=128,
+        predictor_out_channels=512,
+        with_norm=True,
+        spatial_type='avg'),
+    loss=dict(type='CosineSimLoss', negative=False),
+    embed_dim=128,
+    n_embed=32,
+    commitment_cost=1.0,
 )
 
 # model training and testing settings
@@ -68,7 +79,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=24, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -80,7 +91,7 @@ data = dict(
             list_path='/home/lr/dataset/YouTube-VOS/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', ANNO='train/Annotations'),
             clip_length=1,
-            num_clips=1,
+            num_clips=2,
             pipeline=train_pipeline
             ),
 
@@ -95,12 +106,14 @@ data = dict(
 )
 
 # optimizer
-optimizers = dict(type='Adam', lr=3e-4, betas=(0.9, 0.999))
+# optimizers = dict(type='Adam', lr=3e-4, betas=(0.9, 0.999))
+optimizers = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
+
 
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=200
+max_epoch=10
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,
@@ -111,7 +124,7 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=100, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=5, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
