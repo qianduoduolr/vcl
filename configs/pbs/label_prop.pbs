@@ -1,5 +1,5 @@
 #PBS -N test_label_pro
-#PBS -l nodes=1:gpus=1:S
+#PBS -l nodes=1:gpus=2:d
 #PBS -r y
 
 cd $PBS_O_WORKDIR
@@ -13,4 +13,4 @@ echo $PBS_NODEFILE
 echo $PBS_GPUFILE
 cat $PBS_GPUFILE
 
-startdocker -P /gdata/lirui -D /gdata/lirui -u "--shm-size 64G" -c "bash /gdata/lirui/project/vcl/tools/dist_test.sh /gdata/lirui/project/vcl/configs/train/ypb/train_vqvae_video_d4_nemd32_contrastive_byol_commit1.0_2.py 2" bit:5000/lirui_torch1.8_cuda11.1_corres
+startdocker -P /gdata/lirui -D /gdata/lirui -u "--shm-size 64G" -c "bash /gdata/lirui/project/vcl/tools/dist_test.sh vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_random_swintrans.py 2" bit:5000/lirui_torch1.8_cuda11.1_corres

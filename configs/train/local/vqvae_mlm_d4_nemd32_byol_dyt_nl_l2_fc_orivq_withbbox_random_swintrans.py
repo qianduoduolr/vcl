@@ -74,7 +74,7 @@ train_pipeline = [
 ]
 
 val_pipeline = [
-    dict(type='Resize', scale=(-1, 480), keep_ratio=True),
+    dict(type='Resize', scale=(256, 256), keep_ratio=False),
     dict(type='Flip', flip_ratio=0),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='FormatShape', input_format='NCTHW'),
