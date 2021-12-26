@@ -10,7 +10,7 @@ docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 # model settings
 model = dict(
     type='VQCL_v2',
-    backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
+    backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )), #pretrained='/home/lr/models/ssl/vcl/vfs_pretrain/r18_nc_sgd_cos_100e_r2_1xNx8_k400-db1a4c0d.pth'),
     sim_siam_head=dict(
         type='SimSiamHead',
         in_channels=512,
@@ -26,8 +26,23 @@ model = dict(
     loss=dict(type='CosineSimLoss', negative=False),
     embed_dim=128,
     n_embed=32,
-    commitment_cost=1.0,
+    commitment_cost=0.25,
+    decay=0.5,
+    pretrained='/home/lr/models/vqvae/vqvae_youtube_d4_n32_c256_embc128_byol_commit1.0.pth'
 )
+# model = dict(
+#     type='VQVAE',
+#     downsample=4, 
+#     n_embed=32, 
+#     channel=256, 
+#     n_res_channel=128, 
+#     embed_dim=128,
+#     commitment_cost=1,
+#     loss=dict(type='MSELoss',reduction='mean'),
+#     pretrained='/home/lr/models/vqvae/vqvae_youtube_d4_n32_c256_embc128.pth'
+# )
+
+
 
 # model training and testing settings
 train_cfg = dict(syncbn=True)
@@ -107,13 +122,13 @@ data = dict(
 
 # optimizer
 # optimizers = dict(type='Adam', lr=3e-4, betas=(0.9, 0.999))
-optimizers = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
+optimizers = dict(type='SGD', lr=0, momentum=0.9, weight_decay=0.0001)
 
 
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=10
+max_epoch=1
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,
@@ -124,7 +139,7 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=5, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=10, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(

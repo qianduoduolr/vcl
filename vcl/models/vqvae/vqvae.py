@@ -318,6 +318,7 @@ class VQVAE(BaseModel):
         newed=False,
         train_cfg=None,
         test_cfg=None,
+        pretrained=None
     ):
         """
         :param in_channel: input channels
@@ -342,9 +343,22 @@ class VQVAE(BaseModel):
 
         self.quantize_conv = nn.Conv2d(channel, embed_dim, 1)  # Dimension reduction to embedding size
         self.quantize = Quantize(embed_dim, n_embed, commitment_cost, decay)  # Vector quantization
-
+        self.commitment_cost = commitment_cost
+        self.n_embed = n_embed
+        self.embed_dim = embed_dim
+        
         self.loss = build_loss(loss)
+        self.init_weights(pretrained)
 
+    def init_weights(self, pretrained): 
+        if pretrained is not None:
+            print('load pretrained')
+            _ = load_checkpoint(self, pretrained, map_location='cpu')
+
+        embed = torch.randn(self.embed_dim, self.n_embed)
+        self.quantize.register_buffer("embed", embed)
+        self.quantize.register_buffer("cluster_size", torch.zeros(self.n_embed))
+        self.quantize.register_buffer("embed_avg", embed.clone())
 
     def encode(self, x):
         """
@@ -386,7 +400,7 @@ class VQVAE(BaseModel):
         losses = {}
 
         losses['rec_loss'] = self.loss(dec, img)
-        losses['commit_loss'] = diff
+        losses['commit_loss'] = self.commitment_cost * diff
 
         return losses
 
@@ -693,7 +707,6 @@ class VQCL_v2(BaseModel):
         decay=0.99,
         sim_siam_head=None,
         loss=None,
-
         train_cfg=None,
         test_cfg=None,
         pretrained=None
@@ -702,6 +715,7 @@ class VQCL_v2(BaseModel):
 
         self.commitment_cost = commitment_cost
         self.embed_dim = embed_dim
+        self.n_embed = n_embed
 
         self.quantize = Quantize(embed_dim, n_embed, commitment_cost, decay)  # Vector quantization
         self.backbone = build_backbone(backbone)
@@ -715,9 +729,13 @@ class VQCL_v2(BaseModel):
         else:
             self.head = None
 
+        self.init_weights(pretrained)
+            
+    def init_weights(self, pretrained):
+        self.backbone.init_weights()
         if pretrained is not None:
-            self.init_weights(pretrained)
-
+            print('load pretrained')
+            _ = load_checkpoint(self, pretrained, map_location='cpu')
 
 
     def forward_train(self, imgs):
@@ -737,6 +755,7 @@ class VQCL_v2(BaseModel):
 
         losses['cts_loss'] = self.forward_img_head(q, k)
         losses['diff'] = diff * self.commitment_cost
+        
 
         return losses, diff.item()
 

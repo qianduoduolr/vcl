@@ -26,7 +26,7 @@ def local_attention(correlation_sampler, tar, refs, patch_size):
     return out, att
 
 
-def non_local_attention(tar, refs, per_ref=True):
+def non_local_attention(tar, refs, per_ref=True, flatten=True):
     
     """ Given refs and tar, return transform tar non-local.
 
@@ -47,12 +47,12 @@ def non_local_attention(tar, refs, per_ref=True):
     if per_ref:
         # return att for each ref
         att = F.softmax(att, dim=-1)
-        out = frame_transform(att, refs, per_ref=per_ref)
+        out = frame_transform(att, refs, per_ref=per_ref, flatten=flatten)
         return out, att  
     else:
         att_ = att.permute(0, 2, 1, 3).flatten(2)
         att_ = F.softmax(att_, -1)
-        out = frame_transform(att_, refs, per_ref=per_ref)
+        out = frame_transform(att_, refs, per_ref=per_ref, flatten=flatten)
         return out, att_, att
 
 

@@ -454,7 +454,8 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
         self.video_dir = osp.join(self.root, self.year, self.data_prefix['RGB'])
         self.mask_dir = osp.join(self.root, self.year, self.data_prefix['ANNO'])
         self.meta = mmcv.load(osp.join(self.list_path, 'ytvos_s256_flow_raft.json'))[self.split]
-
+        video_idx = 0
+        
         for vid in self.meta:
             sample = dict()
             vname = vid["base_path"].split('/')[-1]
@@ -466,14 +467,20 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
             for frame in vid['frame']:
                 sample['frames_path'].append(osp.join(self.video_dir, vname, frame['img_path']))
                 sample['frames_bbox'].append(frame['objs'][0]['bbox'])
-
+                
+            sample['video_idx'] = video_idx
+            video_idx += 1
             self.samples.append(sample)
+        
+        self.samples = self.samples[:16]
+
     
     def prepare_train_data(self, idx):
         sample = self.samples[idx]
         frames_path = sample['frames_path']
         frames_bbox = sample['frames_bbox']
         num_frames = sample['num_frames']
+        video_idx = sample['video_idx']
 
         offset = [ random.randint(0, num_frames-self.clip_length) for i in range(self.num_clips)]
 
@@ -489,6 +496,7 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
                 'imgs': frames,
                 'bboxs': bboxs,
                 'mask_ratio': self.mask_ratio,
+                'video_idx': video_idx,
                 'mask_sample_size': (self.vq_res, self.vq_res),
                 'modality': 'RGB',
                 'num_clips': self.num_clips,
@@ -506,6 +514,7 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
             data = {
                 'imgs': frames,
                 'mask_query_idx': mask_query_idx,
+                'video_idx': video_idx,
                 'modality': 'RGB',
                 'num_clips': self.num_clips,
                 'num_proposals':1,
