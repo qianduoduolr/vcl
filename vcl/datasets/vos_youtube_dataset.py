@@ -36,7 +36,8 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
                        test_mode=False,
                        split='train',
                        year='2018',
-                       load_to_ram=False
+                       load_to_ram=False,
+                       per_video=False
                        ):
         super().__init__(root, list_path, pipeline, test_mode, split)
 
@@ -47,6 +48,7 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
         self.year = year
         self.clip_length = clip_length
         self.num_clips = num_clips
+        self.per_video = per_video
 
         self.load_annotations()
 
@@ -66,8 +68,9 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
                 sample = dict()
                 vname, num_frames = line.strip('\n').split()
                 
-                if vname != '2bf545c2f5':
-                    continue
+                if self.per_video:
+                    if vname != self.per_video:
+                        continue  
                     
                 if int(num_frames) < self.clip_length: continue
                 sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
@@ -75,7 +78,8 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
                 sample['num_frames'] = int(num_frames)
                 self.samples.append(sample)
         
-        self.samples = [self.samples[0] for i in range(3000)]
+        if self.per_video:
+            self.samples = [self.samples[0] for i in range(32 * 100)]
 
     def prepare_train_data(self, idx):
 
