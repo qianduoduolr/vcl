@@ -6,6 +6,7 @@ import numbers
 from typing import Tuple, List, Optional
 from torch import Tensor
 
+import cv2
 import mmcv
 import numpy as np
 from numpy import random as npr
@@ -1207,12 +1208,19 @@ class MultiGroupCrop(object):
 @PIPELINES.register_module()
 class RGB2LAB(object):
 
-    def __init__(self, keys='imgs'):
+    def __init__(self, 
+                 keys='imgs',
+                 output_keys='imgs'):
         self.keys = keys
+        self.output_keys = output_keys
 
     def __call__(self, results):
+        if self.keys is not self.output_keys: 
+            results[self.output_keys] = results[self.output_keys] = copy.deepcopy(results[self.keys])
         for i, img in enumerate(results[self.keys]):
-            results[self.keys][i] = mmcv.imconvert(img, 'rgb', 'lab')
+            # results[self.output_keys][i] = mmcv.imconvert(img, 'rgb', 'lab')
+            img = np.float32(img) / 255.0
+            results[self.output_keys][i] = cv2.cvtColor(img, cv2.COLOR_RGB2Lab)
         return results
 
 
@@ -1412,56 +1420,6 @@ class RandomGrayScale(object):
                 results[self.keys][i] = img
 
         return results
-
-
-# @PIPELINES.register_module()
-# class ColorJitter(object):
-
-#     def __init__(self,
-#                  p=0.5,
-#                  same_on_clip=True,
-#                  same_across_clip=True,
-#                  brightness=0,
-#                  contrast=0,
-#                  saturation=0,
-#                  hue=0,
-#                  keys='imgs',
-#                  output_keys='imgs'):
-#         trans = _ColorJitter(
-#             brightness=brightness,
-#             contrast=contrast,
-#             saturation=saturation,
-#             hue=hue)
-#         self.brightness = trans.brightness
-#         self.contrast = trans.contrast
-#         self.saturation = trans.saturation
-#         self.hue = trans.hue
-#         self.p = p
-#         self.same_on_clip = same_on_clip
-#         self.same_across_clip = same_across_clip
-#         self.keys = keys
-#         self.output_keys = output_keys
-
-#     def __call__(self, results):
-#         apply = npr.rand() < self.p
-#         trans = _ColorJitter.get_params(self.brightness, self.contrast,
-#                                         self.saturation, self.hue)
-#         if self.keys is not self.output_keys: 
-#             results[self.output_keys] = results[self.output_keys] = copy.deepcopy(results[self.keys])
-
-#         for i, img in enumerate(results[self.keys]):
-#             is_new_clip = not self.same_across_clip and i % results[
-#                 'clip_len'] == 0 and i > 0
-#             if not self.same_on_clip or is_new_clip:
-#                 apply = npr.rand() < self.p
-#                 trans = _ColorJitter.get_params(self.brightness, self.contrast,
-#                                                 self.saturation, self.hue)
-#             if apply:
-#                 img = np.array(trans(Image.fromarray(img)))
-#                 results[self.output_keys][i] = img
-
-#         return results
-
 
 @PIPELINES.register_module()
 class Grid(object):
@@ -1879,3 +1837,30 @@ class ColorJitter(torch.nn.Module):
                 results[self.output_keys][i] = img
 
         return results
+    
+@PIPELINES.register_module()
+class ColorDropout(object):
+
+    def __init__(self, 
+                 keys='imgs',
+                 drop_rate=0.8
+                 ):
+        self.keys = keys
+        self.droprate = drop_rate
+
+    def __call__(self, results):
+        
+        if random.random() <= self.droprate:
+            drop_ch_num = int(np.random.choice(np.arange(1, 2), 1))
+            drop_ch_ind = np.random.choice(np.arange(1,3), drop_ch_num, replace=False)
+            
+            for i, img in enumerate(results[self.keys]):
+                for dropout_ch in drop_ch_ind:
+                    img[:, :, dropout_ch] = 0
+                img *= (3 / (3 - drop_ch_num))
+                results[self.keys][i] = img
+                
+            return results
+    
+        else:
+            return results
