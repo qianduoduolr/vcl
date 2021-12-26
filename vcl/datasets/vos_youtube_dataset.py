@@ -471,8 +471,6 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
             sample['video_idx'] = video_idx
             video_idx += 1
             self.samples.append(sample)
-        
-        self.samples = self.samples[:16]
 
     
     def prepare_train_data(self, idx):
