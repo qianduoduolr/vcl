@@ -84,9 +84,8 @@ def main():
     mmcv.mkdir_or_exist(osp.abspath(cfg.work_dir))
 
     # cp code to work_dir
-    if distributed:
+    if distributed and cfg.get('cp_project', True):
         file_path = osp.dirname(osp.dirname(osp.abspath(__file__)))
-        # os.system(f"rsync -a --exclude='{file_path}/.git' {file_path} {cfg.work_dir}")
         os.system(f"rsync -a --exclude 'output' --exclude '.git' {file_path} {cfg.work_dir}/")
 
     # init the logger before other steps
