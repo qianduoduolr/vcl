@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'video_name'
+exp_name = 'b96c57d2c7'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
@@ -108,7 +108,7 @@ data = dict(
             clip_length=1,
             num_clips=2,
             pipeline=train_pipeline,
-            per_video='video_name'
+            per_video='b96c57d2c7'
             ),
 
     test =  dict(
