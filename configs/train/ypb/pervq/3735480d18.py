@@ -139,7 +139,7 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=1, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=1, save_optimizer=False, by_epoch=True, module_name='quantize')
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
@@ -156,6 +156,7 @@ visual_config = None
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/per_video_vq/{exp_name}'
+cp_project = False
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',

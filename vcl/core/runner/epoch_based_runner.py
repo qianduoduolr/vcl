@@ -131,7 +131,9 @@ class EpochBasedRunner_Custom(BaseRunner):
                         filename_tmpl='epoch_{}.pth',
                         save_optimizer=True,
                         meta=None,
-                        create_symlink=True):
+                        create_symlink=True,
+                        module_name=None
+                        ):
         """Save the checkpoint.
 
         Args:
@@ -163,7 +165,12 @@ class EpochBasedRunner_Custom(BaseRunner):
         filename = filename_tmpl.format(self.epoch + 1)
         filepath = osp.join(out_dir, filename)
         optimizer = self.optimizer if save_optimizer else None
-        save_checkpoint(self.model, filepath, optimizer=optimizer, meta=meta)
+        
+        if module_name == None:
+            save_checkpoint(self.model, filepath, optimizer=optimizer, meta=meta)
+        else:
+            module = getattr(self.model.module, module_name)
+            save_checkpoint(module, filepath, optimizer=optimizer, meta=meta)
         # in some environments, `os.symlink` is not supported, you may need to
         # set `create_symlink` to False
         if create_symlink:

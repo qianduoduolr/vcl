@@ -58,7 +58,7 @@ do
             fi
         fi
         COUNT=`expr $COUNT + 1`
-    done < /gdata/lirui/dataset/YouTube-VOS/2018/train/youtube2018_train_list.txt
+    done < /gdata/lirui/dataset/YouTube-VOS/2018/train/youtube2018_train_list1.txt
 
     echo "end cycle"
 done

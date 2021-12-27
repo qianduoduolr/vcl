@@ -158,7 +158,7 @@ eval_config= dict(
 
 
 load_from = None
-resume_from = None
+resume_from = '/gdata/lirui/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_random_perv/epoch_1600.pth'
 workflow = [('train', 1)]
 
 

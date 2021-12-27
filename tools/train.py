@@ -19,7 +19,7 @@ from vcl.utils import collect_env, get_root_logger
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train an editor')
-    parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/local/vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_random_lab_colordrop.py')
+    parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/local/train_vqvae_perv_cluster.py')
     parser.add_argument('--work-dir', help='the dir to save logs and models')
     parser.add_argument(
         '--resume-from', help='the checkpoint file to resume from')
@@ -84,7 +84,7 @@ def main():
     mmcv.mkdir_or_exist(osp.abspath(cfg.work_dir))
 
     # cp code to work_dir
-    if distributed:
+    if distributed and cfg.get('cp_project', True):
         file_path = osp.dirname(osp.dirname(osp.abspath(__file__)))
         os.system(f"rsync -a --exclude 'output' --exclude '.git' {file_path} {cfg.work_dir}/")
 

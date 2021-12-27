@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = '0a275e7f12'
+exp_name = 'video_name'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
@@ -94,7 +94,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=16, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -108,7 +108,7 @@ data = dict(
             clip_length=1,
             num_clips=2,
             pipeline=train_pipeline,
-            per_video='0a275e7f12'
+            per_video='video_name'
             ),
 
     test =  dict(
@@ -139,7 +139,7 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=1, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=1, save_optimizer=False, by_epoch=True, module_name='quantize')
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
@@ -156,6 +156,7 @@ visual_config = None
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 work_dir = f'/home/lr/expdir/VCL/group_vqvae_tracker/per_video_vq/{exp_name}'
+cp_project = False
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
