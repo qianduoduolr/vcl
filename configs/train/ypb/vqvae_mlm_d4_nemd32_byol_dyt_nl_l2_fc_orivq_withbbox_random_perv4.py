@@ -3,8 +3,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_random_perv3'
-docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
+exp_name = 'vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_random_perv4'
+docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
@@ -123,7 +123,7 @@ optimizers = dict(
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=3200
+max_epoch=800
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,
@@ -133,7 +133,7 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=1600, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=400, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
