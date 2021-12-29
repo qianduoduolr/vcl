@@ -4,7 +4,7 @@ import mmcv
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_random_pervq_quant'
+exp_name = 'vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_random_pervq_quant_fc'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 per_vq = []
@@ -15,7 +15,7 @@ for vid in meta:
     
 # model settings
 model = dict(
-    type='Vqvae_Tracker_V7',
+    type='Vqvae_Tracker_V8',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
     vqvae=dict(type='VQCL_v2', backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
                sim_siam_head=dict(type='SimSiamHead', in_channels=512, num_projection_fcs=3, projection_mid_channels=512,
@@ -23,6 +23,7 @@ model = dict(
                with_norm=True, spatial_type='avg'),loss=dict(type='CosineSimLoss', negative=False), embed_dim=128,
                n_embed=32, commitment_cost=1.0, per_vq=per_vq, pretrained='/gdata/lirui/models/vqvae/vqvae_youtube_d4_n32_c256_embc128_byol_commit1.0.pth'),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
+    video_num=3457,
     patch_size=-1,
     temperature=0.1,
     pretrained_vq=None,
@@ -74,8 +75,8 @@ train_pipeline = [
     dict(type='Normalize', **img_norm_cfg, keys='jitter_imgs'),
     dict(type='FormatShape', input_format='NPTCHW'),
     dict(type='FormatShape', input_format='NPTCHW', keys='jitter_imgs'),
-    dict(type='Collect', keys=['imgs', 'jitter_imgs', 'mask_query_idx'], meta_keys=['video_name']),
-    dict(type='ToTensor', keys=['imgs', 'jitter_imgs', 'mask_query_idx'])
+    dict(type='Collect', keys=['imgs', 'jitter_imgs', 'mask_query_idx', 'video_idx'], meta_keys=['video_name']),
+    dict(type='ToTensor', keys=['imgs', 'jitter_imgs', 'mask_query_idx', 'video_idx'])
 ]
 
 val_pipeline = [
@@ -124,8 +125,7 @@ data = dict(
 
 # optimizer
 optimizers = dict(
-    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-    predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    type='Adam', lr=0.001, betas=(0.9, 0.999)
     )
 # learning policy
 # total_iters = 200000

@@ -821,3 +821,129 @@ class Vqvae_Tracker_V7(BaseModel):
                 losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
         
         return losses
+    
+    
+@MODELS.register_module()
+class Vqvae_Tracker_V8(BaseModel):
+
+    def __init__(self,
+                 backbone,
+                 vqvae,
+                 patch_size,
+                 pretrained_vq,
+                 temperature,
+                 video_num,
+                 ce_loss=None,
+                 train_cfg=None,
+                 test_cfg=None,
+                 pretrained=None
+                 ):
+        """ original vqvae tracker
+        """
+        super(Vqvae_Tracker_V8, self).__init__()
+        if not isinstance(vqvae, list):
+            vqvae = list([vqvae])
+            if pretrained_vq is not None:
+                pretrained_vq = list([pretrained_vq])
+
+        self.train_cfg = train_cfg
+        self.test_cfg = test_cfg
+        self.patch_size = patch_size
+        self.num_head = len(vqvae)
+
+        logger = get_root_logger()
+
+        self.backbone = build_backbone(backbone)
+
+        self.vq_type = vqvae[0].type
+        if self.vq_type != 'DALLE_Encoder':
+            for idx, i in enumerate(range(len(vqvae))):
+                i = str(i).replace('0', '')
+                setattr(self, f'vqvae{i}', build_model(vqvae[idx]).cuda())
+                if pretrained_vq is not None:
+                    _ = load_checkpoint(getattr(self, f'vqvae{i}'), pretrained_vq[idx], map_location='cpu')
+                    logger.info(f'load {i}th pretrained VQVAE successfully')
+                setattr(self, f'vq_emb{i}', getattr(self, f'vqvae{i}').quantize.embed)
+                setattr(self, f'n_embed{i}', vqvae[idx].n_embed)
+                setattr(self, f'vq_t{i}', temperature)
+                setattr(self, f'vq_enc_per_video{i}', getattr(self, f'vqvae{i}').encode_per_video)
+        else:
+            assert self.num_head == 1
+            self.vq_enc = load_model(pretrained_vq).cuda()
+            self.n_embed = self.vq_enc.vocab_size
+            logger.info('load pretrained VQVAE successfully')
+
+        # loss
+        self.ce_loss = build_loss(ce_loss) if ce_loss else None
+
+        # corr
+        if patch_size != -1:
+            from spatial_correlation_sampler import SpatialCorrelationSampler
+            self.correlation_sampler = SpatialCorrelationSampler(
+                kernel_size=1,
+                patch_size=patch_size,
+                stride=1,
+                padding=0,
+                dilation=1)
+
+        # fc
+        for i in range(video_num):
+            setattr(self, f'predictor{i}', nn.Linear(self.backbone.feat_dim, self.n_embed))
+
+        if pretrained:
+            _ = load_checkpoint(self, pretrained, map_location='cpu')
+            logger.info('load pretrained model successfully')
+
+    def forward_train(self, imgs, mask_query_idx, img_meta, video_idx, jitter_imgs=None):
+
+        bsz, num_clips, t, c, h, w = imgs.shape
+
+        # vqvae tokenize for query frame
+        with torch.no_grad():
+            out_ind = []
+            for i in range(self.num_head):
+                inds = []
+                i = str(i).replace('0', '')
+                vqvae = getattr(self, f'vqvae{i}')
+                vq_enc_per_video = getattr(self, f'vq_enc_per_video{i}')
+                vqvae.eval()
+                
+                for i in range(bsz):
+                    img = imgs[i:i+1]
+                    vname = img_meta[i]['video_name']
+                    emb, _, _, ind, _ = vq_enc_per_video(img[:, 0, -1], vname)
+                    ind = ind.unsqueeze(1).repeat(1, t-1, 1, 1)
+                    inds.append(ind)
+                    
+                ind = torch.cat(inds, 0).long().detach()
+                out_ind.append(ind)
+
+        if jitter_imgs is not None:
+            imgs = jitter_imgs
+
+        mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
+
+        tar = self.backbone(imgs[:,0,-1])
+        refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
+
+        if self.patch_size != -1:
+            out, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
+        else:
+            out, att = non_local_attention(tar, refs, per_ref=True, flatten=False)
+
+        losses = {}
+
+        loss = 0
+        for i in range(bsz):
+            idx = video_idx[i].item() 
+            predictor = getattr(self, f'predictor{idx}')
+            predict = predictor(out[i, 0])
+            loss_per_video = self.ce_loss(predict, ind[i].reshape(-1,1))
+            mask = mask_query_idx[i:i+1]
+            
+            loss_per_video = (loss_per_video * mask.reshape(-1)).sum() / (mask.sum() + 1e-9)
+            loss += loss_per_video
+            
+        losses['ce_loss'] = loss / bsz
+        
+        return losses

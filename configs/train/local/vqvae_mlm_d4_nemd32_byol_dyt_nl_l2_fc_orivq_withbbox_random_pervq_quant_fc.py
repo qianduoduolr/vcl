@@ -4,25 +4,26 @@ import mmcv
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_random_pervq_quant'
+exp_name = 'vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_random_pervq_quant_fc'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 per_vq = []
-meta = mmcv.load(os.path.join('/dev/shm/2018/train', 'ytvos_s256_flow_raft.json'))['train']
+meta = mmcv.load(os.path.join('/home/lr/dataset/YouTube-VOS/2018/train', 'ytvos_s256_flow_raft.json'))['train']
 for vid in meta:
     vname = vid["base_path"].split('/')[-1]
     per_vq.append(vname)
     
 # model settings
 model = dict(
-    type='Vqvae_Tracker_V7',
+    type='Vqvae_Tracker_V8',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
     vqvae=dict(type='VQCL_v2', backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
                sim_siam_head=dict(type='SimSiamHead', in_channels=512, num_projection_fcs=3, projection_mid_channels=512,
                projection_out_channels=512, num_predictor_fcs=2, predictor_mid_channels=128, predictor_out_channels=512,
                with_norm=True, spatial_type='avg'),loss=dict(type='CosineSimLoss', negative=False), embed_dim=128,
-               n_embed=32, commitment_cost=1.0, per_vq=per_vq, pretrained='/gdata/lirui/models/vqvae/vqvae_youtube_d4_n32_c256_embc128_byol_commit1.0.pth'),
+               n_embed=32, commitment_cost=1.0, per_vq=per_vq, pretrained='/home/lr/models/vqvae/vqvae_youtube_d4_n32_c256_embc128_byol_commit1.0.pth'),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
+    video_num=3457,
     patch_size=-1,
     temperature=0.1,
     pretrained_vq=None,
@@ -74,8 +75,8 @@ train_pipeline = [
     dict(type='Normalize', **img_norm_cfg, keys='jitter_imgs'),
     dict(type='FormatShape', input_format='NPTCHW'),
     dict(type='FormatShape', input_format='NPTCHW', keys='jitter_imgs'),
-    dict(type='Collect', keys=['imgs', 'jitter_imgs', 'mask_query_idx'], meta_keys=['video_name']),
-    dict(type='ToTensor', keys=['imgs', 'jitter_imgs', 'mask_query_idx'])
+    dict(type='Collect', keys=['imgs', 'jitter_imgs', 'mask_query_idx', 'video_idx'], meta_keys=['video_name']),
+    dict(type='ToTensor', keys=['imgs', 'jitter_imgs', 'mask_query_idx', 'video_idx'])
 ]
 
 val_pipeline = [
@@ -93,7 +94,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=16, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -103,8 +104,8 @@ data = dict(
             type=train_dataset_type,
             size=256,
             p=0.8,
-            root='/dev/shm',
-            list_path='/dev/shm/2018/train',
+            root='/home/lr/dataset/YouTube-VOS',
+            list_path='/home/lr/dataset/YouTube-VOS/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
             mask_ratio=0.15,
             clip_length=2,
@@ -114,8 +115,8 @@ data = dict(
 
     test =  dict(
             type=test_dataset_type,
-            root='/gdata/lirui/dataset/DAVIS',
-            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
+            root='/home/lr/dataset/DAVIS',
+            list_path='/home/lr/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -124,8 +125,7 @@ data = dict(
 
 # optimizer
 optimizers = dict(
-    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-    predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    type='Adam', lr=0.001, betas=(0.9, 0.999)
     )
 # learning policy
 # total_iters = 200000
@@ -156,11 +156,11 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
+work_dir = f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
+                  checkpoint_path=f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
                 )
 
 
