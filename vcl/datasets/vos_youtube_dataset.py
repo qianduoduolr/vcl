@@ -463,6 +463,7 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
         for vid in self.meta:
             sample = dict()
             vname = vid["base_path"].split('/')[-1]
+            sample['video_name'] = vname
             sample['frames_path'] = []
             sample['frames_bbox'] = []
             sample['num_frames'] = len(vid['frame'])
@@ -497,6 +498,7 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
             data = {
                 'imgs': frames,
                 'bboxs': bboxs,
+                'video_name':sample['video_name'],
                 'mask_ratio': self.mask_ratio,
                 'video_idx': video_idx,
                 'mask_sample_size': (self.vq_res, self.vq_res),
@@ -515,6 +517,7 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
 
             data = {
                 'imgs': frames,
+                'video_name':sample['video_name'],
                 'mask_query_idx': mask_query_idx,
                 'video_idx': video_idx,
                 'modality': 'RGB',

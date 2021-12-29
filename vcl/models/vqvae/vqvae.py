@@ -709,6 +709,7 @@ class VQCL_v2(BaseModel):
         loss=None,
         train_cfg=None,
         test_cfg=None,
+        per_vq=False,
         pretrained=None
     ):
         super().__init__()
@@ -718,6 +719,11 @@ class VQCL_v2(BaseModel):
         self.n_embed = n_embed
 
         self.quantize = Quantize(embed_dim, n_embed, commitment_cost, decay)  # Vector quantization
+        self.per_vq = True if per_vq else False
+        if self.per_vq:
+            for name in per_vq:
+                setattr(self, f'quantize_{name}', Quantize(embed_dim, n_embed, commitment_cost, decay))
+            
         self.backbone = build_backbone(backbone)
         self.quantize_conv = nn.Conv2d(self.backbone.feat_dim, embed_dim, 1)  # Dimension reduction to embedding size
 
@@ -729,14 +735,21 @@ class VQCL_v2(BaseModel):
         else:
             self.head = None
 
-        self.init_weights(pretrained)
+        self.init_weights(pretrained, per_vq)
             
-    def init_weights(self, pretrained):
-        self.backbone.init_weights()
+    def init_weights(self, pretrained, per_vq):
+        # self.backbone.init_weights()
         if pretrained is not None:
             print('load pretrained')
             _ = load_checkpoint(self, pretrained, map_location='cpu')
-
+        
+        if self.per_vq:
+            for name in per_vq:
+                vq = getattr(self, f'quantize_{name}')
+                root = '/'.join(pretrained.split('/')[:3])
+                vq_path = os.path.join(root, f'expdir/VCL/group_vqvae_tracker/per_video_vq/{name}/epoch_1.pth')
+                _ = load_checkpoint(vq, vq_path, map_location='cpu')
+                
 
     def forward_train(self, imgs):
     
@@ -793,6 +806,20 @@ class VQCL_v2(BaseModel):
 
         q_emb = self.quantize_conv(enc).permute(0, 2, 3, 1)
         quant, diff, ind, embed = self.quantize(q_emb.contiguous(), distributed=False)
+
+        # Converting back the quantized map to B x C x H x W
+        quant = quant.permute(0, 3, 1, 2)
+
+        return enc, quant, diff, ind, embed
+    
+    def encode_per_video(self, x, name):
+        # Encoding
+        enc = self.backbone(x)
+
+        q_emb = self.quantize_conv(enc).permute(0, 2, 3, 1)
+        
+        vq = getattr(self, f'quantize_{name}')
+        quant, diff, ind, embed = vq(q_emb.contiguous(), distributed=False)
 
         # Converting back the quantized map to B x C x H x W
         quant = quant.permute(0, 3, 1, 2)
