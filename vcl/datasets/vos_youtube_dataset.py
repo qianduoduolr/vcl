@@ -350,7 +350,7 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
         flows_path = sample['flows_path']
         num_frames = sample['num_frames']
 
-        offset = [ random.randint(0, num_frames-self.clip_length) for i in range(self.num_clips)]
+        offset = [ random.randint(0, num_frames-self.clip_length) for i in range(self.num_clips) ]
 
 
         if self.load_to_ram:
@@ -429,8 +429,12 @@ class VOS_youtube_dataset_mlm_withbbox(VOS_youtube_dataset_mlm):
             frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
         else:
             frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
+            
+        bboxs = []
+        for off in offset:
+            for l in self.clip_length:
+                bboxs.append(frames_bbox[off+l])
         
-        bboxs = [ frames_bbox[offset[0] + i]  for i in range(self.clip_length * self.num_clips)]
 
         data = {
             'imgs': frames,
@@ -479,20 +483,92 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
 
     
     def prepare_train_data(self, idx):
+        
         sample = self.samples[idx]
         frames_path = sample['frames_path']
         frames_bbox = sample['frames_bbox']
         num_frames = sample['num_frames']
         video_idx = sample['video_idx']
 
-        offset = [ random.randint(0, num_frames-self.clip_length) for i in range(self.num_clips)]
+        offset = [ random.randint(0, num_frames-self.clip_length) for i in range(self.num_clips) ]
+
 
         if self.load_to_ram:
             frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
         else:
             frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
         
-        bboxs = [ frames_bbox[offset[0] + i]  for i in range(self.clip_length * self.num_clips)]
+        bboxs = []
+        for off in offset:
+            for l in self.clip_length:
+                bboxs.append(frames_bbox[off+l])
+
+        if random.random() <= self.p:
+            data = {
+                'imgs': frames,
+                'bboxs': bboxs,
+                'video_name':sample['video_name'],
+                'mask_ratio': self.mask_ratio,
+                'video_idx': video_idx,
+                'mask_sample_size': (self.vq_res, self.vq_res),
+                'modality': 'RGB',
+                'num_clips': self.num_clips,
+                'num_proposals':1,
+                'clip_len': self.clip_length
+            }
+            return self.pipeline(data)
+
+        else:
+            mask_num = int(self.vq_res * self.vq_res * self.mask_ratio)
+            mask_query_idx = np.zeros(self.vq_res * self.vq_res).astype(np.uint8)
+            sample_idx = np.array(random.sample(range(self.vq_res * self.vq_res), mask_num))
+            mask_query_idx[sample_idx] = 1
+
+            data = {
+                'imgs': frames,
+                'video_name':sample['video_name'],
+                'mask_query_idx': mask_query_idx,
+                'video_idx': video_idx,
+                'modality': 'RGB',
+                'num_clips': self.num_clips,
+                'num_proposals':1,
+                'clip_len': self.clip_length
+            }
+
+            return self.pipeline(data)
+
+@DATASETS.register_module()
+class VOS_youtube_dataset_mlm_withbbox_random_V2(VOS_youtube_dataset_mlm_withbbox_random):
+    def __init__(self, first_frame=False, **kwargs):
+        super().__init__(**kwargs)
+        self.first_frame = first_frame
+
+    
+    def prepare_train_data(self, idx):
+        
+        sample = self.samples[idx]
+        frames_path = sample['frames_path']
+        frames_bbox = sample['frames_bbox']
+        num_frames = sample['num_frames']
+        video_idx = sample['video_idx']
+
+        if self.first_frame:
+            idx = random.randint(1, num_frames-self.num_clips*self.clip_length)
+            offset = [ idx + i for i in range(self.num_clips-1) ]
+            offset.insert(0, 0)
+        else:
+            idx = random.randint(0, num_frames-self.num_clips*self.clip_length)
+            offset = [ idx + i for i in range(self.num_clips) ]
+
+        if self.load_to_ram:
+            frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
+        else:
+            frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
+        
+        bboxs = []
+        for off in offset:
+            for l in range(self.clip_length):
+                bboxs.append(frames_bbox[off+l])
 
         if random.random() <= self.p:
             data = {

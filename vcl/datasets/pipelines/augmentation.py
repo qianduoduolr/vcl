@@ -196,7 +196,7 @@ class RandomResizedCrop(object):
                  area_range=(0.08, 1.0),
                  aspect_ratio_range=(3 / 4, 4 / 3),
                  same_on_clip=True,
-                 same_across_clip=True,
+                 same_across_clip=False,
                  same_clip_indices=None,
                  same_frame_indices=None,
                  crop_ratio=0.9,
@@ -720,7 +720,7 @@ class Flip(object):
                  direction='horizontal',
                  lazy=False,
                  same_on_clip=True,
-                 same_across_clip=True,
+                 same_across_clip=False,
                  same_clip_indices=None,
                  same_frame_indices=None,
                  keys='imgs'):
@@ -805,7 +805,7 @@ class Flip(object):
                 if 'masks' in results:
                     if flip:
                         mmcv.imflip_(results['masks'][i])
-
+                
             if flip:
                 lt = len(results[self.keys])
                 for i in range(0, lt, 2):

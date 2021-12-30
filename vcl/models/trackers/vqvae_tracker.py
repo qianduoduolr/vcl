@@ -40,6 +40,7 @@ class Vqvae_Tracker(BaseModel):
                  fc=True,
                  train_cfg=None,
                  test_cfg=None,
+                 per_ref=True,
                  pretrained=None
                  ):
         """ original vqvae tracker
@@ -54,6 +55,7 @@ class Vqvae_Tracker(BaseModel):
         self.patch_size = patch_size
         self.num_head = len(vqvae)
         self.multi_head_weight = multi_head_weight
+        self.per_ref = per_ref
 
         logger = get_root_logger()
 
@@ -121,13 +123,20 @@ class Vqvae_Tracker(BaseModel):
                 vq_enc = getattr(self, f'vq_enc{i}')
                 vqvae.eval()
                 emb, _, _, ind, _ = vq_enc(imgs[:, 0, -1])
-                ind = ind.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
+                
+                if self.per_ref:
+                    ind = ind.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
+                    mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
+                else:
+                    ind = ind.reshape(-1, 1).long().detach()
+                    mask_query_idx = mask_query_idx.bool()
+                    
                 out_ind.append(ind)
 
         if jitter_imgs is not None:
             imgs = jitter_imgs
 
-        mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
+
 
         tar = self.backbone(imgs[:,0,-1])
         refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
@@ -135,7 +144,7 @@ class Vqvae_Tracker(BaseModel):
         if self.patch_size != -1:
             out, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
         else:
-            out, att = non_local_attention(tar, refs, per_ref=True)
+            out, att = non_local_attention(tar, refs, per_ref=self.per_ref)
 
         losses = {}
 
