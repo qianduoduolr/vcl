@@ -500,7 +500,7 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
         
         bboxs = []
         for off in offset:
-            for l in self.clip_length:
+            for l in range(self.clip_length):
                 bboxs.append(frames_bbox[off+l])
 
         if random.random() <= self.p:

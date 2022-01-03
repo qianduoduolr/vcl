@@ -1,1 +1,1 @@
-train_dry_run
+vqvae_mlm_d4_nemd2048_dyt_nl_l2_nofc_orivq_withbbox_random_mse

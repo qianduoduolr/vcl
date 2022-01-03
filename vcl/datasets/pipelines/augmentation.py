@@ -759,7 +759,8 @@ class Flip(object):
 
         results['flip'] = flip
         results['flip_direction'] = self.direction
-
+        
+        imgs = []
         if not self.lazy:
             results['bboxs'] = []
             for i, img in enumerate(results[self.keys]):
@@ -806,6 +807,15 @@ class Flip(object):
                     if flip:
                         mmcv.imflip_(results['masks'][i])
                 
+                # imgs.append(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+            
+            # if results.get('bbox_mask', None):
+            #     mask = cv2.resize(results['mask_query_idx'][-1].astype(np.uint8), (256,256), cv2.INTER_NEAREST)[:,:,None].repeat(3, -1) * 255
+            #     imgs.append(mask)
+            #     out = np.concatenate(imgs, 1)
+            #     num = random.randint(0,1000)
+            #     cv2.imwrite(f'/home/lr/project/vcl/output/aug_vis/{num}.jpg', out)
+               
             if flip:
                 lt = len(results[self.keys])
                 for i in range(0, lt, 2):

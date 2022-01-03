@@ -347,10 +347,11 @@ class VQVAE(BaseModel):
         self.n_embed = n_embed
         self.embed_dim = embed_dim
         
-        self.loss = build_loss(loss)
+        self.loss = build_loss(loss) if loss is not None else None
         self.init_weights(pretrained)
 
     def init_weights(self, pretrained): 
+        
         if pretrained is not None:
             print('load pretrained')
             _ = load_checkpoint(self, pretrained, map_location='cpu')
