@@ -29,6 +29,10 @@ def create_lmdb_video_dataset_rgb(root_path, dst_path, workers=-1, quality=100, 
         frame_names = sorted(glob(os.path.join(video_path, '*.jpg')))
         for frame_name in frame_names:
             frame = cv2.imread(frame_name)
+            
+            if frame is None:
+                return 
+            
             h, w, c = frame.shape
 
             if resize:
@@ -41,6 +45,8 @@ def create_lmdb_video_dataset_rgb(root_path, dst_path, workers=-1, quality=100, 
             
             if save_jpg:
                 file = os.path.join(dst_file_jpg, os.path.basename(frame_name))
+                if os.path.exists(file):
+                    continue
                 cv2.imwrite(file, frame)
 
             frames.append(frame)
@@ -110,8 +116,8 @@ def parse_option():
     parser = argparse.ArgumentParser('training')
 
     # dataset
-    parser.add_argument('--root-path', type=str, default='/home/lr/dataset/YouTube-VOS/2018/train/Annotations', help='path of original data')
-    parser.add_argument('--dst-path', type=str, default='LMDBImages_s256', help='path to store generated data')
+    parser.add_argument('--root-path', type=str, default='/home/lr/dataset/YouTube-VOS/2018/train_all_frames/JPEGImages', help='path of original data')
+    parser.add_argument('--dst-path', type=str, default='JPEGImages_s256', help='path to store generated data')
     parser.add_argument('--num-workers', type=int, default=-1, help='num of workers to use')
     parser.add_argument('--resize', type=str, default='r', help='path to store generated data')
     parser.add_argument('--save-jpg', type=str, default='yes', help='path to store generated data')
@@ -125,6 +131,6 @@ def parse_option():
 if __name__ == '__main__':
     
     args =  parse_option()
-    # create_lmdb_video_dataset_rgb(args.root_path, args.dst_path, workers=args.num_workers, resize=args.resize, save_jpg=args.save_jpg)
-    create_lmdb_video_dataset_anno(args.root_path, args.dst_path, workers=args.num_workers, resize=args.resize, save_jpg=args.save_jpg)
+    create_lmdb_video_dataset_rgb(args.root_path, args.dst_path, workers=args.num_workers, resize=args.resize, save_jpg=args.save_jpg)
+    # create_lmdb_video_dataset_anno(args.root_path, args.dst_path, workers=args.num_workers, resize=args.resize, save_jpg=args.save_jpg)
 

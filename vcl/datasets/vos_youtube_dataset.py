@@ -32,6 +32,7 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
                        data_prefix, 
                        clip_length=3,
                        num_clips=1,
+                       step=1,
                        pipeline=None, 
                        test_mode=False,
                        split='train',
@@ -49,6 +50,7 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
         self.clip_length = clip_length
         self.num_clips = num_clips
         self.per_video = per_video
+        self.step = step
 
         self.load_annotations()
 
@@ -72,7 +74,7 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
                     if vname != self.per_video:
                         continue  
                     
-                if int(num_frames) < self.clip_length: continue
+                if int(num_frames) < self.clip_length * self.step: continue
                 sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
                 sample['masks_path'] = sorted(glob.glob(osp.join(self.mask_dir, vname, '*.png')))
                 sample['num_frames'] = int(num_frames)
@@ -87,10 +89,10 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
         frames_path = sample['frames_path']
         num_frames = sample['num_frames']
 
-        offsets = [ random.randint(0, num_frames-self.clip_length) for i in range(self.num_clips) ]
+        offsets = [ random.randint(0, num_frames-self.clip_length * self.step) for i in range(self.num_clips) ]
 
         # load frame
-        frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length)
+        frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length, step=self.step)
 
         data = {
             'imgs': frames,
@@ -125,7 +127,6 @@ class VOS_youtube_dataset_rgb_withbbox(VOS_youtube_dataset_rgb):
                 sample['frames_bbox'].append(frame['objs'][0]['bbox'])
 
             self.samples.append(sample)
-        self.samples = self.samples[:64]
     
     def prepare_train_data(self, idx):
 

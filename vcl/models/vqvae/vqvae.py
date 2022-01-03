@@ -295,6 +295,7 @@ class Decoder_my(nn.Module):
 
     def forward(self, z):
         return self.blocks(z)
+    
 
 
 @MODELS.register_module()
