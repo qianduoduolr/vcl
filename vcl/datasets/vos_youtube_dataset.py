@@ -73,11 +73,12 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
                 if self.per_video:
                     if vname != self.per_video:
                         continue  
-                    
-                if int(num_frames) < self.clip_length * self.step: continue
                 sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
                 sample['masks_path'] = sorted(glob.glob(osp.join(self.mask_dir, vname, '*.png')))
-                sample['num_frames'] = int(num_frames)
+                sample['num_frames'] = len(sample['frames_path'])
+                
+                if sample['num_frames'] < self.clip_length * self.step: continue
+                
                 self.samples.append(sample)
         
         if self.per_video:

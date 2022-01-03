@@ -1,1 +1,1 @@
-train_vqvae_video_d4_nemd2048_3d_step2
+train_dry_run
