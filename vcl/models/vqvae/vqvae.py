@@ -46,16 +46,13 @@ class Quantize(nn.Module):
         self.register_buffer("cluster_size", torch.zeros(n_embed))
         self.register_buffer("embed_avg", embed.clone())
 
-    def forward(self, z, distributed=False):
+    def forward(self, z):
         """
         :param z: Encoder output
         :return: Quantized tensor
         """
-        if not distributed:
-            flatten = z.reshape(-1, self.dim)  # Converting the z input to a [N x D] tensor, where D is embedding dimension
-        else:
-            flatten = concat_all_gather(z.reshape(-1, self.dim))
-            z = concat_all_gather(z)
+
+        flatten = z.reshape(-1, self.dim)  # Converting the z input to a [N x D] tensor, where D is embedding dimension
         dist = (
                 flatten.pow(2).sum(1, keepdim=True)
                 - 2 * flatten @ self.embed
@@ -70,10 +67,17 @@ class Quantize(nn.Module):
 
         # Exponential decay updating, as a replacement to codebook loss
         if self.training:
-            self.cluster_size.data.mul_(self.decay).add_(
-                embed_onehot.sum(0), alpha=1 - self.decay
-            )
+            n_total = embed_onehot.sum(0)
             embed_sum = flatten.transpose(0, 1) @ embed_onehot
+            
+            if distributed.is_initialized():
+                distributed.all_reduce(n_total)
+                distributed.all_reduce(embed_sum)
+            
+            self.cluster_size.data.mul_(self.decay).add_(
+                n_total, alpha=1 - self.decay
+            )
+            
             self.embed_avg.data.mul_(self.decay).add_(embed_sum, alpha=1 - self.decay)
             n = self.cluster_size.sum()
             cluster_size = (
@@ -597,18 +601,6 @@ class VQCL(BaseModel):
         )
 
         return outputs
-    
-    def PCA(self, X, embed_dim):
-        bsz, c, h, w = X.shape
-        X = X.permute(0, 2, 3, 1).flatten(0,2).detach().cpu().numpy()
-        X_new = X - np.mean(X, axis=0)
-        # SVD
-        U, Sigma, Vh = np.linalg.svd(X_new, full_matrices=False, compute_uv=True)
-        X_pca_svd = np.dot(X_new, (Vh.T)[:,:embed_dim])
-        X_out = torch.from_numpy(X_pca_svd).cuda()
-        out = X_out.reshape(bsz, h, w, embed_dim)
-
-        return out.permute(0, 3, 1, 2)
 
     @torch.no_grad()
     def _momentum_update_key_encoder(self):
@@ -764,7 +756,8 @@ class VQCL_v2(BaseModel):
         bsz, c, _, _ = q.shape
 
         q_emb = self.quantize_conv(q).permute(0, 2, 3, 1)
-        quant, diff, ind, embed = self.quantize(q_emb.contiguous(), distributed=False)
+        # q_emb = PCA_torch_v2(q, self.embed_dim).permute(0, 2, 3, 1)
+        quant, diff, ind, embed = self.quantize(q_emb.contiguous())
     
         losses = {}
 
@@ -807,7 +800,7 @@ class VQCL_v2(BaseModel):
         enc = self.backbone(x)
 
         q_emb = self.quantize_conv(enc).permute(0, 2, 3, 1)
-        quant, diff, ind, embed = self.quantize(q_emb.contiguous(), distributed=False)
+        quant, diff, ind, embed = self.quantize(q_emb.contiguous())
 
         # Converting back the quantized map to B x C x H x W
         quant = quant.permute(0, 3, 1, 2)
@@ -850,8 +843,9 @@ class VQCL_v3(VQCL_v2):
         **kwargs
     ):
         super().__init__(**kwargs)
+
         self.head_quant = build_components(sim_siam_head_quant)
-        self.head_quant.init_weights()
+        self.head.init_weights()
 
     def forward_train(self, imgs, bboxs=None, jitter_imgs=None):
     
@@ -864,12 +858,14 @@ class VQCL_v3(VQCL_v2):
         bsz, c, _, _ = q.shape
 
         q_emb = self.quantize_conv(q).permute(0, 2, 3, 1)
-        quant_q, diff1, ind, embed = self.quantize(q_emb.contiguous(), distributed=False)
+        quant_q, diff1, ind, embed = self.quantize(q_emb.contiguous())
         quant_q = quant_q.permute(0, 3, 1, 2)
 
+
         k_emb = self.quantize_conv(k).permute(0, 2, 3, 1)
-        quant_k, diff2, ind, embed = self.quantize(k_emb.contiguous(), distributed=False)
+        quant_k, diff2, ind, embed = self.quantize(k_emb.contiguous())
         quant_k = quant_k.permute(0, 3, 1, 2)
+
         
         diff = diff1 + diff2
 

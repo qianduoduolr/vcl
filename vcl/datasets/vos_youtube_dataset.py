@@ -121,11 +121,12 @@ class VOS_youtube_dataset_rgb_withbbox(VOS_youtube_dataset_rgb):
             sample['frames_path'] = []
             sample['frames_bbox'] = []
             sample['num_frames'] = len(vid['frame'])
-            if sample['num_frames'] < self.clip_length:
-                continue
+ 
             for frame in vid['frame']:
                 sample['frames_path'].append(osp.join(self.video_dir, vname, frame['img_path']))
                 sample['frames_bbox'].append(frame['objs'][0]['bbox'])
+                
+            if sample['num_frames'] < self.clip_length * self.step: continue
 
             self.samples.append(sample)
     
@@ -169,6 +170,7 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
                        mask_ratio=0.15,
                        clip_length=3,
                        num_clips=1,
+                       step=1,
                        vq_size=32,
                        pipeline=None, 
                        test_mode=False,
@@ -189,6 +191,7 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
 
         self.clip_length = clip_length
         self.num_clips = num_clips
+        self.step = step
         self.vq_res = vq_size
         self.mask_ratio = mask_ratio
 
@@ -214,9 +217,10 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
                 vname, num_frames = line.strip('\n').split()
                 sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
                 sample['masks_path'] = sorted(glob.glob(osp.join(self.mask_dir, vname, '*.png')))
-                sample['num_frames'] = int(num_frames)
-                if sample['num_frames'] < self.clip_length:
-                    continue
+                sample['num_frames'] = len(sample['frames_path'])
+                
+                if sample['num_frames'] < self.clip_length * self.step: continue
+                
                 if self.load_to_ram:
                     sample['frames'] = self._parser_rgb_rawframe([0], sample['frames_path'], sample['num_frames'], step=1)
                 self.samples.append(sample)
@@ -393,9 +397,6 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
 
 @DATASETS.register_module()
 class VOS_youtube_dataset_mlm_withbbox(VOS_youtube_dataset_mlm):
-    def __init__(self, size, p=1.0, crop_ratio=0.6, **kwargs):
-        super().__init__(**kwargs)
-        self.p = p
 
     def load_annotations(self):
         
@@ -410,11 +411,13 @@ class VOS_youtube_dataset_mlm_withbbox(VOS_youtube_dataset_mlm):
             sample['frames_path'] = []
             sample['frames_bbox'] = []
             sample['num_frames'] = len(vid['frame'])
-            if sample['num_frames'] < self.clip_length:
-                continue
+
             for frame in vid['frame']:
                 sample['frames_path'].append(osp.join(self.video_dir, vname, frame['img_path']))
                 sample['frames_bbox'].append(frame['objs'][0]['bbox'])
+            
+            if sample['num_frames'] < self.clip_length * self.step:
+                continue
 
             self.samples.append(sample)
     
@@ -473,12 +476,14 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
             sample['frames_path'] = []
             sample['frames_bbox'] = []
             sample['num_frames'] = len(vid['frame'])
-            if sample['num_frames'] < self.clip_length:
-                continue
+ 
             for frame in vid['frame']:
                 sample['frames_path'].append(osp.join(self.video_dir, vname, frame['img_path']))
                 sample['frames_bbox'].append(frame['objs'][0]['bbox'])
-                
+            
+            if sample['num_frames'] < self.clip_length * self.step:
+                continue
+            
             sample['video_idx'] = video_idx
             video_idx += 1
             self.samples.append(sample)
@@ -542,6 +547,11 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
 @DATASETS.register_module()
 class VOS_youtube_dataset_mlm_withbbox_random_V2(VOS_youtube_dataset_mlm_withbbox_random):
     def __init__(self, first_frame=False, **kwargs):
+        """conitinue read frames
+
+        Args:
+            first_frame (bool, optional): [description]. Defaults to False.
+        """
         super().__init__(**kwargs)
         self.first_frame = first_frame
 

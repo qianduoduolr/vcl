@@ -255,3 +255,35 @@ def tensor_slice(x, begin, size):
 
     slices = [slice(b, b + s) for b, s in zip(begin, size)]
     return x[slices]
+
+
+def PCA_numpy(X, embed_dim):
+    bsz, c, h, w = X.shape
+    X = X.permute(0, 2, 3, 1).flatten(0,2).detach().cpu().numpy()
+    X_new = X - np.mean(X, axis=0)
+    # SVD
+    U, Sigma, Vh = np.linalg.svd(X_new, full_matrices=False, compute_uv=True)
+    X_pca_svd = np.dot(X_new, (Vh.T)[:,:embed_dim])
+    X_out = torch.from_numpy(X_pca_svd).cuda()
+    out = X_out.reshape(bsz, h, w, embed_dim)
+
+    return out.permute(0, 3, 1, 2)
+
+
+def PCA_torch_v1(X, embed_dim):
+    bsz, c, h, w = X.shape
+    X = X.permute(0, 2, 3, 1).flatten(1,2)
+    U, S, V = torch.pca_lowrank(X, q=embed_dim, center=True, niter=2)
+    X = torch.matmul(X, V)
+    
+    return X.permute(0, 2, 1).reshape(bsz, embed_dim, h, w)
+
+
+def PCA_torch_v2(X, embed_dim):
+    bsz, c, h, w = X.shape
+    X = X.permute(0, 2, 3, 1).flatten(1,2)
+    X = X - X.mean(dim=1, keepdim=True)
+    U, S, V = torch.svd(X)
+    X = torch.matmul(X, V[:,:,:embed_dim])
+    
+    return X.permute(0, 2, 1).reshape(bsz, embed_dim, h, w)

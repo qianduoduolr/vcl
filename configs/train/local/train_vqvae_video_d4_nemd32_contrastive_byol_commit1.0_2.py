@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'train_vqvae_video_d4_nemd32_contrastive_byol_commit1.0_2'
+exp_name = 'train_vqvae_video_d4_nemd2048_contrastive_byol_commit1.0_2'
 docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corres'
 
 # model settings
@@ -24,7 +24,7 @@ model = dict(
         spatial_type='avg'),
     loss=dict(type='CosineSimLoss', negative=False),
     embed_dim=128,
-    n_embed=32,
+    n_embed=2048,
     commitment_cost=1.0,
 )
 
@@ -111,7 +111,7 @@ optimizers = dict(type='SGD', lr=0.05, momentum=0.9, weight_decay=0.0001)
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=12800
+max_epoch=3200
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0,
@@ -122,7 +122,7 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=6400, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=1600, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
