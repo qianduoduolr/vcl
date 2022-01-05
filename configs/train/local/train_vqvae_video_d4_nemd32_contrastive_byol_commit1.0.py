@@ -59,15 +59,15 @@ train_pipeline = [
         same_on_clip=False),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
     dict(type='Flip', flip_ratio=0.5, same_across_clip=False, same_on_clip=False),
-    dict(
-        type='ColorJitter',
-        brightness=0.5,
-        contrast=0.5,
-        saturation=0.5,
-        hue=0.1,
-        p=0.8,
-        same_across_clip=False,
-        same_on_clip=False),
+    # dict(
+    #     type='ColorJitter',
+    #     brightness=0.5,
+    #     contrast=0.5,
+    #     saturation=0.5,
+    #     hue=0.1,
+    #     p=0.8,
+    #     same_across_clip=False,
+    #     same_on_clip=False),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='FormatShape', input_format='NPTCHW'),
     dict(type='Collect', keys=['imgs'], meta_keys=[]),
@@ -136,7 +136,7 @@ checkpoint_config = dict(interval=800, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
-    interval=100,
+    interval=1,
     hooks=[
         dict(type='TextLoggerHook', by_epoch=False),
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),

@@ -287,3 +287,18 @@ def PCA_torch_v2(X, embed_dim):
     X = torch.matmul(X, V[:,:,:embed_dim])
     
     return X.permute(0, 2, 1).reshape(bsz, embed_dim, h, w)
+
+
+def make_mask(size, t_size, eq=True):
+    masks = []
+    for i in range(size):
+        for j in range(size):
+            mask = torch.zeros((size, size)).cuda()
+            if eq:
+                mask[max(0, i-t_size):min(size, i+t_size+1), max(0, j-t_size):min(size, j+t_size+1)] = 1
+            else:
+                mask[max(0, i-t_size):min(size, i+t_size+1), max(0, j-t_size):min(size, j+t_size+1)] = 0.7
+                mask[i,j] = 1
+                
+            masks.append(mask.reshape(-1))
+    return torch.stack(masks)

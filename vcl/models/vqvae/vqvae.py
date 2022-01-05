@@ -46,7 +46,7 @@ class Quantize(nn.Module):
         self.register_buffer("cluster_size", torch.zeros(n_embed))
         self.register_buffer("embed_avg", embed.clone())
 
-    def forward(self, z):
+    def forward(self, z, cluster=False):
         """
         :param z: Encoder output
         :return: Quantized tensor
@@ -66,7 +66,7 @@ class Quantize(nn.Module):
         quantize = F.embedding(embed_ind, self.embed.transpose(0, 1))  # B x H x W x D quantized tensor
 
         # Exponential decay updating, as a replacement to codebook loss
-        if self.training:
+        if self.training or cluster:
             n_total = embed_onehot.sum(0)
             embed_sum = flatten.transpose(0, 1) @ embed_onehot
             
@@ -701,9 +701,11 @@ class VQCL_v2(BaseModel):
         decay=0.99,
         sim_siam_head=None,
         loss=None,
+        do_cluster=False,
         train_cfg=None,
         test_cfg=None,
         per_vq=False,
+        div_loss=False,
         pretrained=None
     ):
         super().__init__()
@@ -711,6 +713,8 @@ class VQCL_v2(BaseModel):
         self.commitment_cost = commitment_cost
         self.embed_dim = embed_dim
         self.n_embed = n_embed
+        self.div_loss = div_loss
+        self.do_cluster = do_cluster
 
         self.quantize = Quantize(embed_dim, n_embed, commitment_cost, decay)  # Vector quantization
         self.per_vq = True if per_vq else False
@@ -728,13 +732,15 @@ class VQCL_v2(BaseModel):
             self.head.init_weights()
         else:
             self.head = None
+        
+        self.mask = make_mask(32, 1, eq=False)
 
         self.init_weights(pretrained, per_vq)
             
     def init_weights(self, pretrained, per_vq):
-        # self.backbone.init_weights()
+        
+        self.backbone.init_weights()
         if pretrained is not None:
-            print('load pretrained')
             _ = load_checkpoint(self, pretrained, map_location='cpu')
         
         if self.per_vq:
@@ -743,10 +749,16 @@ class VQCL_v2(BaseModel):
                 root = '/'.join(pretrained.split('/')[:3])
                 vq_path = os.path.join(root, f'expdir/VCL/group_vqvae_tracker/per_video_vq/{name}/epoch_1.pth')
                 _ = load_checkpoint(vq, vq_path, map_location='cpu')
+        
+        # if self.do_cluster:
+        #     embed = torch.randn(self.quantize.dim, self.quantize.n_embed)
+        #     self.quantize.embed = embed
+        #     self.quantize.cluster_size = torch.zeros(self.quantize.n_embed)
+        #     self.quantize.embed_avg = embed.clone()
                 
 
     def forward_train(self, imgs):
-    
+        
         im_q = imgs[:, 0, 0]
         im_k = imgs[:, 0, 1]
 
@@ -756,14 +768,18 @@ class VQCL_v2(BaseModel):
         bsz, c, _, _ = q.shape
 
         q_emb = self.quantize_conv(q).permute(0, 2, 3, 1)
-        # q_emb = PCA_torch_v2(q, self.embed_dim).permute(0, 2, 3, 1)
-        quant, diff, ind, embed = self.quantize(q_emb.contiguous())
+        
+        quant, diff, ind, embed = self.quantize(q_emb.contiguous(), self.do_cluster)
     
         losses = {}
-
         losses['cts_loss'] = self.forward_img_head(q, k)
         losses['diff'] = diff * self.commitment_cost
         
+        if self.div_loss:
+            q_f = F.normalize(q_emb.flatten(1, 2), dim=-1)
+            A = torch.einsum('bic,bcj -> bij', [q_f, q_f.permute(0,2,1)])
+            target = self.mask.repeat(bsz, 1, 1).cuda()
+            losses['div_loss'] = F.mse_loss(A, target, reduction='mean')
 
         return losses, diff.item()
 
@@ -868,7 +884,6 @@ class VQCL_v3(VQCL_v2):
 
         
         diff = diff1 + diff2
-
         losses = {}
 
         losses['cts_loss'] = self.forward_img_head(q, k, self.head)

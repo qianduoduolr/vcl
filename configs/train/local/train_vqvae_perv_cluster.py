@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'b96c57d2c7'
+exp_name = 'cluster'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
@@ -27,8 +27,9 @@ model = dict(
     embed_dim=128,
     n_embed=32,
     commitment_cost=0.25,
-    decay=0.5,
-    pretrained='/home/lr/models/vqvae/vqvae_youtube_d4_n32_c256_embc128_byol_commit1.0.pth'
+    decay=0.99,
+    do_cluster=True,
+    pretrained='/home/lr/models/vqvae/vqvae_youtube_d4_n32_c256_embc128_byol_nc_commit1.0.pth'
 )
 # model = dict(
 #     type='VQVAE',
@@ -94,7 +95,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=24, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -108,7 +109,6 @@ data = dict(
             clip_length=1,
             num_clips=2,
             pipeline=train_pipeline,
-            per_video='b96c57d2c7'
             ),
 
     test =  dict(
@@ -139,11 +139,11 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=1, save_optimizer=False, by_epoch=True, module_name='quantize')
+checkpoint_config = dict(interval=1, save_optimizer=False, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
-    interval=100,
+    interval=1,
     hooks=[
         dict(type='TextLoggerHook', by_epoch=False),
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
