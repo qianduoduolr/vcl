@@ -701,7 +701,6 @@ class VQCL_v2(BaseModel):
         decay=0.99,
         sim_siam_head=None,
         loss=None,
-        do_cluster=False,
         train_cfg=None,
         test_cfg=None,
         per_vq=False,
@@ -714,7 +713,6 @@ class VQCL_v2(BaseModel):
         self.embed_dim = embed_dim
         self.n_embed = n_embed
         self.div_loss = div_loss
-        self.do_cluster = do_cluster
 
         self.quantize = Quantize(embed_dim, n_embed, commitment_cost, decay)  # Vector quantization
         self.per_vq = True if per_vq else False
@@ -749,12 +747,6 @@ class VQCL_v2(BaseModel):
                 root = '/'.join(pretrained.split('/')[:3])
                 vq_path = os.path.join(root, f'expdir/VCL/group_vqvae_tracker/per_video_vq/{name}/epoch_1.pth')
                 _ = load_checkpoint(vq, vq_path, map_location='cpu')
-        
-        # if self.do_cluster:
-        #     embed = torch.randn(self.quantize.dim, self.quantize.n_embed)
-        #     self.quantize.embed = embed
-        #     self.quantize.cluster_size = torch.zeros(self.quantize.n_embed)
-        #     self.quantize.embed_avg = embed.clone()
                 
 
     def forward_train(self, imgs):
@@ -768,8 +760,9 @@ class VQCL_v2(BaseModel):
         bsz, c, _, _ = q.shape
 
         q_emb = self.quantize_conv(q).permute(0, 2, 3, 1)
+
         
-        quant, diff, ind, embed = self.quantize(q_emb.contiguous(), self.do_cluster)
+        quant, diff, ind, embed = self.quantize(q_emb.contiguous())
     
         losses = {}
         losses['cts_loss'] = self.forward_img_head(q, k)
@@ -1087,3 +1080,32 @@ class VQVAE_V2(VQVAE):
         out = torch.matmul(att, ref).reshape(bsz,  w_, h_, -1).permute(0, 3, 1, 2)
 
         return out, att
+    
+    
+
+
+@MODELS.register_module()
+class VQCL_v5(VQCL_v2):
+                
+
+    def forward_train(self, imgs):
+        
+        im_q = imgs[:, 0, 0]
+        im_k = imgs[:, 0, 1]
+
+        q = self.backbone(im_q)
+        k = self.backbone(im_k)
+
+        bsz, c, _, _ = q.shape
+
+        q_emb = self.quantize_conv(q)
+        k_emb = self.quantize_conv(k)
+        
+        quant, diff, ind, embed = self.quantize(q_emb.permute(0, 2, 3, 1).contiguous())
+    
+        losses = {}
+        losses['cts_loss'] = self.forward_img_head(q_emb, k_emb)
+        losses['diff'] = diff * self.commitment_cost
+        
+
+        return losses, diff.item()
