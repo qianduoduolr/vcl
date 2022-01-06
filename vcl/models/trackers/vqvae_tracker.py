@@ -185,14 +185,11 @@ class Vqvae_Tracker(BaseModel):
 
         # vqvae tokenize for query frame
         with torch.no_grad():
-            if self.vq_type == 'VQVAE':
-                _, quant, diff, ind, embed = self.vq_enc(imgs[:, 0, -1])
-                ind = ind.reshape(-1, 1).long().detach()
-            else:
-                ind = self.vqvae(imgs[:, 0, -1])
-                ind = torch.argmax(ind, axis=1).reshape(-1, 1).long().detach()
+            _, quant, diff, ind, embed = self.vq_enc(imgs[:, 0, -1])
+            ind = ind.reshape(-1, 1).long().detach()
 
-        out, att = non_local_attention(tar, refs)
+
+        out, att = non_local_attention(tar, refs,  per_ref=False)
 
         visualize_att(imgs, att, iteration, mask_query_idx, tar.shape[-1], self.patch_size, dst_path=save_path, norm_mode='mean-std')
 
