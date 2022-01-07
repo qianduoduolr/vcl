@@ -621,7 +621,7 @@ class Vqvae_Tracker_V6(BaseModel):
                  test_cfg=None,
                  pretrained=None
                  ):
-        """ original vqvae tracker
+        """ per video per fc
         """
         super(Vqvae_Tracker_V6, self).__init__()
         if not isinstance(vqvae, list):
@@ -737,8 +737,10 @@ class Vqvae_Tracker_V7(BaseModel):
                  test_cfg=None,
                  pretrained=None
                  ):
-        """ original vqvae tracker
         """
+        per video per vq and gloable fc
+        """
+
         super(Vqvae_Tracker_V7, self).__init__()
         if not isinstance(vqvae, list):
             vqvae = list([vqvae])
@@ -845,7 +847,11 @@ class Vqvae_Tracker_V7(BaseModel):
     
 @MODELS.register_module()
 class Vqvae_Tracker_V8(BaseModel):
+    """ per video per vq and fc
 
+    Args:
+        BaseModel ([type]): [description]
+    """
     def __init__(self,
                  backbone,
                  vqvae,
@@ -972,6 +978,10 @@ class Vqvae_Tracker_V8(BaseModel):
     
 @MODELS.register_module()
 class Vqvae_Tracker_V9(Vqvae_Tracker):
+    """
+    Args:
+        Vqvae_Tracker ([type]): [induse long-term relationship]
+    """
     
     def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
 
@@ -1035,7 +1045,7 @@ class Vqvae_Tracker_V9(Vqvae_Tracker):
                 loss_s = self.ce_loss(predict_s, out_ind[idx])
                 loss_l = self.ce_loss(predict_l, out_ind[idx])
                 
-                losses[f'ce{i}_short_loss'] = (loss_s * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
+                # losses[f'ce{i}_short_loss'] = (loss_s * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
                 losses[f'ce{i}_long_loss'] = (loss_l * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
 
         
