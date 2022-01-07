@@ -980,7 +980,6 @@ class Vqvae_Tracker_V9(Vqvae_Tracker):
         # vqvae tokenize for query frame
         with torch.no_grad():
             out_ind= []
-            out_quant = []
             for i in range(self.num_head):
                 i = str(i).replace('0', '')
                 vqvae = getattr(self, f'vqvae{i}')
@@ -988,12 +987,14 @@ class Vqvae_Tracker_V9(Vqvae_Tracker):
                 vqvae.eval()
                 emb, quant, _, ind, _ = vq_enc(imgs[:, 0, -1])
                 
-                ind = ind.reshape(-1, 1).long().detach()
-                quant = quant.permute(0,2,3,1).flatten(0,2).detach()
-                mask_query_idx = mask_query_idx.bool()
+                if self.per_ref:
+                    ind = ind.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
+                    mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
+                else:
+                    ind = ind.reshape(-1, 1).long().detach()
+                    mask_query_idx = mask_query_idx.bool()
                 
                 out_ind.append(ind)
-                out_quant.append(quant)
 
         if jitter_imgs is not None:
             imgs = jitter_imgs
@@ -1001,4 +1002,41 @@ class Vqvae_Tracker_V9(Vqvae_Tracker):
         tar = self.backbone(imgs[:,0,-1])
         refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
         
+        # for short term
+        out_s, att_s = non_local_attention(tar, refs[-1:], per_ref=self.per_ref)
         
+        # for long term
+        atts = []
+        for i in range(t-1):
+            if i == 0:
+                atts.append(att_s)
+                continue
+            else:
+                _, att = non_local_attention(refs[-1-i+1], [refs[-1-i]], per_ref=self.per_ref)
+            
+            atts.append(att)
+        
+        att_l = 1
+        for att in atts:
+            att_l *= att
+           
+        del atts
+            
+        out_l = frame_transform(att_l, refs[0].flatten(2).permute(0, 2, 1).unsqueeze(1), per_ref=self.per_ref)
+        
+        losses = {}
+        if self.ce_loss:
+            for idx, i in enumerate(range(self.num_head)):
+                i = str(i).replace('0', '')
+
+                predict_s = getattr(self, f'predictor{i}')(out_s)
+                predict_l = getattr(self, f'predictor{i}')(out_l)
+            
+                loss_s = self.ce_loss(predict_s, out_ind[idx])
+                loss_l = self.ce_loss(predict_l, out_ind[idx])
+                
+                losses[f'ce{i}_short_loss'] = (loss_s * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
+                losses[f'ce{i}_long_loss'] = (loss_l * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
+
+        
+        return losses
