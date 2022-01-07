@@ -967,3 +967,38 @@ class Vqvae_Tracker_V8(BaseModel):
         losses['ce_loss'] = loss / bsz
         
         return losses
+    
+    
+    
+@MODELS.register_module()
+class Vqvae_Tracker_V9(Vqvae_Tracker):
+    
+    def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
+
+        bsz, num_clips, t, c, h, w = imgs.shape
+
+        # vqvae tokenize for query frame
+        with torch.no_grad():
+            out_ind= []
+            out_quant = []
+            for i in range(self.num_head):
+                i = str(i).replace('0', '')
+                vqvae = getattr(self, f'vqvae{i}')
+                vq_enc = getattr(self, f'vq_enc{i}')
+                vqvae.eval()
+                emb, quant, _, ind, _ = vq_enc(imgs[:, 0, -1])
+                
+                ind = ind.reshape(-1, 1).long().detach()
+                quant = quant.permute(0,2,3,1).flatten(0,2).detach()
+                mask_query_idx = mask_query_idx.bool()
+                
+                out_ind.append(ind)
+                out_quant.append(quant)
+
+        if jitter_imgs is not None:
+            imgs = jitter_imgs
+
+        tar = self.backbone(imgs[:,0,-1])
+        refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
+        
+        
