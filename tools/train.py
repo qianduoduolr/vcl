@@ -148,6 +148,8 @@ def main():
         timestamp=timestamp,
         meta=meta)
 
+    work_dir_local = osp.join('/home/lr','/'.join(cfg.work_dir.split('/')[3:-1]))
+    os.system(f"rsync -a  {cfg.work_dir} lirui@192.168.161.4:{work_dir_local}/")
 
 if __name__ == '__main__':
     main()
