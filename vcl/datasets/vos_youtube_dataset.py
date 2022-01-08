@@ -457,9 +457,10 @@ class VOS_youtube_dataset_mlm_withbbox(VOS_youtube_dataset_mlm):
 
 @DATASETS.register_module()
 class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
-    def __init__(self, size, p=1.0, crop_ratio=0.6, **kwargs):
+    def __init__(self, size, p=1.0, crop_ratio=0.6, return_first_query=False, **kwargs):
         super().__init__(**kwargs)
         self.p = p
+        self.return_first_query = return_first_query
 
     def load_annotations(self):
         
@@ -521,7 +522,8 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
                 'modality': 'RGB',
                 'num_clips': self.num_clips,
                 'num_proposals':1,
-                'clip_len': self.clip_length
+                'clip_len': self.clip_length,
+                'return_first_query': self.return_first_query
             }
             return self.pipeline(data)
 
@@ -539,7 +541,8 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
                 'modality': 'RGB',
                 'num_clips': self.num_clips,
                 'num_proposals':1,
-                'clip_len': self.clip_length
+                'clip_len': self.clip_length,
+                'return_first_query': self.return_first_query
             }
 
             return self.pipeline(data)
@@ -593,7 +596,8 @@ class VOS_youtube_dataset_mlm_withbbox_random_V2(VOS_youtube_dataset_mlm_withbbo
                 'modality': 'RGB',
                 'num_clips': self.num_clips,
                 'num_proposals':1,
-                'clip_len': self.clip_length
+                'clip_len': self.clip_length,
+                'return_first_query': self.return_first_query
             }
             return self.pipeline(data)
 
@@ -611,7 +615,8 @@ class VOS_youtube_dataset_mlm_withbbox_random_V2(VOS_youtube_dataset_mlm_withbbo
                 'modality': 'RGB',
                 'num_clips': self.num_clips,
                 'num_proposals':1,
-                'clip_len': self.clip_length
+                'clip_len': self.clip_length,
+                'return_first_query': self.return_first_query
             }
 
             return self.pipeline(data)

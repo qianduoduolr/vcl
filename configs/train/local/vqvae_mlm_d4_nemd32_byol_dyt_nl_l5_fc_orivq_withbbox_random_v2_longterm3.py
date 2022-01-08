@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'vqvae_mlm_d4_nemd32_byol_dyt_nl_l5_fc_orivq_withbbox_random_v2_longterm2'
+exp_name = 'vqvae_mlm_d4_nemd32_byol_dyt_nl_l5_fc_orivq_withbbox_random_v2_longterm3'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 # model settings
@@ -21,7 +21,6 @@ model = dict(
     temperature=0.1,
     per_ref=False,
     pretrained_vq='/home/lr/models/vqvae/vqvae_youtube_d4_n32_c256_embc128_byol_commit1.0_v2.pth',
-    pretrained='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2/epoch_800.pth',
 )
 
 # model training and testing settings
@@ -105,6 +104,7 @@ data = dict(
             clip_length=5,
             vq_size=32,
             pipeline=train_pipeline,
+            return_first_query=True,
             test_mode=False),
 
     test =  dict(

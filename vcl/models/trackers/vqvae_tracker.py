@@ -1009,30 +1009,22 @@ class Vqvae_Tracker_V9(Vqvae_Tracker):
         if jitter_imgs is not None:
             imgs = jitter_imgs
 
-        tar = self.backbone(imgs[:,0,-1])
-        refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
+        tar = self.backbone(imgs[:,0, 0])
+        refs = list([self.backbone(imgs[:,0,i]) for i in range(1,t)])
         
         # for short term
-        out_s, att_s = non_local_attention(tar, refs[-1:], per_ref=self.per_ref)
+        out_s, att_s = non_local_attention(tar, [refs[0]], per_ref=self.per_ref)
         
         # for long term
-        atts = []
+        att_l = torch.eye(att_s.shape[-1]).repeat(bsz, 1, 1).cuda()
         for i in range(t-1):
             if i == 0:
-                atts.append(att_s)
-                continue
+                att_l = torch.einsum('bij,bjk->bik', [att_l, att_s]) 
             else:
-                _, att = non_local_attention(refs[-1-i+1], [refs[-1-i]], per_ref=self.per_ref)
+                _, att = non_local_attention(refs[i-1], [refs[i]], per_ref=self.per_ref)
+                att_l = torch.einsum('bij,bjk->bik', [att_l, att]) 
             
-            atts.append(att)
-        
-        att_l = 1
-        for att in atts:
-            att_l *= att
-           
-        del atts
-            
-        out_l = frame_transform(att_l, refs[0].flatten(2).permute(0, 2, 1).unsqueeze(1), per_ref=self.per_ref)
+        out_l = frame_transform(att_l, refs[-1].flatten(2).permute(0, 2, 1).unsqueeze(1), per_ref=self.per_ref)
         
         losses = {}
         if self.ce_loss:
@@ -1045,7 +1037,7 @@ class Vqvae_Tracker_V9(Vqvae_Tracker):
                 loss_s = self.ce_loss(predict_s, out_ind[idx])
                 loss_l = self.ce_loss(predict_l, out_ind[idx])
                 
-                # losses[f'ce{i}_short_loss'] = (loss_s * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
+                losses[f'ce{i}_short_loss'] = (loss_s * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
                 losses[f'ce{i}_long_loss'] = (loss_l * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
 
         

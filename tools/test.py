@@ -19,7 +19,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train an editor')
     parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/test/vqvae_mlm_orivq_viz.py')
     # parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='')
-    parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2/epoch_800.pth')
+    parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_2/epoch_3200.pth')
     parser.add_argument('--seed', type=int, default=3, help='random seed')
     parser.add_argument(
         '--deterministic',
@@ -40,7 +40,7 @@ def parse_args():
         help='whether to use gpu to collect results')
     parser.add_argument(
         '--save-path',
-        default='output/youtube/vis_vq_vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2',
+        default='output/youtube/vis_vq_vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_2',
         type=str,
         help='path to store images and if not given, will not save image')
     parser.add_argument('--tmpdir', help='tmp dir for writing some results')
