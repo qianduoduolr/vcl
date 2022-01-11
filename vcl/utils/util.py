@@ -146,17 +146,21 @@ def visualize_att(imgs, atts, idx, query_idx=None, feat_size=25, patch_size=5, d
         if index == 0:
             img_ = Image.fromarray(copy.deepcopy(outs[index])).convert('RGBA')
             resized_out = Image.fromarray(resized_query).convert('RGBA')
-            blend_out_query = Image.blend(img_, resized_out, 0.8)
-            # blend_out1.save(os.path.join(dst_path,'blend_ref.png'))
+            blend_out_query = Image.blend(img_, resized_out, 0.65)
+            blend_out_query = np.array(blend_out_query)
+            blend_out_query = np.concatenate([blend_out_query, np.ones((h,7,c+1))*255], 1)
             blend_outs.append(np.array(blend_out_query))
             
         img_ = Image.fromarray(copy.deepcopy(outs[index+1])).convert('RGBA')
         resized_ = Image.fromarray(resized_).convert('RGBA')
-        blend_out = Image.blend(img_, resized_, 0.8)
+        blend_out = Image.blend(img_, resized_, 0.65)
+        blend_out = np.array(blend_out)
+        blend_out = np.concatenate([blend_out, np.ones((h,7,c+1))*255], 1)
         blend_outs.append(np.array(blend_out))
     
     blend_outs = np.concatenate(blend_outs, 1)
     outs = np.concatenate(outs, 1)
+    
     
     cv2.imwrite(os.path.join(dst_path,'out_blend.png'), blend_outs)
     cv2.imwrite(os.path.join(dst_path,'out_img.png'), outs)
