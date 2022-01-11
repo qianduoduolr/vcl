@@ -225,22 +225,55 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
                     sample['frames'] = self._parser_rgb_rawframe([0], sample['frames_path'], sample['num_frames'], step=1)
                 self.samples.append(sample)
     
+    # def prepare_test_data(self, idx):
+    #     sample = self.samples[idx]
+    #     frames_path = sample['frames_path']
+    #     masks_path = sample['masks_path']
+    #     num_frames = sample['num_frames']
+    #     vid_name = frames_path[0].split('/')[-2]
+
+    #     offset = [self.test_dic[vid_name][0]]
+    #     for i in range(self.num_clips - 1):
+    #         offset.append(offset[-1] + 1)
+
+    #     if self.load_to_ram:
+    #         frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
+    #     else:
+    #         frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
+    #     sample_idx = np.array([self.test_dic[vid_name][1]])
+
+    #     assert sample_idx.shape[0] == 1
+
+    #     data = {
+    #         'imgs': frames,
+    #         'mask_query_idx': sample_idx,
+    #         'modality': 'RGB',
+    #         'num_clips': self.num_clips,
+    #         'num_proposals':1,
+    #         'clip_len': self.clip_length,
+    #     }
+
+    #     return self.pipeline(data)
+    
+
     def prepare_test_data(self, idx):
+        
         sample = self.samples[idx]
         frames_path = sample['frames_path']
         masks_path = sample['masks_path']
         num_frames = sample['num_frames']
-        vid_name = frames_path[0].split('/')[-2]
 
-        offset = [self.test_dic[vid_name][0]]
-        for i in range(self.num_clips - 1):
-            offset.append(offset[-1] + 1)
+        offset = [ random.randint(0, num_frames-self.clip_length)]
+        frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
+        mask = self._parser_rgb_rawframe([offset[0]+1], masks_path, 1, flag='unchanged', backend='pillow')[0]
 
-        if self.load_to_ram:
-            frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
+        mask = cv2.resize(mask, (self.vq_res, self.vq_res), cv2.INTER_NEAREST).reshape(-1)
+        obj_idxs = np.nonzero(mask)[0]
+
+        if mask.max() > 0:
+            sample_idx = np.array(random.sample(obj_idxs.tolist(), 1))
         else:
-            frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
-        sample_idx = np.array([self.test_dic[vid_name][1]])
+            sample_idx = np.array(random.sample(range(self.vq_res * self.vq_res), 1))
 
         assert sample_idx.shape[0] == 1
 
@@ -248,7 +281,7 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
             'imgs': frames,
             'mask_query_idx': sample_idx,
             'modality': 'RGB',
-            'num_clips': self.num_clips,
+            'num_clips': 1,
             'num_proposals':1,
             'clip_len': self.clip_length
         }

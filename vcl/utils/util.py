@@ -59,10 +59,10 @@ def tensor2img(tensor, out_type=np.uint8, min_max=(0, 1), norm_mode='0-1'):
         # Important. Unlike matlab, numpy.unit8() WILL NOT round by default.
     return img_np.astype(out_type)
 
-def visualize_att(imgs, att, idx, query_idx=None, feat_size=25, patch_size=5, dst_path='/home/lr/project/vcl/output/vis', norm_mode='mean-std', color='bone'):
+def visualize_att(imgs, atts, idx, query_idx=None, feat_size=25, patch_size=5, dst_path='/home/lr/project/vcl/output/vis', norm_mode='mean-std', color='bone'):
     bsz, num_clips, t, c, w, h = imgs.shape
 
-    dst_path = os.path.join(dst_path, str(idx))
+    dst_path = os.path.join(dst_path, f'{idx}')
     mmcv.mkdir_or_exist(dst_path)
 
     outs = []
@@ -70,94 +70,97 @@ def visualize_att(imgs, att, idx, query_idx=None, feat_size=25, patch_size=5, ds
         img = imgs[:,:,i].reshape(c,w,h)
         out = tensor2img(img, norm_mode=norm_mode)
         # out = cv2.resize(out, (feat_size,feat_size))
-        cv2.imwrite(os.path.join(dst_path,f'{i}.jpg'), out)
+        # cv2.imwrite(os.path.join(dst_path,f'{i}.jpg'), out)
         outs.append(cv2.cvtColor(out, cv2.COLOR_BGR2RGB))
 
-    if query_idx == None:
-        if patch_size != -1:
-            att = att.cpu().detach().numpy()[0,0]
+    blend_outs = []
+    for index, att in enumerate(atts):
+        if query_idx == None:
+            if patch_size != -1:
+                att = att.cpu().detach().numpy()[0,0]
 
-            x = random.randint(patch_size // 2+1, feat_size - patch_size // 2 -1)
-            y = random.randint(patch_size // 2+1, feat_size - patch_size // 2 -1)
-            attr = (att[:, x, y]).reshape(patch_size, patch_size)
-            attr = ((attr - attr.min()) * 255 / (attr.max() - attr.min())).astype(np.uint8)
+                x = random.randint(patch_size // 2+1, feat_size - patch_size // 2 -1)
+                y = random.randint(patch_size // 2+1, feat_size - patch_size // 2 -1)
+                attr = (att[:, x, y]).reshape(patch_size, patch_size)
+                attr = ((attr - attr.min()) * 255 / (attr.max() - attr.min())).astype(np.uint8)
 
-            att_out = np.zeros((feat_size, feat_size)).astype(np.uint8)
-            att_out_query = np.zeros((feat_size, feat_size)).astype(np.uint8)
-            att_out[x-patch_size // 2:x+patch_size // 2+1, y-patch_size // 2:y+patch_size // 2+1] = attr
+                att_out = np.zeros((feat_size, feat_size)).astype(np.uint8)
+                att_out_query = np.zeros((feat_size, feat_size)).astype(np.uint8)
+                att_out[x-patch_size // 2:x+patch_size // 2+1, y-patch_size // 2:y+patch_size // 2+1] = attr
 
 
-            att_out_query[x,y] = 255
+                att_out_query[x,y] = 255
+
+            else:
+                att = att.cpu().detach().numpy()
+                query_idx = random.randint(feat_size * feat_size -1)
+
+                attr = (att[:, query_idx.item()]).reshape(feat_size, feat_size)
+                attr = ((attr - attr.min()) * 255 / (attr.max() - attr.min())).astype(np.uint8)
+
+                att_out = attr
+                att_out_query = np.zeros(feat_size * feat_size).astype(np.uint8)
+                att_out_query[query_idx.item()] = 255
+                att_out_query = att_out_query.reshape(feat_size, feat_size)
 
         else:
-            att = att.cpu().detach().numpy()
-            query_idx = random.randint(feat_size * feat_size -1)
+            if patch_size == -1:
+                att = att.cpu().detach().numpy()
+                # x = query_idx.item() // feat_size
+                # y = query_idx.item() % feat_size
 
-            attr = (att[:, query_idx.item()]).reshape(feat_size, feat_size)
-            attr = ((attr - attr.min()) * 255 / (attr.max() - attr.min())).astype(np.uint8)
+                attr = (att[:, query_idx.item()]).reshape(feat_size, feat_size)
+                attr = ((attr - attr.min()) * 255 / (attr.max() - attr.min())).astype(np.uint8)
 
-            att_out = attr
-            att_out_query = np.zeros(feat_size * feat_size).astype(np.uint8)
-            att_out_query[query_idx.item()] = 255
-            att_out_query = att_out_query.reshape(feat_size, feat_size)
+                att_out = attr
+                att_out_query = np.zeros(feat_size * feat_size).astype(np.uint8)
+                att_out_query[query_idx.item()] = 255
+                att_out_query = att_out_query.reshape(feat_size, feat_size)
+            else:
+                att = att.cpu().detach().numpy()
+                x = query_idx.item() // feat_size
+                y = query_idx.item() % feat_size
 
-    else:
-        if patch_size == -1:
-            att = att.cpu().detach().numpy()
-            # x = query_idx.item() // feat_size
-            # y = query_idx.item() % feat_size
+                att_out = np.zeros((feat_size, feat_size))
+                attr = (att[:, query_idx.item()]).reshape(feat_size, feat_size)
 
-            attr = (att[:, query_idx.item()]).reshape(feat_size, feat_size)
-            attr = ((attr - attr.min()) * 255 / (attr.max() - attr.min())).astype(np.uint8)
+                att_out[max(x-patch_size // 2,0):min(x+patch_size // 2+1,feat_size), max(y-patch_size // 2, 0):min(y+patch_size // 2+1, feat_size)] = attr[max(x-patch_size // 2,0):min(x+patch_size // 2+1,feat_size), max(y-patch_size // 2, 0):min(y+patch_size // 2+1, feat_size)]
 
-            att_out = attr
-            att_out_query = np.zeros(feat_size * feat_size).astype(np.uint8)
-            att_out_query[query_idx.item()] = 255
-            att_out_query = att_out_query.reshape(feat_size, feat_size)
-        else:
-            att = att.cpu().detach().numpy()
-            x = query_idx.item() // feat_size
-            y = query_idx.item() % feat_size
+                att_out = ((att_out - att_out.min()) * 255 / (att_out.max() - att_out.min())).astype(np.uint8)
+                attr = ((attr - attr.min()) * 255 / (attr.max() - attr.min())).astype(np.uint8)
 
-            att_out = np.zeros((feat_size, feat_size))
-            attr = (att[:, query_idx.item()]).reshape(feat_size, feat_size)
-
-            att_out[max(x-patch_size // 2,0):min(x+patch_size // 2+1,feat_size), max(y-patch_size // 2, 0):min(y+patch_size // 2+1, feat_size)] = attr[max(x-patch_size // 2,0):min(x+patch_size // 2+1,feat_size), max(y-patch_size // 2, 0):min(y+patch_size // 2+1, feat_size)]
-
-            att_out = ((att_out - att_out.min()) * 255 / (att_out.max() - att_out.min())).astype(np.uint8)
-            attr = ((attr - attr.min()) * 255 / (attr.max() - attr.min())).astype(np.uint8)
-
-            att_out_query = np.zeros(feat_size * feat_size).astype(np.uint8)
-            att_out_query[query_idx.item()] = 255
-            att_out_query = att_out_query.reshape(feat_size, feat_size)
+                att_out_query = np.zeros(feat_size * feat_size).astype(np.uint8)
+                att_out_query[query_idx.item()] = 255
+                att_out_query = att_out_query.reshape(feat_size, feat_size)
 
 
-    
-    resized_1 = cv2.resize(att_out, (w,h))
-    resized_2 = cv2.resize(att_out_query, (w,h), cv2.INTER_NEAREST)
+        
+        resized_ = cv2.resize(att_out, (w,h))
+        resized_query = cv2.resize(att_out_query, (w,h), cv2.INTER_NEAREST)
 
-    if color == 'bone':
+
         att_map = cv2.applyColorMap(att_out, cv2.COLORMAP_BONE)
         attr = cv2.applyColorMap(attr, cv2.COLORMAP_BONE)
         att_query_map = cv2.applyColorMap(att_out_query, cv2.COLORMAP_BONE)
 
-        img_ = Image.fromarray(copy.deepcopy(outs[0])).convert('RGBA')
-        resized_1 = Image.fromarray(resized_1).convert('RGBA')
-        blend_out1 = Image.blend(img_, resized_1, 0.8)
-        blend_out1.save(os.path.join(dst_path,'blend_ref.png'))
-
-        img_ = Image.fromarray(copy.deepcopy(outs[1])).convert('RGBA')
-        resized_1 = Image.fromarray(resized_2).convert('RGBA')
-        blend_out2 = Image.blend(img_, resized_1, 0.8)
-        blend_out2.save(os.path.join(dst_path,'blend_tar.png'))
+        if index == 0:
+            img_ = Image.fromarray(copy.deepcopy(outs[index])).convert('RGBA')
+            resized_out = Image.fromarray(resized_query).convert('RGBA')
+            blend_out_query = Image.blend(img_, resized_out, 0.8)
+            # blend_out1.save(os.path.join(dst_path,'blend_ref.png'))
+            blend_outs.append(np.array(blend_out_query))
+            
+        img_ = Image.fromarray(copy.deepcopy(outs[index+1])).convert('RGBA')
+        resized_ = Image.fromarray(resized_).convert('RGBA')
+        blend_out = Image.blend(img_, resized_, 0.8)
+        blend_outs.append(np.array(blend_out))
     
-    else:
-        blend_out1 = show_cam_on_image(outs[0], resized_1)
-        cv2.imwrite(os.path.join(dst_path,'blend_ref.png'), blend_out1)
-
-        blend_out2 = show_cam_on_image(outs[1], resized_2)
-        cv2.imwrite(os.path.join(dst_path,'blend_tar.png'), blend_out2)
-
+    blend_outs = np.concatenate(blend_outs, 1)
+    outs = np.concatenate(outs, 1)
+    
+    cv2.imwrite(os.path.join(dst_path,'out_blend.png'), blend_outs)
+    cv2.imwrite(os.path.join(dst_path,'out_img.png'), outs)
+    
 
 def moment_update(model, model_ema, m):
     """ model_ema = m * model_ema + (1 - m) model """

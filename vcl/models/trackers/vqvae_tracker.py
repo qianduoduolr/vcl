@@ -57,7 +57,7 @@ class Vqvae_Tracker(BaseModel):
         self.multi_head_weight = multi_head_weight
         self.per_ref = per_ref
 
-        logger = get_root_logger()
+        self.logger = get_root_logger()
 
         self.backbone = build_backbone(backbone)
         if sim_siam_head is not None:
@@ -72,7 +72,7 @@ class Vqvae_Tracker(BaseModel):
                 i = str(i).replace('0', '')
                 setattr(self, f'vqvae{i}', build_model(vqvae[idx]).cuda())
                 _ = load_checkpoint(getattr(self, f'vqvae{i}'), pretrained_vq[idx], map_location='cpu')
-                logger.info(f'load {i}th pretrained VQVAE successfully')
+                self.logger.info(f'load {i}th pretrained VQVAE successfully')
                 setattr(self, f'vq_emb{i}', getattr(self, f'vqvae{i}').quantize.embed)
                 setattr(self, f'n_embed{i}', vqvae[idx].n_embed)
                 setattr(self, f'vq_t{i}', temperature)
@@ -81,7 +81,7 @@ class Vqvae_Tracker(BaseModel):
             assert self.num_head == 1
             self.vq_enc = load_model(pretrained_vq).cuda()
             self.n_embed = self.vq_enc.vocab_size
-            logger.info('load pretrained VQVAE successfully')
+            self.logger.info('load pretrained VQVAE successfully')
 
         # loss
         self.ce_loss = build_loss(ce_loss) if ce_loss else None
@@ -106,9 +106,17 @@ class Vqvae_Tracker(BaseModel):
         else:
             self.embedding_layer = nn.Linear(self.backbone.feat_dim, self.vq_emb.shape[0])
 
+        # init weights
+        self.init_weights(pretrained)
+        
+            
+    def init_weights(self, pretrained):
+        
         if pretrained:
             _ = load_checkpoint(self, pretrained, map_location='cpu')
-            logger.info('load pretrained model successfully')
+            self.logger.info('load pretrained model successfully')
+            
+        return 
 
     def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
 
@@ -191,7 +199,7 @@ class Vqvae_Tracker(BaseModel):
 
         out, att = non_local_attention(tar, refs,  per_ref=False)
 
-        visualize_att(imgs, att, iteration, mask_query_idx, tar.shape[-1], self.patch_size, dst_path=save_path, norm_mode='mean-std')
+        visualize_att(imgs, [att], iteration, mask_query_idx, tar.shape[-1], self.patch_size, dst_path=save_path, norm_mode='mean-std')
 
         if self.backbone.out_indices[0] == 3:
             if self.fc:
@@ -484,12 +492,12 @@ class Vqvae_Tracker_V4(BaseModel):
             if i > 1: break
             i = str(i).replace('0', '')
             setattr(self, f'predictor{i}', nn.Linear(self.backbone.feat_dim, getattr(self, f'n_embed{i}')))
-    
 
         if pretrained:
             _ = load_checkpoint(self, pretrained, map_location='cpu')
             logger.info('load pretrained model successfully')
-
+            
+            
     def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
 
         bsz, num_clips, t, c, h, w = imgs.shape
@@ -981,8 +989,7 @@ class Vqvae_Tracker_V9(Vqvae_Tracker):
     """
     Args:
         Vqvae_Tracker ([type]): [induse long-term relationship]
-    """
-    
+    """        
     def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
 
         bsz, num_clips, t, c, h, w = imgs.shape
@@ -1042,3 +1049,31 @@ class Vqvae_Tracker_V9(Vqvae_Tracker):
 
         
         return losses
+    
+    
+    def forward_test(self, imgs, mask_query_idx, save_image=False, save_path=None, iteration=None):
+        
+        bsz, num_clips, t, c, h, w = imgs.shape
+        
+        tar = self.backbone(imgs[:,0, 0])
+        refs = list([self.backbone(imgs[:,0,i]) for i in range(1,t)])
+        atts = []
+        
+        # for short term
+        _, att_s = non_local_attention(tar, [refs[0]], per_ref=self.per_ref)
+        
+        # for long term
+        att_l = torch.eye(att_s.shape[-1]).repeat(bsz, 1, 1).cuda()
+        for i in range(t-1):
+            if i == 0:
+                att_l = torch.einsum('bij,bjk->bik', [att_l, att_s]) 
+            else:
+                _, att = non_local_attention(refs[i-1], [refs[i]], per_ref=self.per_ref)
+                att_l = torch.einsum('bij,bjk->bik', [att_l, att]) 
+                
+            atts.append(att_l)
+            
+        visualize_att(imgs, atts, iteration, mask_query_idx, tar.shape[-1], self.patch_size, dst_path=save_path, norm_mode='mean-std')
+        
+            
+        return None
