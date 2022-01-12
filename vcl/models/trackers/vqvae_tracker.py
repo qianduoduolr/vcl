@@ -1087,6 +1087,10 @@ class Vqvae_Tracker_V10(Vqvae_Tracker):
     def __init__(self, soft_ce_loss, **kwargs):
         super().__init__(**kwargs)
         self.soft_ce_loss = build_loss(soft_ce_loss)
+        self.fc = nn.Sequential(
+            nn.Linear(512,2048),
+            nn.Linear(2048, 512)
+        )
     
     def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
 
@@ -1122,31 +1126,19 @@ class Vqvae_Tracker_V10(Vqvae_Tracker):
         
         # for long term
         att_l = torch.eye(att_s.shape[-1]).repeat(bsz, 1, 1).cuda()
-        # atts = []
-        # for i in range(t-1):
-        #     if i == 0:
-        #         atts.append(att_s)
-        #     else:
-        #         _, att = non_local_attention(refs[i-1], [refs[i]], per_ref=self.per_ref)
-        #         atts.append(att)
-                
-        # for att in atts[::-1]:
-        #     atts.append(att.permute(0,2,1))
-            
-        # atts = atts[:-1]
-        # for att in atts:
-        #     att_l = torch.einsum('bij,bjk->bik', [att_l, att]) 
-        
         refs.insert(0, tar)
-        fs = torch.stack(refs, 1).flatten(3).permute(0,1,3,2)
-        atts = torch.einsum('btic,btjc->btij',[fs[:,:-1], fs[:,1:]])
-        atts_reverse = torch.flip(atts, [1]).permute(0,1,3,2)[:,:-1]
+        fs = torch.stack(refs, 1).flatten(3).permute(0,1,3,2).flatten(0,2)
+        fs = self.fc(fs).reshape(bsz, t, att_s.shape[-1], -1)
+        atts = torch.einsum('btic,btjc->btij',[fs[:,:-1], fs[:,1:]]) / 0.05
+        atts_reverse = torch.flip(atts, [1]).permute(0,1,3,2)
         atts_cycle = torch.cat([atts, atts_reverse], 1)
         for i in range(atts_cycle.shape[1]):
             att = atts_cycle[:, i].softmax(dim=-1)
-            att_l = torch.einsum('bij,bjk->bik', [att_l, att]) 
+            att_l = torch.einsum('bij,bjk->bik', [att_l, att])
             
         del fs, refs, atts, atts_cycle, atts_reverse
+        
+        label = torch.arange(att_s.shape[-1]).repeat(bsz, 1).cuda().reshape(-1, 1)
             
         losses = {}
         if self.ce_loss:
@@ -1154,7 +1146,8 @@ class Vqvae_Tracker_V10(Vqvae_Tracker):
                 i = str(i).replace('0', '')
                 predict_s = getattr(self, f'predictor{i}')(out_s)
                 loss_s = self.ce_loss(predict_s, out_ind[idx])
-                loss_l = self.soft_ce_loss(att_l.flatten(0,1), att_s.flatten(0,1).detach())
+                # loss_l = self.soft_ce_loss(att_l.flatten(0,1), att_s.flatten(0,1).detach())
+                loss_l = self.ce_loss(att_l.flatten(0,1), label)
                 losses[f'ce{i}_short_loss'] = (loss_s * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
                 losses[f'ce{i}_long_loss'] = (loss_l * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
 
