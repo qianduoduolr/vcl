@@ -265,7 +265,7 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
 
         offset = [ random.randint(0, num_frames-self.clip_length)]
         frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
-        mask = self._parser_rgb_rawframe([offset[0]+1], masks_path, 1, flag='unchanged', backend='pillow')[0]
+        mask = self._parser_rgb_rawframe([offset[0]], masks_path, 1, flag='unchanged', backend='pillow')[0]
 
         mask = cv2.resize(mask, (self.vq_res, self.vq_res), cv2.INTER_NEAREST).reshape(-1)
         obj_idxs = np.nonzero(mask)[0]

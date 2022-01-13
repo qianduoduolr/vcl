@@ -46,7 +46,7 @@ img_norm_cfg = dict(
 
 
 train_pipeline = [
-    dict(type='RandomResizedCrop', area_range=(0.6,1.0), same_on_clip=True),
+    dict(type='RandomResizedCrop', area_range=(0.6,1.0), same_on_clip=False),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
     dict(type='Flip', flip_ratio=0),
     dict(type='Normalize', **img_norm_cfg),

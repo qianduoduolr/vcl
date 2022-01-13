@@ -71,7 +71,8 @@ def visualize_att(imgs, atts, idx, query_idx=None, feat_size=25, patch_size=5, d
         out = tensor2img(img, norm_mode=norm_mode)
         # out = cv2.resize(out, (feat_size,feat_size))
         # cv2.imwrite(os.path.join(dst_path,f'{i}.jpg'), out)
-        outs.append(cv2.cvtColor(out, cv2.COLOR_BGR2RGB))
+        # outs.append(cv2.cvtColor(out, cv2.COLOR_BGR2RGB))
+        outs.append(out)
 
     blend_outs = []
     for index, att in enumerate(atts):
