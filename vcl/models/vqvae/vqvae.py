@@ -824,3 +824,67 @@ class VQCL_v5(VQCL_v2):
         
 
         return losses, diff.item()
+    
+    
+@MODELS.register_module()
+class VQCL_v6(VQCL_v2):
+
+    def forward_train(self, imgs):
+        
+        bsz, _, c, _, h, w = imgs.shape
+        imgs = imgs.reshape(bsz, 2, -1, c, h, w).permute(0, 1, 3, 2, 4, 5)
+        
+        assert imgs.size(1) == 2
+        assert imgs.ndim == 6
+        clip_len = imgs.size(3)
+
+        imgs1 = video2images(imgs[:,
+                                  0].contiguous().reshape(-1, *imgs.shape[2:]))
+        imgs2 = video2images(imgs[:,
+                                  1].contiguous().reshape(-1, *imgs.shape[2:]))
+        
+        x1 = self.backbone(imgs1)
+        x2 = self.backbone(imgs2)
+        
+        x1 = self.quantize_conv(x1)
+        x2 = self.quantize_conv(x2)
+        
+        quant, diff, ind, embed = self.quantize(x1.permute(0, 2, 3, 1).contiguous())
+        
+        losses = dict()
+
+        loss_img_head = self.forward_img_head(x1, x2, clip_len)
+        losses.update(add_prefix(loss_img_head, prefix='img_head'))
+        
+        losses['diff'] = diff * self.commitment_cost
+        
+        return losses, diff.item()
+    
+
+    def forward_img_head(self, x1, x2, clip_len):
+        
+        if isinstance(x1, tuple):
+            x1 = x1[-1]
+        if isinstance(x2, tuple):
+            x2 = x2[-1]
+        losses = dict()
+        z1, p1 = self.head(x1)
+        z2, p2 = self.head(x2)
+        loss_weight = 1. / clip_len 
+        losses.update(
+            add_prefix(
+                self.head.loss(p1, z1, p2, z2, weight=loss_weight),
+                prefix='0'))
+
+        z2_v, p2_v = images2video(z2, clip_len), images2video(p2, clip_len)
+        for i in range(1, clip_len):
+            losses.update(
+                add_prefix(
+                    self.head.loss(
+                        p1,
+                        z1,
+                        video2images(p2_v.roll(i, dims=2)),
+                        video2images(z2_v.roll(i, dims=2)),
+                        weight=loss_weight),
+                    prefix=f'{i}'))
+        return losses

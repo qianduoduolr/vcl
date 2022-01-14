@@ -1,4 +1,5 @@
 import copy
+from operator import length_hint
 import os.path as osp
 from collections import defaultdict
 from pathlib import Path
@@ -27,31 +28,16 @@ from .pipelines import Compose
 
 @DATASETS.register_module()
 class VOS_youtube_dataset_rgb(VOS_dataset_base):
-    def __init__(self, root,  
-                       list_path, 
-                       data_prefix, 
-                       clip_length=3,
-                       num_clips=1,
-                       step=1,
-                       pipeline=None, 
-                       test_mode=False,
-                       split='train',
+    def __init__(self, data_prefix, 
                        year='2018',
-                       load_to_ram=False,
-                       per_video=False
+                       per_video=False,
+                       **kwargs
                        ):
-        super().__init__(root, list_path, pipeline, test_mode, split)
+        super().__init__(**kwargs)
 
-        self.list_path = list_path
-        self.root = root
         self.data_prefix = data_prefix
-        self.split = split
         self.year = year
-        self.clip_length = clip_length
-        self.num_clips = num_clips
         self.per_video = per_video
-        self.step = step
-
         self.load_annotations()
 
     def __len__(self):
@@ -83,15 +69,16 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
         
         if self.per_video:
             self.samples = [self.samples[0] for i in range(32 * 100)]
-
+    
+    
     def prepare_train_data(self, idx):
 
         sample = self.samples[idx]
         frames_path = sample['frames_path']
         num_frames = sample['num_frames']
 
-        offsets = [ random.randint(0, num_frames-self.clip_length * self.step) for i in range(self.num_clips) ]
-
+        offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, self.step)
+        
         # load frame
         frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length, step=self.step)
 
@@ -138,7 +125,7 @@ class VOS_youtube_dataset_rgb_withbbox(VOS_youtube_dataset_rgb):
         frames_bbox = sample['frames_bbox']
         num_frames = sample['num_frames']
 
-        offsets = [ random.randint(0, num_frames-self.clip_length) for i in range(self.num_clips) ]
+        offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, self.step)
 
         # load frame
         frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length)
@@ -164,34 +151,21 @@ class VOS_youtube_dataset_rgb_withbbox(VOS_youtube_dataset_rgb):
 
 @DATASETS.register_module()
 class VOS_youtube_dataset_mlm(VOS_dataset_base):
-    def __init__(self, root,  
-                       list_path, 
-                       data_prefix, 
+    def __init__(self, data_prefix, 
                        mask_ratio=0.15,
-                       clip_length=3,
-                       num_clips=1,
-                       step=1,
                        vq_size=32,
-                       pipeline=None, 
-                       test_mode=False,
                        with_mask=False,
-                       split='train',
                        year='2018',
-                       load_to_ram=False
+                       load_to_ram=False,
+                       **kwargs
                        ):
-        super().__init__(root, list_path, pipeline, test_mode, split)
+        super().__init__(**kwargs)
 
-
-        self.list_path = list_path
-        self.root = root
         self.data_prefix = data_prefix
         self.year = year
         self.load_to_ram = load_to_ram
         self.with_mask = with_mask
 
-        self.clip_length = clip_length
-        self.num_clips = num_clips
-        self.step = step
         self.vq_res = vq_size
         self.mask_ratio = mask_ratio
 
@@ -263,9 +237,9 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
         masks_path = sample['masks_path']
         num_frames = sample['num_frames']
 
-        offset = [ random.randint(0, num_frames-self.clip_length)]
-        frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
-        mask = self._parser_rgb_rawframe([offset[0]], masks_path, 1, flag='unchanged', backend='pillow')[0]
+        offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, self.step)
+        frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length, step=1)
+        mask = self._parser_rgb_rawframe([offsets[0]], masks_path, 1, flag='unchanged', backend='pillow')[0]
 
         mask = cv2.resize(mask, (self.vq_res, self.vq_res), cv2.INTER_NEAREST).reshape(-1)
         obj_idxs = np.nonzero(mask)[0]
@@ -295,16 +269,15 @@ class VOS_youtube_dataset_mlm(VOS_dataset_base):
         masks_path = sample['masks_path']
         num_frames = sample['num_frames']
 
-        offset = [ random.randint(0, num_frames-self.clip_length) for i in range(self.num_clips)]
-
+        offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, self.step)
 
         if self.load_to_ram:
-            frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
+            frames = (sample['frames'])[offsets[0]:offsets[0]+self.clip_length]
         else:
-            frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
+            frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length, step=1)
 
         if self.with_mask:
-            masks = self._parser_rgb_rawframe(offset, masks_path, self.clip_length, step=1, backend='pillow', flag='unchanged')
+            masks = self._parser_rgb_rawframe(offsets, masks_path, self.clip_length, step=1, backend='pillow', flag='unchanged')
 
         mask_num = int(self.vq_res * self.vq_res * self.mask_ratio)
         mask_query_idx = np.zeros(self.vq_res * self.vq_res)
@@ -389,15 +362,15 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
         flows_path = sample['flows_path']
         num_frames = sample['num_frames']
 
-        offset = [ random.randint(0, num_frames-self.clip_length) for i in range(self.num_clips) ]
+        offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, self.step)
 
 
         if self.load_to_ram:
-            frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
-            flows = (sample['flows'])[flows_path[offset[0]][0]:flows_path[offset[0]][1]]
+            frames = (sample['frames'])[offsets[0]:offsets[0]+self.clip_length]
+            flows = (sample['flows'])[flows_path[offsets[0]][0]:flows_path[offsets[0]][1]]
         else:
-            frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
-            sample_flows_path = flows_path[offset[0]+1]
+            frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length, step=1)
+            sample_flows_path = flows_path[offsets[0]+1]
             flows = self._parser_rgb_rawframe([0], sample_flows_path, len(sample_flows_path), step=1)
 
         results = dict(imgs=frames, flows=flows, with_flow=True)
@@ -460,16 +433,16 @@ class VOS_youtube_dataset_mlm_withbbox(VOS_youtube_dataset_mlm):
         frames_bbox = sample['frames_bbox']
         num_frames = sample['num_frames']
 
-        offset = [ random.randint(0, num_frames-self.clip_length) for i in range(self.num_clips)]
+        offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, self.step)
 
 
         if self.load_to_ram:
-            frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
+            frames = (sample['frames'])[offsets[0]:offsets[0]+self.clip_length]
         else:
-            frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
+            frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length, step=1)
             
         bboxs = []
-        for off in offset:
+        for off in offsets:
             for l in self.clip_length:
                 bboxs.append(frames_bbox[off+l])
         
@@ -521,6 +494,8 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
             sample['video_idx'] = video_idx
             video_idx += 1
             self.samples.append(sample)
+        
+        # self.samples = self.samples[:40]
 
     
     def prepare_train_data(self, idx):
@@ -530,17 +505,16 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
         frames_bbox = sample['frames_bbox']
         num_frames = sample['num_frames']
         video_idx = sample['video_idx']
-
-        offset = [ random.randint(0, num_frames-self.clip_length) for i in range(self.num_clips) ]
-
+        
+        offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, self.step)
 
         if self.load_to_ram:
-            frames = (sample['frames'])[offset[0]:offset[0]+self.clip_length]
+            frames = (sample['frames'])[offsets[0]:offsets[0]+self.clip_length]
         else:
-            frames = self._parser_rgb_rawframe(offset, frames_path, self.clip_length, step=1)
+            frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length, step=1)
         
         bboxs = []
-        for off in offset:
+        for off in offsets:
             for l in range(self.clip_length):
                 bboxs.append(frames_bbox[off+l])
 

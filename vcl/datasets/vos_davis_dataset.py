@@ -31,6 +31,9 @@ MAX_OBJECT_NUM_PER_SAMPLE = 5
 class VOS_dataset_base(BaseDataset):
     def __init__(self, root,  
                        list_path, 
+                       num_clips=1,
+                       clip_length=1,
+                       step=1,
                        pipeline=None, 
                        test_mode=False,
                        filename_tmpl='{:05d}.jpg',
@@ -38,6 +41,9 @@ class VOS_dataset_base(BaseDataset):
                        ):
         super().__init__(pipeline, test_mode)
 
+        self.clip_length = clip_length
+        self.num_clips = num_clips
+        self.step = step
         self.list_path = list_path
         self.root = root
         self.filename_tmpl = filename_tmpl
@@ -69,6 +75,18 @@ class VOS_dataset_base(BaseDataset):
         for i,l in enumerate(ob_list):
             mask_[mask == l] = i + 1
         return mask_,n,ob_list
+    
+    def temporal_sampling(self, num_frames, num_clips, clip_length, step, mode='random'):
+            
+        if mode == 'random':
+            offsets = [ random.randint(0, num_frames-clip_length * step) for i in range(num_clips) ]
+        elif mode == 'distant':
+            length_ext = num_frames / num_clips
+            offsets = np.arange(num_clips) * length_ext + np.random.uniform(low=0.0, high=length_ext, size=(num_clips))
+        else:
+            raise NotImplementedError
+        
+        return offsets
 
     def _parser_rgb_rawframe(self, offsets, frames_path, clip_length, step=1, flag='color', backend='cv2'):
         """read frame"""

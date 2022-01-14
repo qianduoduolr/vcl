@@ -310,3 +310,25 @@ def make_mask(size, t_size, eq=True):
                 
             masks.append(mask.reshape(-1))
     return torch.stack(masks)
+
+
+def video2images(imgs):
+    batches, channels, clip_len = imgs.shape[:3]
+    if clip_len == 1:
+        new_imgs = imgs.squeeze(2).reshape(batches, channels, *imgs.shape[3:])
+    else:
+        new_imgs = imgs.transpose(1, 2).contiguous().reshape(
+            batches * clip_len, channels, *imgs.shape[3:])
+
+    return new_imgs
+
+
+def images2video(imgs, clip_len):
+    batches, channels = imgs.shape[:2]
+    if clip_len == 1:
+        new_imgs = imgs.unsqueeze(2)
+    else:
+        new_imgs = imgs.reshape(batches // clip_len, clip_len, channels,
+                                *imgs.shape[2:]).transpose(1, 2).contiguous()
+
+    return new_imgs

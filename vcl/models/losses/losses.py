@@ -335,7 +335,9 @@ class CosineSimLoss(nn.Module):
         
         if self.reduction == 'mean':
             loss = loss.mean()
-        else:
+        elif self.reduction == 'sum':
             loss = loss.sum()
+        else:
+            pass
             
         return loss * self.loss_weight
