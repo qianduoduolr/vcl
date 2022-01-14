@@ -828,6 +828,10 @@ class VQCL_v5(VQCL_v2):
     
 @MODELS.register_module()
 class VQCL_v6(VQCL_v2):
+    def __init__(self, loss_feat, **kwargs):
+        super().__init__(**kwargs)
+        self.loss_feat = build_loss(loss_feat)
+        
 
     def forward_train(self, imgs):
         
@@ -873,18 +877,29 @@ class VQCL_v6(VQCL_v2):
         loss_weight = 1. / clip_len 
         losses.update(
             add_prefix(
-                self.head.loss(p1, z1, p2, z2, weight=loss_weight),
+                self.head_loss(p1, z1, p2, z2, weight=loss_weight),
                 prefix='0'))
 
         z2_v, p2_v = images2video(z2, clip_len), images2video(p2, clip_len)
         for i in range(1, clip_len):
             losses.update(
                 add_prefix(
-                    self.head.loss(
+                    self.head_loss(
                         p1,
                         z1,
                         video2images(p2_v.roll(i, dims=2)),
                         video2images(z2_v.roll(i, dims=2)),
                         weight=loss_weight),
                     prefix=f'{i}'))
+        return losses
+    
+    def head_loss(self, p1, z1, p2, z2, mask12=None, mask21=None, weight=1.):
+        assert mask12 is None
+        assert mask21 is None
+
+        losses = dict()
+
+        loss_feat = self.loss_feat(p1, z2.detach()) * 0.5 + self.loss_feat(
+            p2, z1.detach()) * 0.5
+        losses['loss_feat'] = loss_feat * weight
         return losses

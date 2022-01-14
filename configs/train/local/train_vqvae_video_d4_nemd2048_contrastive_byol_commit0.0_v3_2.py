@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'train_vqvae_video_d4_nemd2048_contrastive_byol_commit0.0_v3'
+exp_name = 'train_vqvae_video_d4_nemd2048_contrastive_byol_commit0.0_v3_2'
 docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corres'
 
 # model settings
@@ -23,8 +23,9 @@ model = dict(
         predictor_out_channels=128,
         with_norm=True,
         spatial_type='avg',
-        loss_feat=dict(type='CosineSimLoss', negative=False, reduction='mean')),
+    ),
     loss=dict(type='CosineSimLoss', negative=False, reduction='none'),
+    loss_feat=dict(type='CosineSimLoss', negative=False, reduction='mean'),
     embed_dim=128,
     n_embed=2048,
     commitment_cost=0.0,
