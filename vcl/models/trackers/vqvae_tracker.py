@@ -1148,7 +1148,7 @@ class Vqvae_Tracker_V10(Vqvae_Tracker):
             for idx, i in enumerate(range(self.num_head)):
                 i = str(i).replace('0', '')
                 predict_s = getattr(self, f'predictor{i}')(out_s)
-                loss_s = self.ce_loss(predict_s, out_ind[idx])
+                # loss_s = self.ce_loss(predict_s, out_ind[idx])
                 # loss_l = self.soft_ce_loss(att_l.flatten(0,1), att_s.flatten(0,1).detach())
                 loss_l = self.ce_loss(att_l.flatten(0,1), label)
                 # losses[f'ce{i}_short_loss'] = (loss_s * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
@@ -1328,7 +1328,7 @@ class Vqvae_Tracker_V11(Vqvae_Tracker):
             for idx, i in enumerate(range(self.num_head)):
                 i = str(i).replace('0', '')
                 predict_s = getattr(self, f'predictor{i}')(out_s)
-                losses['ce_loss'] = self.ce_loss(predict_s, out_ind[idx])
+                # losses['ce_loss'] = self.ce_loss(predict_s, out_ind[idx])
 
         # for long term
         refs.insert(0, tar)

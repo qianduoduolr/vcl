@@ -31,6 +31,7 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
     def __init__(self, data_prefix, 
                        year='2018',
                        per_video=False,
+                       temporal_sampling_mode='random',
                        **kwargs
                        ):
         super().__init__(**kwargs)
@@ -38,6 +39,7 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
         self.data_prefix = data_prefix
         self.year = year
         self.per_video = per_video
+        self.temporal_sampling_mode = temporal_sampling_mode
         self.load_annotations()
 
     def __len__(self):
@@ -77,7 +79,7 @@ class VOS_youtube_dataset_rgb(VOS_dataset_base):
         frames_path = sample['frames_path']
         num_frames = sample['num_frames']
 
-        offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, self.step)
+        offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, self.step, mode=self.temporal_sampling_mode)
         
         # load frame
         frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length, step=self.step)
