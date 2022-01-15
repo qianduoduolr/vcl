@@ -205,6 +205,9 @@ class Vqvae_Tracker(BaseModel):
                 att_l = torch.einsum('bij,bjk->bik', [att_l, att]) 
                 
             atts.append(att_l)
+        
+        if len(atts) == 0:
+            atts.append(att_s)
             
         visualize_att(imgs, atts, iteration, mask_query_idx, tar.shape[-1], self.patch_size, dst_path=save_path, norm_mode='mean-std')
 

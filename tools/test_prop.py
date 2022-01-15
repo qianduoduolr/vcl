@@ -21,6 +21,8 @@ def parse_args():
     parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='')
     parser.add_argument('--out-indices', nargs='+', type=int, default=[0])
     parser.add_argument('--seed', type=int, default=None, help='random seed')
+    parser.add_argument('--radius', type=int, default=-1, help='random seed')
+    
     parser.add_argument(
         '--deterministic',
         action='store_true',
@@ -135,6 +137,10 @@ def main():
     elif cfg.model.backbone.type == 'SwinTransformer':
         model = mmcv.ConfigDict(type='VanillaTracker', backbone=cfg.model.backbone)
         model.backbone.out_indices = args.out_indices
+        
+    if args.radius is not -1:
+        cfg.test_cfg.neighbor_range = args.radius
+        print(cfg.test_cfg.neighbor_range)
 
 
     model = build_model(model, train_cfg=None, test_cfg=cfg.test_cfg)
