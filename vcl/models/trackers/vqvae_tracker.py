@@ -186,20 +186,33 @@ class Vqvae_Tracker(BaseModel):
                     save_image=False,
                     save_path=None,
                     iteration=None):
-        bsz, num_clips, t, c, w, h = imgs.shape
-
-        tar = self.backbone(imgs[:,0,-1])
-        refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
+        bsz, num_clips, t, c, h, w = imgs.shape
+        
+        tar = self.backbone(imgs[:,0, 0])
+        refs = list([self.backbone(imgs[:,0,i]) for i in range(1,t)])
+        atts = []
+        
+        # for short term
+        out, att_s = non_local_attention(tar, [refs[0]], per_ref=self.per_ref)
+        
+        # for long term
+        att_l = torch.eye(att_s.shape[-1]).repeat(bsz, 1, 1).cuda()
+        for i in range(t-1):
+            if i == 0:
+                att_l = torch.einsum('bij,bjk->bik', [att_l, att_s]) 
+            else:
+                _, att = non_local_attention(refs[i-1], [refs[i]], per_ref=self.per_ref)
+                att_l = torch.einsum('bij,bjk->bik', [att_l, att]) 
+                
+            atts.append(att_l)
+            
+        visualize_att(imgs, atts, iteration, mask_query_idx, tar.shape[-1], self.patch_size, dst_path=save_path, norm_mode='mean-std')
 
         # vqvae tokenize for query frame
         with torch.no_grad():
             _, quant, diff, ind, embed = self.vq_enc(imgs[:, 0, -1])
             ind = ind.reshape(-1, 1).long().detach()
 
-
-        out, att = non_local_attention(tar, refs,  per_ref=False)
-
-        visualize_att(imgs, [att], iteration, mask_query_idx, tar.shape[-1], self.patch_size, dst_path=save_path, norm_mode='mean-std')
 
         if self.backbone.out_indices[0] == 3:
             if self.fc:
@@ -219,6 +232,7 @@ class Vqvae_Tracker(BaseModel):
             return out1, out2
         else:
             return None
+        
 
 @MODELS.register_module()
 class Vqvae_Tracker_V2(BaseModel):
@@ -984,99 +998,6 @@ class Vqvae_Tracker_V8(BaseModel):
     
     
     
-@MODELS.register_module()
-class Vqvae_Tracker_V9(Vqvae_Tracker):
-    """
-    Args:
-        Vqvae_Tracker ([type]): [induse long-term relationship]
-    """        
-    def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
-
-        bsz, num_clips, t, c, h, w = imgs.shape
-
-        # vqvae tokenize for query frame
-        with torch.no_grad():
-            out_ind= []
-            for i in range(self.num_head):
-                i = str(i).replace('0', '')
-                vqvae = getattr(self, f'vqvae{i}')
-                vq_enc = getattr(self, f'vq_enc{i}')
-                vqvae.eval()
-                emb, quant, _, ind, _ = vq_enc(imgs[:, 0, -1])
-                
-                if self.per_ref:
-                    ind = ind.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
-                    mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
-                else:
-                    ind = ind.reshape(-1, 1).long().detach()
-                    mask_query_idx = mask_query_idx.bool()
-                
-                out_ind.append(ind)
-
-        if jitter_imgs is not None:
-            imgs = jitter_imgs
-
-        tar = self.backbone(imgs[:,0, 0])
-        refs = list([self.backbone(imgs[:,0,i]) for i in range(1,t)])
-        
-        # for short term
-        out_s, att_s = non_local_attention(tar, [refs[0]], per_ref=self.per_ref)
-        
-        # for long term
-        att_l = torch.eye(att_s.shape[-1]).repeat(bsz, 1, 1).cuda()
-        for i in range(t-1):
-            if i == 0:
-                att_l = torch.einsum('bij,bjk->bik', [att_l, att_s]) 
-            else:
-                _, att = non_local_attention(refs[i-1], [refs[i]], per_ref=self.per_ref)
-                att_l = torch.einsum('bij,bjk->bik', [att_l, att]) 
-            
-        out_l = frame_transform(att_l, refs[-1].flatten(2).permute(0, 2, 1).unsqueeze(1), per_ref=self.per_ref)
-        
-        losses = {}
-        if self.ce_loss:
-            for idx, i in enumerate(range(self.num_head)):
-                i = str(i).replace('0', '')
-
-                predict_s = getattr(self, f'predictor{i}')(out_s)
-                predict_l = getattr(self, f'predictor{i}')(out_l)
-            
-                loss_s = self.ce_loss(predict_s, out_ind[idx])
-                loss_l = self.ce_loss(predict_l, out_ind[idx])
-                
-                losses[f'ce{i}_short_loss'] = (loss_s * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
-                losses[f'ce{i}_long_loss'] = (loss_l * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
-
-        
-        return losses
-    
-    
-    def forward_test(self, imgs, mask_query_idx, save_image=False, save_path=None, iteration=None):
-        
-        bsz, num_clips, t, c, h, w = imgs.shape
-        
-        tar = self.backbone(imgs[:,0, 0])
-        refs = list([self.backbone(imgs[:,0,i]) for i in range(1,t)])
-        atts = []
-        
-        # for short term
-        _, att_s = non_local_attention(tar, [refs[0]], per_ref=self.per_ref)
-        
-        # for long term
-        att_l = torch.eye(att_s.shape[-1]).repeat(bsz, 1, 1).cuda()
-        for i in range(t-1):
-            if i == 0:
-                att_l = torch.einsum('bij,bjk->bik', [att_l, att_s]) 
-            else:
-                _, att = non_local_attention(refs[i-1], [refs[i]], per_ref=self.per_ref)
-                att_l = torch.einsum('bij,bjk->bik', [att_l, att]) 
-                
-            atts.append(att_l)
-            
-        visualize_att(imgs, atts, iteration, mask_query_idx, tar.shape[-1], self.patch_size, dst_path=save_path, norm_mode='mean-std')
-            
-        return None
-    
 
 @MODELS.register_module()
 class Vqvae_Tracker_V10(Vqvae_Tracker):
@@ -1164,7 +1085,7 @@ class Vqvae_Tracker_V10(Vqvae_Tracker):
 class Vqvae_Tracker_V11(Vqvae_Tracker):
     """
     Args:
-        Vqvae_Tracker ([type]): [induse long-term relationship]
+        Vqvae_Tracker ([type]): [induse long-term relationship  cycle-consistency]
     """        
     def __init__(self, soft_ce_loss, **kwargs):
         super().__init__(**kwargs)
