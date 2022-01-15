@@ -120,21 +120,16 @@ class VOS_davis_dataset_test(VOS_dataset_base):
                [128, 64, 0], [0, 191, 0], [128, 191, 0], [0, 64, 128],
                [128, 64, 128]]
     
-    def __init__(self, root,  
-                       list_path, 
+    def __init__(self, 
                        data_prefix, 
-                       pipeline=None, 
-                       test_mode=False,
                        task='semi-supervised',
                        year='2017',
-                       split='val'
+                       split='val',
+                       **kwargs
                        ):
-        super().__init__(root, list_path, pipeline, test_mode=test_mode, split=split)
+        super().__init__(split=split, **kwargs)
 
         self.task = task
-
-        self.list_path = list_path
-        self.root = root
         self.data_prefix = data_prefix
         self.year = year
 
