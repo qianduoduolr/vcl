@@ -1,9 +1,10 @@
 import os
+from pickle import TRUE
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_2'
+exp_name = 'vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_9'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 # model settings
@@ -19,7 +20,9 @@ model = dict(
     patch_size=-1,
     fc=True,
     temperature=0.1,
+    per_ref=False,
     pretrained_vq='/home/lr/expdir/VCL/group_vqvae_tracker/train_vqvae_video_d4_nemd2048_contrastive_byol_commit1.0_v2/epoch_3200.pth',
+    pretrained='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_2/epoch_3200.pth'
 )
 
 # model training and testing settings
@@ -50,9 +53,9 @@ img_norm_cfg = dict(
 #     mean=[0, 0, 0], std=[255, 255, 255], to_bgr=False)
 
 train_pipeline = [
-    dict(type='RandomResizedCrop', area_range=(0.6,1.0), aspect_ratio_range=(1.5, 2.0),),
+    dict(type='RandomResizedCrop', area_range=(0.6,1.0), aspect_ratio_range=(1.5, 2.0), same_across_clip=True),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
-    dict(type='Flip', flip_ratio=0.5),
+    dict(type='Flip', flip_ratio=0.5, same_across_clip=True),
     dict(
         type='ColorJitter',
         brightness=0.7,
@@ -86,7 +89,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=16, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=6, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -100,9 +103,11 @@ data = dict(
             list_path='/home/lr/dataset/YouTube-VOS/2018/train_all_frames',
             data_prefix=dict(RGB='train_all_frames/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
             mask_ratio=0.15,
-            clip_length=2,
+            clip_length=1,
+            num_clips=5,
             vq_size=32,
             pipeline=train_pipeline,
+            temporal_sampling_mode='mast',
             test_mode=False),
 
     test =  dict(
@@ -117,8 +122,8 @@ data = dict(
 
 # optimizer
 optimizers = dict(
-    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-    predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    backbone=dict(type='Adam', lr=0.0001, betas=(0.9, 0.999)),
+    predictor=dict(type='Adam', lr=0.0001, betas=(0.9, 0.999))
     )
 # learning policy
 # total_iters = 200000
@@ -126,10 +131,11 @@ runner_type='epoch'
 max_epoch=3200
 lr_config = dict(
     policy='CosineAnnealing',
-    min_lr_ratio=0.001,
+    min_lr_ratio=0.0001,
     by_epoch=False,
-    warmup_iters=10,
-    warmup_ratio=0.1,
+    warmup='linear',
+    warmup_iters=100,
+    warmup_ratio=0.0001,
     warmup_by_epoch=True
     )
 

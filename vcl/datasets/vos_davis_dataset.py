@@ -37,6 +37,7 @@ class VOS_dataset_base(BaseDataset):
                        pipeline=None, 
                        test_mode=False,
                        filename_tmpl='{:05d}.jpg',
+                       temporal_sampling_mode='random',
                        split='train'
                        ):
         super().__init__(pipeline, test_mode)
@@ -47,6 +48,7 @@ class VOS_dataset_base(BaseDataset):
         self.list_path = list_path
         self.root = root
         self.filename_tmpl = filename_tmpl
+        self.temporal_sampling_mode = temporal_sampling_mode
         self.split = split
 
     def To_onehot(self, mask):
@@ -83,8 +85,12 @@ class VOS_dataset_base(BaseDataset):
         elif mode == 'distant':
             length_ext = num_frames / num_clips
             offsets = np.floor(np.arange(num_clips) * length_ext + np.random.uniform(low=0.0, high=length_ext, size=(num_clips))).astype(np.uint8)
-        else:
-            raise NotImplementedError
+        elif mode =='mast':
+            short_term_interval = 2
+            offsets_long_term = [0,1]
+            short_term_start = random.randint(2, num_frames-clip_length * step - (num_clips-2) * short_term_interval )
+            offsets_short_term = list([ short_term_start+i*short_term_interval for i in range(num_clips-2)])
+            offsets = offsets_long_term + offsets_short_term
         
         return offsets
 
