@@ -350,155 +350,173 @@ class VOS_davis_dataset_test(VOS_dataset_base):
         return eval_results
 
 
-
 @DATASETS.register_module()
-class VOS_davis_dataset_stm(VOS_dataset_base):
-
-    def __init__(self, root,  
-                       list_path, 
-                       resolution, 
-                       year, 
-                       single_object, 
-                       sample_type='stm', 
-                       pipeline=None, 
-                       test_mode=False
+class VOS_davis_dataset_rgb(VOS_dataset_base):
+    def __init__(self, data_prefix, 
+                       year='2017',
+                       per_video=False,
+                       temporal_sampling_mode='random',
+                       **kwargs
                        ):
-        super().__init__(root, list_path, pipeline, test_mode)
+        super().__init__(**kwargs)
 
-        self.sample_type = sample_type
-        self.aug = aug_heavy()
-        self.K = 11
-        self.skip = 0
-        
-        self.resolution = resolution
+        self.data_prefix = data_prefix
         self.year = year
-
-    def load_annotations(self):
-        
-        self.samples = []
-
-        mask_dir = osp.join(self.root, 'Annotations', self.resolution)
-        video_dir = osp.join(self.root, 'JPEGImages', self.resolution)
-        list_path = osp.join(self.list_path, f'davis{self.year}_train_list.txt') if not self.test_mode else  osp.join(self.list_path, f'davis{self.year}_val_list.txt')
-
-        with open(list_path, 'r') as f:
-            for line in f.readlines():
-                sample = dict()
-                vname, num_frames = line.strip('\n').split()
-                sample['frames_path'] = sorted(glob.glob(osp.join(video_dir, vname, '*.jpg')))
-                sample['masks_path'] = sorted(glob.glob(osp.join(mask_dir, vname, '*.png')))
-                sample['num_frames'] = int(num_frames)
-
-                _mask = np.array(Image.open(sample['masks_path'][0]).convert('P'), dtype=np.uint8)
-                sample['num_objects'] = np.max(_mask)
-                self.samples.append(sample)
+        self.per_video = per_video
+        self.temporal_sampling_mode = temporal_sampling_mode
+        self.load_annotations()
 
     def __len__(self):
         return len(self.samples)
 
-    def change_skip(self,f):
-        self.skip = f
-
-    def prepare_train_data_stm(self, index):
-
-        sample = self.samples[index]
-        num_frames = sample['num_frames']
-        masks_path = sample['masks_path']
-        frames_path = sample['frames_path']
-       
-        # sample on temporal
-        n1 = random.sample(range(0,num_frames - 2),1)[0]
-        n2 = random.sample(range(n1 + 1,min(num_frames - 1,n1 + 2 + self.skip)),1)[0]
-        n3 = random.sample(range(n2 + 1,min(num_frames,n2 + 2 + self.skip)),1)[0]
-        offsets = [n1,n2,n3]
-        num_object = 0
-        ob_list = []
+    def load_annotations(self):
         
-        # load frames and masks
-        frames = self._parser_rgb_jpg_cv(offsets, frames_path)
-        masks = self._parser_mask(offsets, masks_path)
+        self.samples = []
+        self.mask_dir = osp.join(self.root, self.data_prefix['ANNO'])
+        self.video_dir = osp.join(self.root, self.data_prefix['RGB'])
+        list_path = osp.join(self.list_path, f'davis{self.year}_{self.split}_list.txt')
 
-        # apply augmentations
-        frames_,masks_ = self.aug(frames,masks)
-
-        for f in range(len(frames)):
-            masks_[f],num_object,ob_list = self.mask_process(masks_[f],f,num_object,ob_list)
-            
-        
-        Fs = torch.from_numpy(np.transpose(np.stack(frames_, axis=0), (3, 0, 1, 2))).float()
-        Ms = torch.from_numpy(self.All_to_onehot(np.stack(masks_, axis=0))).float()
-
-        if num_object == 0:
-            num_object += 1
-            
-        num_objects = torch.LongTensor([num_object])
-
-        data = {
-            'Fs': Fs,
-            'Ms': Ms,
-            'num_objects':num_objects
-        }
-
-        return data
-
+        with open(list_path, 'r') as f:
+            for idx, line in enumerate(f.readlines()):
+                sample = dict()
+                vname, num_frames = line.strip('\n').split()
+                sample['masks_path'] = sorted(glob.glob(osp.join(self.mask_dir, vname, '*.png')))
+                sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
+                sample['video_path'] = osp.join(self.video_dir, vname)
+                sample['num_frames'] = int(num_frames)
+                self.samples.append(sample)
+    
+    
     def prepare_train_data(self, idx):
 
-        data_sampler = getattr(self, f'prepare_train_data_{self.sample_type}')
-
-        return data_sampler(idx)
-
-    def prepare_test_data(self, index):
-        sample = self.samples[index]
+        sample = self.samples[idx]
+        frames_path = sample['frames_path']
         num_frames = sample['num_frames']
-        num_objects = sample['num_objects']
 
-        num_objects = torch.LongTensor([int(num_objects)])
+        offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, self.step, mode=self.temporal_sampling_mode)
+        
+        # load frame
+        frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length, step=self.step)
 
         data = {
-            'num_objects': num_objects,
-            'num_frames': num_frames,
-            'video': index
-        }
+            'imgs': frames,
+            'modality': 'RGB',
+            'num_clips': self.num_clips,
+            'num_proposals':1,
+            'clip_len': self.clip_length
+        } 
 
-        return data
-
-
-    def evaluate(self, results, logger=None):
-
-        if not isinstance(results, list):
-            raise TypeError(f'results must be a list, but got {type(results)}')
-
-        results = [res['eval_result'] for res in results]  # a list of dict
-        eval_results = defaultdict(list)  # a dict of list
-
-        for res in results:
-            for metric, sub_metric in res.items():
-                for metric_, v in sub_metric.items():
-                    eval_results[metric_].extend(v)
-        
-         # average the results
-        eval_results = {
-            metric: np.mean(values)
-            for metric, values in eval_results.items()
-        }
-        return eval_results
+        return self.pipeline(data)
     
-    def load_single_image(self, sample, f):  
+    
+@DATASETS.register_module()
+class VOS_davis_dataset_mlm(VOS_dataset_base):
+    def __init__(self, data_prefix, 
+                       mask_ratio=0.15,
+                       vq_size=32,
+                       with_mask=False,
+                       year='2017',
+                       load_to_ram=False,
+                       **kwargs
+                       ):
+        super().__init__(**kwargs)
 
-        frame_file = sample['frames_path'][f]
+        self.data_prefix = data_prefix
+        self.year = year
+        self.load_to_ram = load_to_ram
+        self.with_mask = with_mask
 
-        N_frames = (np.array(Image.open(frame_file).convert('RGB'))/255)[None, :]
+        self.vq_res = vq_size
+        self.mask_ratio = mask_ratio
 
-        mask_file = sample['masks_path'][f]
-        N_masks = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)[None, :]
+        self.load_annotations()
 
-        Fs = torch.from_numpy(np.transpose(N_frames, (3, 0, 1, 2))).float()
-        if self.single_object:
-            N_masks = (N_masks > 0.5).astype(np.uint8) * (N_masks < 255).astype(np.uint8)
-            Ms = torch.from_numpy(self.All_to_onehot(N_masks).copy()).float()
-            num_objects = torch.LongTensor([int(1)])
-            return Fs, Ms, num_objects
+    def load_annotations(self):
+        
+        self.samples = []
+        self.video_dir = osp.join(self.root, self.data_prefix['RGB'])
+        self.mask_dir = osp.join(self.root, self.data_prefix['ANNO'])
+        list_path = osp.join(self.list_path, f'davis{self.year}_{self.split}_list.txt')
+
+        with open(list_path, 'r') as f:
+            for idx, line in enumerate(f.readlines()):
+                sample = dict()
+                vname, num_frames = line.strip('\n').split()
+                sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
+                sample['masks_path'] = sorted(glob.glob(osp.join(self.mask_dir, vname, '*.png')))
+                sample['num_frames'] = len(sample['frames_path'])
+                
+                if sample['num_frames'] < self.clip_length * self.step: continue
+                
+                if self.load_to_ram:
+                    sample['frames'] = self._parser_rgb_rawframe([0], sample['frames_path'], sample['num_frames'], step=1)
+                self.samples.append(sample)
+
+    def prepare_test_data(self, idx):
+        
+        sample = self.samples[idx]
+        frames_path = sample['frames_path']
+        masks_path = sample['masks_path']
+        num_frames = sample['num_frames']
+
+        offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, self.step)
+        frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length, step=1)
+        mask = self._parser_rgb_rawframe([offsets[0]], masks_path, 1, flag='unchanged', backend='pillow')[0]
+
+        mask = cv2.resize(mask, (self.vq_res, self.vq_res), cv2.INTER_NEAREST).reshape(-1)
+        obj_idxs = np.nonzero(mask)[0]
+
+        if mask.max() > 0:
+            sample_idx = np.array(random.sample(obj_idxs.tolist(), 1))
         else:
-            Ms = torch.from_numpy(self.All_to_onehot(N_masks)).float()
-            num_objects = torch.LongTensor([int(sample['num_objects'])])
-            return Fs, Ms
+            sample_idx = np.array(random.sample(range(self.vq_res * self.vq_res), 1))
+
+        assert sample_idx.shape[0] == 1
+
+        data = {
+            'imgs': frames,
+            'mask_query_idx': sample_idx,
+            'modality': 'RGB',
+            'num_clips': 1,
+            'num_proposals':1,
+            'clip_len': self.clip_length
+        }
+
+        return self.pipeline(data)
+
+    def prepare_train_data(self, idx):
+        
+        sample = self.samples[idx]
+        frames_path = sample['frames_path']
+        masks_path = sample['masks_path']
+        num_frames = sample['num_frames']
+
+        offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, self.step)
+
+        if self.load_to_ram:
+            frames = (sample['frames'])[offsets[0]:offsets[0]+self.clip_length]
+        else:
+            frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length, step=1)
+
+        if self.with_mask:
+            masks = self._parser_rgb_rawframe(offsets, masks_path, self.clip_length, step=1, backend='pillow', flag='unchanged')
+
+        mask_num = int(self.vq_res * self.vq_res * self.mask_ratio)
+        mask_query_idx = np.zeros(self.vq_res * self.vq_res)
+        sample_idx = np.array(random.sample(range(self.vq_res * self.vq_res), mask_num))
+        mask_query_idx[sample_idx] = 1
+
+        assert mask_query_idx.sum() == mask_num
+
+        data = {
+            'imgs': frames,
+            'mask_query_idx': mask_query_idx,
+            'modality': 'RGB',
+            'num_clips': self.num_clips,
+            'num_proposals':1,
+            'clip_len': self.clip_length
+        }
+        if self.with_mask:
+            data['masks'] = masks
+
+        return self.pipeline(data)

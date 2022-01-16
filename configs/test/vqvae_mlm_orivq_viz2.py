@@ -32,7 +32,7 @@ test_cfg = dict(
     output_dir='eval_results')
 
 # dataset settings
-train_dataset_type = 'VOS_youtube_dataset_mlm'
+train_dataset_type = 'VOS_davis_dataset_mlm'
 
 val_dataset_type = None
 test_dataset_type = 'VOS_davis_dataset_test'
@@ -46,7 +46,7 @@ img_norm_cfg = dict(
 
 
 train_pipeline = [
-    dict(type='RandomResizedCrop', area_range=(0.6,1.0), same_on_clip=False),
+    # dict(type='RandomResizedCrop', area_range=(0.6,1.0), same_on_clip=False),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
     dict(type='Flip', flip_ratio=0),
     dict(type='Normalize', **img_norm_cfg),
@@ -78,26 +78,27 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            root='/home/lr/dataset/YouTube-VOS',
-            list_path='/home/lr/dataset/YouTube-VOS/2018/train',
-            data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
+            root='/home/lr/dataset/DAVIS',
+            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            data_prefix=dict(RGB='JPEGImages/480p', FLOW='train_all_frames/Flows_s256', ANNO='Annotations/480p'),
             mask_ratio=0.15,
             clip_length=5,
             vq_size=32,
             pipeline=train_pipeline,
             test_mode=False),
 
-    test =  dict(
+    test =  
+            dict(
             type=train_dataset_type,
-            root='/home/lr/dataset/YouTube-VOS',
-            list_path='/home/lr/dataset/YouTube-VOS/2018/train',
-            data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
+            root='/home/lr/dataset/DAVIS',
+            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            data_prefix=dict(RGB='JPEGImages/480p', FLOW='train_all_frames/Flows_s256', ANNO='Annotations/480p'),
             mask_ratio=0.15,
             clip_length=5,
             vq_size=32,
             pipeline=train_pipeline,
+            split='val',
             test_mode=True)
-
 )
 
 # optimizer
@@ -107,10 +108,6 @@ optimizers = dict(
     head=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
     
     )
-# optimizers = dict(
-#     backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-#     predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-#     )
 
 # learning policy
 # total_iters = 200000

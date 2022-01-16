@@ -22,6 +22,7 @@ def parse_args():
     parser.add_argument('--out-indices', nargs='+', type=int, default=[0])
     parser.add_argument('--seed', type=int, default=None, help='random seed')
     parser.add_argument('--radius', type=int, default=-1, help='random seed')
+    parser.add_argument('--temperature', type=float, default=-1, help='random seed')
     
     parser.add_argument(
         '--deterministic',
@@ -141,7 +142,11 @@ def main():
     if args.radius is not -1:
         cfg.test_cfg.neighbor_range = args.radius
         print(cfg.test_cfg.neighbor_range)
-
+    
+    if args.temperature is not -1:
+        cfg.test_cfg.temperature = args.temperature
+        print(cfg.test_cfg.temperature)
+        
 
     model = build_model(model, train_cfg=None, test_cfg=cfg.test_cfg)
 
