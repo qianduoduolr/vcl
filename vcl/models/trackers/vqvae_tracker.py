@@ -32,7 +32,7 @@ class Vqvae_Tracker(BaseModel):
                  vqvae,
                  patch_size,
                  pretrained_vq,
-                 temperature,
+                 temperature=1.0,
                  sim_siam_head=None,
                  multi_head_weight=[1.0],
                  ce_loss=None,
@@ -56,6 +56,7 @@ class Vqvae_Tracker(BaseModel):
         self.num_head = len(vqvae)
         self.multi_head_weight = multi_head_weight
         self.per_ref = per_ref
+        self.temperature = temperature
 
         self.logger = get_root_logger()
 
@@ -154,7 +155,7 @@ class Vqvae_Tracker(BaseModel):
         if self.patch_size != -1:
             out, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
         else:
-            out, att = non_local_attention(tar, refs, per_ref=self.per_ref)
+            out, att = non_local_attention(tar, refs, per_ref=self.per_ref, temprature=self.temperature)
 
         losses = {}
 

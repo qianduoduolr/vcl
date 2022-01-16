@@ -216,14 +216,14 @@ class VanillaTracker(BaseTracker):
                     mode='bilinear',
                     align_corners=False)
                 if not input_onehot:
-                    seg_pred_min = seg_pred.view(*seg_pred.shape[:2], -1).min(
-                        dim=-1)[0].view(*seg_pred.shape[:2], 1, 1)
-                    seg_pred_max = seg_pred.view(*seg_pred.shape[:2], -1).max(
-                        dim=-1)[0].view(*seg_pred.shape[:2], 1, 1)
-                    normalized_seg_pred = (seg_pred - seg_pred_min) / (
-                        seg_pred_max - seg_pred_min + 1e-12)
-                    seg_pred = torch.where(seg_pred_max > 0,
-                                           normalized_seg_pred, seg_pred)
+                    # seg_pred_min = seg_pred.view(*seg_pred.shape[:2], -1).min(
+                    #     dim=-1)[0].view(*seg_pred.shape[:2], 1, 1)
+                    # seg_pred_max = seg_pred.view(*seg_pred.shape[:2], -1).max(
+                    #     dim=-1)[0].view(*seg_pred.shape[:2], 1, 1)
+                    # normalized_seg_pred = (seg_pred - seg_pred_min) / (
+                    #     seg_pred_max - seg_pred_min + 1e-12)
+                    # seg_pred = torch.where(seg_pred_max > 0,
+                    #                        normalized_seg_pred, seg_pred)
                     seg_pred = seg_pred.argmax(dim=1)
                     seg_pred = F.interpolate(
                         seg_pred.float().unsqueeze(1),
