@@ -1229,7 +1229,7 @@ class Vqvae_Tracker_V11(Vqvae_Tracker):
 
         return self._xent_targets[key]
 
-    def forward_train_cycle(self, q):
+    def forward_train_cycle(self, q, mask_query_idx=None):
         '''
         Input is B x T x N*C x H x W, where either
            N>1 -> list of patches of images
@@ -1239,7 +1239,8 @@ class Vqvae_Tracker_V11(Vqvae_Tracker):
         
         q = q.flatten(0,1)
         q = nn.functional.normalize(self.fc(q), dim=1).reshape(bsz, T, q.shape[1], -1).permute(0,2,1,3)
-
+        # q = q.reshape(bsz, T, q.shape[1], -1).permute(0,2,1,3)
+        
         #################################################################
         # Compute walks 
         #################################################################
@@ -1270,7 +1271,11 @@ class Vqvae_Tracker_V11(Vqvae_Tracker):
 
         for name, (A, target) in walks.items():
             logits = torch.log(A+1e-20).flatten(0, -2)
-            loss = self.ce_loss(logits, target.unsqueeze(1)).mean()
+            if mask_query_idx == None:
+                loss = self.ce_loss(logits, target.unsqueeze(1)).mean()
+            else:
+                loss = self.ce_loss(logits, target.unsqueeze(1))
+                loss = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
             acc = (torch.argmax(logits, dim=-1) == target).float().mean()
             # diags.update({f"{H} xent {name}": loss.detach(),
             #               f"{H} acc {name}": acc})
@@ -1286,45 +1291,50 @@ class Vqvae_Tracker_V11(Vqvae_Tracker):
     
         bsz, num_clips, t, c, h, w = imgs.shape
 
+        # self.eval()
+        
         # vqvae tokenize for query frame
-        with torch.no_grad():
-            out_ind= []
-            for i in range(self.num_head):
-                i = str(i).replace('0', '')
-                vqvae = getattr(self, f'vqvae{i}')
-                vq_enc = getattr(self, f'vq_enc{i}')
-                vqvae.eval()
-                emb, quant, _, ind, _ = vq_enc(imgs[:, 0, -1])
+        # with torch.no_grad():
+        #     out_ind= []
+        #     for i in range(self.num_head):
+        #         i = str(i).replace('0', '')
+        #         vqvae = getattr(self, f'vqvae{i}')
+        #         vq_enc = getattr(self, f'vq_enc{i}')
+        #         vqvae.eval()
+        #         emb, quant, _, ind, _ = vq_enc(imgs[:, 0, -1])
                 
-                if self.per_ref:
-                    ind = ind.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
-                    mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
-                else:
-                    ind = ind.reshape(-1, 1).long().detach()
-                    mask_query_idx = mask_query_idx.bool()
+        #         if self.per_ref:
+        #             ind = ind.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
+        #             mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
+        #         else:
+        #             ind = ind.reshape(-1, 1).long().detach()
+        #             mask_query_idx = mask_query_idx.bool()
                 
-                out_ind.append(ind)
+        #         out_ind.append(ind)
 
-        # if jitter_imgs is not None:
-        #     imgs = jitter_imgs
+        if jitter_imgs is not None:
+            imgs = jitter_imgs
 
         tar = self.backbone(imgs[:,0, 0])
         refs = list([self.backbone(imgs[:,0,i]) for i in range(1,t)])
 
         
         # for short term
-        out_s, att_s = non_local_attention(tar, [refs[0]], per_ref=self.per_ref)
+        # out_s, att_s = non_local_attention(tar, [refs[0]], per_ref=self.per_ref)
      
         losses = {}
-        if self.ce_loss:
-            for idx, i in enumerate(range(self.num_head)):
-                i = str(i).replace('0', '')
-                predict_s = getattr(self, f'predictor{i}')(out_s)
-                # losses['ce_loss'] = self.ce_loss(predict_s, out_ind[idx])
+        # if self.ce_loss:
+        #     for idx, i in enumerate(range(self.num_head)):
+        #         i = str(i).replace('0', '')
+        #         predict_s = getattr(self, f'predictor{i}')(out_s)
+        #         loss = self.ce_loss(predict_s, out_ind[idx])
+        #         losses['ce_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
 
         # for long term
         refs.insert(0, tar)
         all_feats = torch.stack(refs,1)
-        losses['cycle_loss'] = self.forward_train_cycle(all_feats)
+        losses['cycle_loss'] = self.forward_train_cycle(all_feats, mask_query_idx)
+        
+        # self.train()
         
         return losses
