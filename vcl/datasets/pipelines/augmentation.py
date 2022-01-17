@@ -1,7 +1,6 @@
 import random
 import copy
 from collections.abc import Sequence
-from unittest import result
 import torch
 import numbers
 from typing import Tuple, List, Optional
