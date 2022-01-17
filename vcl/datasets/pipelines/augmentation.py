@@ -1,6 +1,7 @@
 import random
 import copy
 from collections.abc import Sequence
+from unittest import result
 import torch
 import numbers
 from typing import Tuple, List, Optional
@@ -391,7 +392,6 @@ class RandomResizedCrop(object):
                                             (lazy_left + right),
                                             (lazy_top + bottom)],
                                            dtype=np.float32)
-
         return results
 
     def get_ratio(self, results, left, top, new_w, new_h, idx):
@@ -810,7 +810,11 @@ class Flip(object):
             #     imgs.append(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
             
             # if results.get('bbox_mask', None):
-            #     mask = cv2.resize(results['mask_query_idx'][0].astype(np.uint8), (256,256), cv2.INTER_NEAREST)[:,:,None].repeat(3, -1) * 255
+            #     if results.get('return_first_query', False):
+            #         mask = results['mask_query_idx'][0]
+            #     else:
+            #         mask = results['mask_query_idx'][-1]
+            #     mask = cv2.resize(mask.astype(np.uint8), (256,256), cv2.INTER_NEAREST)[:,:,None].repeat(3, -1) * 255
             #     imgs.append(mask)
             #     out = np.concatenate(imgs, 1)
             #     num = random.randint(0,1000)
@@ -839,7 +843,16 @@ class Flip(object):
                 raise NotImplementedError('Use one Flip please')
             lazyop['flip'] = flip
             lazyop['flip_direction'] = self.direction
-
+        
+        # with open('result3.txt', 'a') as f:
+        #     if results['masks'][-1].sum() != 0:
+        #         c = results['masks'][-1]
+        #         d = results['mask_query_idx'].reshape((32,32))
+        #         img = results['imgs'][-1]
+        #         gt = (results['masks'][-1] != 0).reshape(-1)
+        #         a = (results['mask_query_idx'] * gt).sum() / (results['mask_query_idx'].sum()+1e-12)
+        #         f.write(str(a) + '\n')
+        
         return results
 
     def __repr__(self):

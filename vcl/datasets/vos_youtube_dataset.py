@@ -482,10 +482,12 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
             sample['video_name'] = vname
             sample['frames_path'] = []
             sample['frames_bbox'] = []
+            sample['masks_path'] = []
             sample['num_frames'] = len(vid['frame'])
  
             for frame in vid['frame']:
                 sample['frames_path'].append(osp.join(self.video_dir, vname, frame['img_path']))
+                sample['masks_path'].append(osp.join(self.mask_dir, vname, frame['img_path'].replace('jpg','png')))
                 sample['frames_bbox'].append(frame['objs'][0]['bbox'])
             
             if sample['num_frames'] < self.clip_length * self.step:
@@ -517,7 +519,7 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
         for off in offsets:
             for l in range(self.clip_length):
                 bboxs.append(frames_bbox[off+l])
-
+        
         if random.random() <= self.p:
             data = {
                 'imgs': frames,

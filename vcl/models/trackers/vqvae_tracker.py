@@ -116,13 +116,13 @@ class Vqvae_Tracker(BaseModel):
         if pretrained:
             _ = load_checkpoint(self, pretrained, map_location='cpu')
             self.logger.info('load pretrained model successfully')
-            
+        
         return 
 
     def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
 
         bsz, num_clips, t, c, h, w = imgs.shape
-
+    
         # vqvae tokenize for query frame
         with torch.no_grad():
             out_ind= []
