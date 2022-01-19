@@ -37,6 +37,7 @@ class Vqvae_Tracker(BaseModel):
                  multi_head_weight=[1.0],
                  ce_loss=None,
                  mse_loss=None,
+                 att_reg=False,
                  fc=True,
                  train_cfg=None,
                  test_cfg=None,
@@ -57,6 +58,7 @@ class Vqvae_Tracker(BaseModel):
         self.multi_head_weight = multi_head_weight
         self.per_ref = per_ref
         self.temperature = temperature
+        self.att_reg = att_reg
 
         self.logger = get_root_logger()
 
@@ -109,6 +111,9 @@ class Vqvae_Tracker(BaseModel):
 
         # init weights
         self.init_weights(pretrained)
+        
+        if self.att_reg:
+            self.att_reg_mask = make_mask(32, 5)
         
             
     def init_weights(self, pretrained):
@@ -181,6 +186,11 @@ class Vqvae_Tracker(BaseModel):
                 loss = self.mse_loss(predict, out_quant[idx]).mean(-1)
                 losses[f'mse{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
         
+        if self.att_reg:
+            mask = torch.ones(*att.shape).cuda() - self.att_reg_mask
+            target = torch.zeros(*att.shape).cuda()
+            losses['att_sparse_loss'] = F.l1_loss(mask*att, target)
+                    
         return losses
 
     def forward_test(self, imgs, mask_query_idx,
