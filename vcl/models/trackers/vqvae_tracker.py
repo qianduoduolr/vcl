@@ -208,20 +208,26 @@ class Vqvae_Tracker(BaseModel):
         out, att_s = non_local_attention(tar, [refs[0]], per_ref=self.per_ref)
         
         # for long term
-        att_l = torch.eye(att_s.shape[-1]).repeat(bsz, 1, 1).cuda()
-        for i in range(t-1):
-            if i == 0:
-                att_l = torch.einsum('bij,bjk->bik', [att_l, att_s]) 
-            else:
-                _, att = non_local_attention(refs[i-1], [refs[i]], per_ref=self.per_ref)
-                att_l = torch.einsum('bij,bjk->bik', [att_l, att]) 
-                
-            atts.append(att_l)
+        if True:
+            _, att = non_local_attention(tar, refs, per_ref=self.per_ref)
+            att = att.reshape(bsz, att_s.shape[-1], t-1, -1)
+            for i in range(t-1):
+                atts.append(att[:,:,i])
+        else:
+            att_l = torch.eye(att_s.shape[-1]).repeat(bsz, 1, 1).cuda()
+            for i in range(t-1):
+                if i == 0:
+                    att_l = torch.einsum('bij,bjk->bik', [att_l, att_s]) 
+                else:
+                    _, att = non_local_attention(refs[i-1], [refs[i]], per_ref=self.per_ref)
+                    att_l = torch.einsum('bij,bjk->bik', [att_l, att]) 
+                    
+                atts.append(att_l)
         
         if len(atts) == 0:
             atts.append(att_s)
             
-        visualize_att(imgs, atts, iteration, mask_query_idx, tar.shape[-1], self.patch_size, dst_path=save_path, norm_mode='mean-std')
+        visualize_att(imgs, atts, iteration, True, mask_query_idx, tar.shape[-1], self.patch_size, dst_path=save_path, norm_mode='mean-std')
 
         # vqvae tokenize for query frame
         with torch.no_grad():
