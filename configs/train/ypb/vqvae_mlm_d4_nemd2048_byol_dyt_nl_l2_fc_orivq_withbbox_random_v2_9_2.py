@@ -128,7 +128,7 @@ optimizers = dict(
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=3200
+max_epoch=1600
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.0001,
@@ -164,7 +164,7 @@ eval_config= dict(
 
 
 load_from = None
-resume_from = None
+resume_from = '/gdata/lirui/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_9_2/epoch_1600.pth'
 workflow = [('train', 1)]
 
 
