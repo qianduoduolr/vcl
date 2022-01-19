@@ -1305,23 +1305,23 @@ class Vqvae_Tracker_V11(Vqvae_Tracker):
         # self.eval()
         
         # vqvae tokenize for query frame
-        # with torch.no_grad():
-        #     out_ind= []
-        #     for i in range(self.num_head):
-        #         i = str(i).replace('0', '')
-        #         vqvae = getattr(self, f'vqvae{i}')
-        #         vq_enc = getattr(self, f'vq_enc{i}')
-        #         vqvae.eval()
-        #         emb, quant, _, ind, _ = vq_enc(imgs[:, 0, -1])
+        with torch.no_grad():
+            out_ind= []
+            for i in range(self.num_head):
+                i = str(i).replace('0', '')
+                vqvae = getattr(self, f'vqvae{i}')
+                vq_enc = getattr(self, f'vq_enc{i}')
+                vqvae.eval()
+                emb, quant, _, ind, _ = vq_enc(imgs[:, 0, -1])
                 
-        #         if self.per_ref:
-        #             ind = ind.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
-        #             mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
-        #         else:
-        #             ind = ind.reshape(-1, 1).long().detach()
-        #             mask_query_idx = mask_query_idx.bool()
+                if self.per_ref:
+                    ind = ind.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
+                    mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
+                else:
+                    ind = ind.reshape(-1, 1).long().detach()
+                    mask_query_idx = mask_query_idx.bool()
                 
-        #         out_ind.append(ind)
+                out_ind.append(ind)
 
         if jitter_imgs is not None:
             imgs = jitter_imgs
@@ -1331,15 +1331,15 @@ class Vqvae_Tracker_V11(Vqvae_Tracker):
 
         
         # for short term
-        # out_s, att_s = non_local_attention(tar, [refs[0]], per_ref=self.per_ref)
+        out_s, att_s = non_local_attention(tar, [refs[0]], per_ref=self.per_ref)
      
         losses = {}
-        # if self.ce_loss:
-        #     for idx, i in enumerate(range(self.num_head)):
-        #         i = str(i).replace('0', '')
-        #         predict_s = getattr(self, f'predictor{i}')(out_s)
-        #         loss = self.ce_loss(predict_s, out_ind[idx])
-        #         losses['ce_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
+        if self.ce_loss:
+            for idx, i in enumerate(range(self.num_head)):
+                i = str(i).replace('0', '')
+                predict_s = getattr(self, f'predictor{i}')(out_s)
+                loss = self.ce_loss(predict_s, out_ind[idx])
+                losses['ce_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
 
         # for long term
         refs.insert(0, tar)
