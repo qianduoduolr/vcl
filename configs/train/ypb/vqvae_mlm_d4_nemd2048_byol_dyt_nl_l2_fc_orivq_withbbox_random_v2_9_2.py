@@ -22,7 +22,7 @@ model = dict(
     temperature=0.1,
     per_ref=False,
     pretrained_vq='/gdata/lirui/expdir/VCL/group_vqvae_tracker/train_vqvae_video_d4_nemd2048_contrastive_byol_commit1.0_v2/epoch_3200.pth',
-    pretrained='/gdata/lirui/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_4/epoch_9600.pth'
+    pretrained='/gdata/lirui/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_2/epoch_3200.pth'
 )
 
 # model training and testing settings
@@ -128,7 +128,7 @@ optimizers = dict(
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=1600
+max_epoch=3200
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.0001,
