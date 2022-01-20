@@ -20,7 +20,7 @@ model = dict(
     multi_head_weight=[1.0,2.0],
     patch_size=-1,
     fc=True,
-    temperature=0.1,
+    temperature=1.0,
     pretrained_vq=['/home/lr/models/vqvae/vqvae_youtube_d4_n32_c256_embc128_byol_commit1.0.pth',
                     '/home/lr/models/vqvae/vqvae_youtube_d4_n1024_c256_embc128.pth'],
     pretrained=None

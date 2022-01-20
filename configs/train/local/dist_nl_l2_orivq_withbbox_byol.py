@@ -12,7 +12,7 @@ model = dict(
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
     loss=dict(type='Soft_Ce_Loss',reduction='none', loss_weight=1),
     patch_size=-1,
-    temperature=0.1,
+    temperature=1.0,
     moment=0.999,
     pretrained='/home/lr/models/vqvae/vqvae_youtube_d4_n32_c256_embc128_byol_commit1.0.pth'
 )

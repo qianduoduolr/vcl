@@ -11,7 +11,7 @@ model = dict(
     type='Pixel_Tracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
     thres=0.9,
-    temperature=0.1,
+    temperature=1.0,
 )
 
 # model training and testing settings

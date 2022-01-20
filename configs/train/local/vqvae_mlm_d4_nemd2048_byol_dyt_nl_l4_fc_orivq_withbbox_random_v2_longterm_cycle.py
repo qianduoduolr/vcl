@@ -19,7 +19,7 @@ model = dict(
     soft_ce_loss=dict(type='Soft_Ce_Loss', reduction='none'),
     patch_size=-1,
     fc=True,
-    temperature=0.1,
+    temperature=1.0,
     per_ref=False,
     pretrained_vq='/home/lr/expdir/VCL/group_vqvae_tracker/train_vqvae_video_d4_nemd2048_contrastive_byol_commit1.0_v2/epoch_3200.pth',
     pretrained='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_2/epoch_3200.pth'

@@ -14,7 +14,7 @@ model = dict(
     loss=dict(type='Kl_Loss',reduction='mean', loss_weight=1, sample_wise=True),
     dilated_search=True,
     patch_size=7,
-    temperature=0.1,
+    temperature=1.0,
     moment=0.999,
     pretrained=None
 )

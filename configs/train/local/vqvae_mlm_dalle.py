@@ -8,7 +8,7 @@ model = dict(
     ce_loss=dict(type='Ce_Loss',reduction='none'),
     patch_size=5,
     fc=True,
-    temperature=0.1,
+    temperature=1.0,
     pretrained_vq='/home/lr/models/vqvae/dalle/encoder.pkl',
     pretrained=None
 )

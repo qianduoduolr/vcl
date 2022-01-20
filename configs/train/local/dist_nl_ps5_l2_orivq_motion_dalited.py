@@ -14,7 +14,7 @@ model = dict(
     loss=dict(type='Soft_Ce_Loss',reduction='none', loss_weight=1),
     dilated_search=True,
     patch_size=5,
-    temperature=0.1,
+    temperature=1.0,
     moment=0.999,
     pretrained=None
 )

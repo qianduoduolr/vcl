@@ -18,7 +18,7 @@ model = dict(
     ce_loss=dict(type='Ce_Loss',reduction='none'),
     patch_size=-1,
     fc=True,
-    temperature=0.1,
+    temperature=1.0,
     pretrained_vq='/home/lr/expdir/VCL/group_vqvae_tracker/train_vqvae_video_d4_nemd2048_contrastive_byol_commit1.0_quant2/epoch_3200.pth',
     pretrained=None
 )

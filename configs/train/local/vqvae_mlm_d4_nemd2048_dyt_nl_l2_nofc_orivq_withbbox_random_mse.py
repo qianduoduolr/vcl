@@ -14,7 +14,7 @@ model = dict(
     mse_loss=dict(type='MSELoss', reduction='none'),
     patch_size=-1,
     fc=False,
-    temperature=0.1,
+    temperature=1.0,
     pretrained_vq='/home/lr/models/vqvae/vqvae_youtube_d4_n2048_c256_embc128.pth',
     pretrained=None
 )

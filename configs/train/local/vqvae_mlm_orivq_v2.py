@@ -14,7 +14,7 @@ model = dict(
     l2_loss = None,
     patch_size=-1,
     fc=True,
-    temperature=0.1,
+    temperature=1.0,
     pretrained_vq=pretrained_vq,
     pretrained=None
 )

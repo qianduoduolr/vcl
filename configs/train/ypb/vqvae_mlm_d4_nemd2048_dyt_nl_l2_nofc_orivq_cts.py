@@ -23,7 +23,7 @@ model = dict(
     cts_loss=dict(type='CosineSimLoss', negative=False),
     patch_size=-1,
     fc=False,
-    temperature=0.1,
+    temperature=1.0,
     pretrained_vq='/gdata/lirui/models/vqvae/vqvae_youtube_d4_n2048_c256_embc128',
     pretrained=None
 )

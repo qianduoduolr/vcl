@@ -21,7 +21,7 @@ model = dict(
     mse_loss=dict(type='MSELoss',reduction='mean', loss_weight=1),
     patch_size=-1,
     fc=True,
-    temperature=0.1,
+    temperature=1.0,
     pretrained_vq=['/gdata/lirui/models/vqvae/vqvae_youtube_d4_n32_c256_embc128_byol_commit1.0.pth',\
                     '/gdata/lirui/models/vqvae/vqvae_youtube_d4_n2048_c256_embc128.pth'],
     pretrained=None

@@ -25,7 +25,7 @@ model = dict(
     ce_loss=dict(type='Ce_Loss',reduction='none'),
     video_num=3457,
     patch_size=-1,
-    temperature=0.1,
+    temperature=1.0,
     pretrained_vq=None,
     pretrained=None
 )
