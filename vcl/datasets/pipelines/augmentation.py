@@ -307,6 +307,7 @@ class RandomResizedCrop(object):
         crop_size = min(img_h, img_w)
         x_offset = (img_w - crop_size) // 2
         y_offset = (img_h - crop_size) // 2
+        
         return x_offset, y_offset, x_offset + crop_size, y_offset + crop_size
 
     def __call__(self, results):
