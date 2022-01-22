@@ -831,12 +831,15 @@ class Flip(object):
                 results[self.keys] = list(results[self.keys])
 
             if results.get('bbox_mask', None):
+                results['frames_mask'] = results['mask_query_idx']
+                
                 if results.get('return_first_query', False):
                     results['mask_query_idx'] = results['mask_query_idx'][0].reshape(-1)
                     
                 else:
                     results['mask_query_idx'] = results['mask_query_idx'][-1].reshape(-1)
             
+                            
         else:
             lazyop = results['lazy']
             if lazyop['flip']:
