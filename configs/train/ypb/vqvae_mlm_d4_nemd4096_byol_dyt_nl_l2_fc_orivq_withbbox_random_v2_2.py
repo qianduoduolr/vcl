@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'vqvae_mlm_d4_nemd4096_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2'
+exp_name = 'vqvae_mlm_d4_nemd4096_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_2'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 # model settings
@@ -14,12 +14,11 @@ model = dict(
                sim_siam_head=dict(type='SimSiamHead', in_channels=128, num_projection_fcs=3, projection_mid_channels=128,
                projection_out_channels=128, num_predictor_fcs=2, predictor_mid_channels=128, predictor_out_channels=128,
                with_norm=True, spatial_type='avg'),loss=dict(type='CosineSimLoss', negative=False), embed_dim=128,
-               n_embed=2048, commitment_cost=1.0,),
+               n_embed=4096, commitment_cost=1.0,),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
     patch_size=-1,
     fc=True,
     temperature=1.0,
-    att_reg=True,
     pretrained_vq='/gdata/lirui/expdir/VCL/group_vqvae_tracker/train_vqvae_video_d4_nemd4096_contrastive_byol_commit1.0_v2/epoch_3200.pth',
 )
 
@@ -124,7 +123,7 @@ optimizers = dict(
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=1600
+max_epoch=3200
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,
@@ -134,7 +133,7 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=1600, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=3200, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
