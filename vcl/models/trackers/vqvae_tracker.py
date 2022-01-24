@@ -1423,9 +1423,9 @@ class Vqvae_Tracker_V12(Vqvae_Tracker):
                 loss = self.mse_loss(predict, out_quant[idx]).mean(-1)
                 losses[f'mse{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
         
-        mask = torch.ones(*att.shape).cuda() - frames_mask[:,:1,None].flatten(3)
+        mask = torch.ones(*att.shape).cuda() - frames_mask[:,:-1,None].flatten(3)
         target = torch.zeros(*att.shape).cuda()
         loss_reg = F.l1_loss(mask*att, target, reduction='none')
-        losses['att_sparse_flow_loss'] = (loss_reg * mask_query_idx.unsqueeze(-1)).sum() / mask_query_idx.sum()
+        losses['att_sparse_flow_loss'] = 10 * (loss_reg * mask_query_idx.unsqueeze(-1)).sum() / mask_query_idx.sum()
                     
         return losses
