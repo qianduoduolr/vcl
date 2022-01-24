@@ -807,18 +807,28 @@ class Flip(object):
                     if flip:
                         mmcv.imflip_(results['masks'][i])
                 
-            #     imgs.append(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+                imgs.append(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
             
-            # if results.get('bbox_mask', None):
-            #     if results.get('return_first_query', False):
-            #         mask = results['mask_query_idx'][0]
-            #     else:
-            #         mask = results['mask_query_idx'][-1]
-            #     mask = cv2.resize(mask.astype(np.uint8), (256,256), cv2.INTER_NEAREST)[:,:,None].repeat(3, -1) * 255
-            #     imgs.append(mask)
-            #     out = np.concatenate(imgs, 1)
-            #     num = random.randint(0,1000)
-            #     cv2.imwrite(f'/home/lr/project/vcl_output/output/aug_vis/train_all_frames/same/{num}.jpg', out)
+            if results.get('bbox_mask', None):
+                if results.get('return_first_query', False):
+                    mask1 = results['mask_query_idx'][0]
+                    mask2 = results['mask_query_idx'][-1]
+                else:
+                    mask1 = results['mask_query_idx'][-1]
+                    mask2 = results['mask_query_idx'][0]
+                
+                mask1 = cv2.resize(mask1.astype(np.uint8), (256,256), cv2.INTER_NEAREST)[:,:,None].repeat(3, -1) * 255
+                mask2 = cv2.resize(mask2.astype(np.uint8), (256,256), cv2.INTER_NEAREST)[:,:,None].repeat(3, -1) * 255
+                
+                mask1 = np.concatenate([mask1, np.ones((256,8,3))*255], 1)
+                mask2 = np.concatenate([mask2, np.ones((256,8,3))*255], 1)
+                
+                imgs.append(mask1)
+                imgs.append(mask2)
+                
+                out = np.concatenate(imgs, 1)
+                num = random.randint(0,1000)
+                cv2.imwrite(f'/home/lr/project/vcl_output/output/aug_vis/same2/{num}.jpg', out)
                
             if flip:
                 lt = len(results[self.keys])

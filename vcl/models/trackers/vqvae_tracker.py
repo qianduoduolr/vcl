@@ -190,7 +190,7 @@ class Vqvae_Tracker(BaseModel):
             mask = torch.ones(*att.shape).cuda() - self.att_reg_mask
             target = torch.zeros(*att.shape).cuda()
             loss = F.l1_loss(mask*att, target, reduction='none')
-            losses['att_sparse_loss'] = (loss * mask_query_idx.unsqueeze(-1)).sum() / mask_query_idx.sum()
+            losses['att_sparse_loss'] = 10 * (loss * mask_query_idx.unsqueeze(-1)).sum() / mask_query_idx.sum()
                     
         return losses
 
