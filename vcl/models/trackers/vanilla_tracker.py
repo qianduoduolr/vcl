@@ -13,6 +13,7 @@ from ..common import (cat, images2video, masked_attention_efficient,
                       pil_nearest_interpolate, spatial_neighbor, video2images)
 from ..registry import MODELS
 from ..base import BaseModel
+from ...utils import *
 
 @MODELS.register_module()
 class BaseTracker(BaseModel):
@@ -67,6 +68,7 @@ class VanillaTracker(BaseTracker):
     def __init__(self, *args, **kwargs):
         super(VanillaTracker, self).__init__(*args, **kwargs)
         self.save_np = self.test_cfg.get('save_np', False)
+        self.hard_prop = self.test_cfg.get('hard_prop', False)
 
     @property
     def stride(self):
@@ -208,7 +210,13 @@ class VanillaTracker(BaseTracker):
                     normalize=self.test_cfg.get('with_norm', True),
                     non_mask_len=0 if self.test_cfg.get(
                         'with_first_neighbor', True) else 1)
-                seg_bank.append(seg_logit.cpu())
+                
+                if not self.hard_prop:
+                    seg_bank.append(seg_logit.cpu())
+                else:
+                    seg_logit_hard = seg_logit.argmax(1,keepdim=True)
+                    seg_logit_hard = F.one_hot(seg_logit_hard)[:,0].permute(0,3,1,2).float()
+                    seg_bank.append(seg_logit_hard.cpu())
 
                 seg_pred = F.interpolate(
                     seg_logit,

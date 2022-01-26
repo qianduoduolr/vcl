@@ -142,15 +142,15 @@ class Vqvae_Tracker(BaseModel):
                 if self.per_ref:
                     ind = ind.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
                     quant = quant.unsqueeze(1).repeat(1, t-1, 1, 1, 1).permute(0,1,3,4,2).flatten(0,3).detach()
-                    mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
                 else:
                     ind = ind.reshape(-1, 1).long().detach()
                     quant = quant.permute(0,2,3,1).flatten(0,2).detach()
-                    mask_query_idx = mask_query_idx.bool()
                     
                 out_ind.append(ind)
                 out_quant.append(quant)
-
+                
+        mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1) if self.per_ref else mask_query_idx.bool()
+            
         if jitter_imgs is not None:
             imgs = jitter_imgs
 
