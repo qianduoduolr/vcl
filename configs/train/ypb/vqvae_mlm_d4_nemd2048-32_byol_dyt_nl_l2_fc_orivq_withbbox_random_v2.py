@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'vqvae_mlm_d4_nemd2048-1024_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2'
+exp_name = 'vqvae_mlm_d4_nemd2048-32_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 # model settings
@@ -19,14 +19,14 @@ model = dict(
                sim_siam_head=dict(type='SimSiamHead', in_channels=128, num_projection_fcs=3, projection_mid_channels=128,
                projection_out_channels=128, num_predictor_fcs=2, predictor_mid_channels=128, predictor_out_channels=128,
                with_norm=True, spatial_type='avg'),loss=dict(type='CosineSimLoss', negative=False), embed_dim=128,
-               n_embed=1024, commitment_cost=1.0,)],
+               n_embed=32, commitment_cost=1.0,)],
     ce_loss=dict(type='Ce_Loss',reduction='none'),
     patch_size=-1,
     fc=True,
     temperature=1.0,
     multi_head_weight=[1,1],
     pretrained_vq=['/gdata/lirui/expdir/VCL/group_vqvae_tracker/train_vqvae_video_d4_nemd2048_contrastive_byol_commit1.0_v2/epoch_3200.pth',
-                   '/gdata/lirui/expdir/VCL/group_vqvae_tracker/train_vqvae_video_d4_nemd1024_contrastive_byol_commit1.0_v2/epoch_3200.pth'],
+                   '/gdata/lirui/models/vqvae/vqvae_youtube_d4_n32_c256_embc128_byol_commit1.0_v2.pth'],
 )
 
 # model training and testing settings
