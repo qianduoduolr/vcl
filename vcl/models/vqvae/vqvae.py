@@ -762,7 +762,8 @@ class VQVAE_V2(VQVAE):
             # Convolution before quantization and converting to B x H x W x C
             enc = self.quantize_conv(enc).permute(0, 2, 3, 1)
         else:
-            enc = self.quantize_conv(x).permute(0, 2, 3, 1)
+            # enc = self.quantize_conv(x).permute(0, 2, 3, 1)
+            enc = x
 
         # Vector quantization
         quant, diff, ind, embed = self.quantize(enc)

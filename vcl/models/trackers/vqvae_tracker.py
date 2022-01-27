@@ -556,7 +556,6 @@ class Vqvae_Tracker_V4(BaseModel):
                 out_ind.append(ind)
         embeds_refs = torch.stack(embeds[:-1], 1)
 
-
         mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
 
         tar = self.backbone(jitter_imgs[:,0,-1])
