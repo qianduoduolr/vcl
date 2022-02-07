@@ -113,6 +113,8 @@ class Vqvae_Tracker(BaseModel):
         
         if mask_radius != -1:
             self.mask = make_mask(32, mask_radius)
+        else:
+            self.mask = None
         
             
     def init_weights(self, pretrained):
@@ -185,8 +187,8 @@ class Vqvae_Tracker(BaseModel):
                 loss = self.mse_loss(predict, out_quant[idx]).mean(-1)
                 losses[f'mse{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
         
-        if self.att_reg:
-            mask = torch.ones(*att.shape).cuda() - self.att_reg_mask
+        if self.mask:
+            mask = torch.ones(*att.shape).cuda() - self.mask
             target = torch.zeros(*att.shape).cuda()
             loss = F.l1_loss(mask*att, target, reduction='none')
             losses['att_sparse_loss'] = 10 * (loss * mask_query_idx.unsqueeze(-1)).sum() / mask_query_idx.sum()
