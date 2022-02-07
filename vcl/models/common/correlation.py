@@ -77,11 +77,8 @@ def frame_transform(att, refs, per_ref=True, local=False, patch_size=-1, flatten
         unfold_fs = list([ F.unfold(ref, kernel_size=patch_size, \
             padding=int((patch_size-1)/2)).reshape(bsz, feat_dim, -1, w_, h_) for ref in refs])
         unfold_fs = torch.cat(unfold_fs, 2)
-
-        out = (unfold_fs * att).sum(2).reshape(bsz, feat_dim, -1).permute(0,2,1).reshape(-1, feat_dim)
-                                                                                         
+        out = (unfold_fs * att).sum(2).reshape(bsz, feat_dim, -1).permute(0,2,1).reshape(-1, feat_dim)                                                                          
     else:
-        
         if not per_ref:
             out =  torch.einsum('bij,bjc -> bic', [att, refs.flatten(1,2)])
         else:

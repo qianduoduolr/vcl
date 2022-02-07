@@ -37,11 +37,11 @@ class Vqvae_Tracker(BaseModel):
                  multi_head_weight=[1.0],
                  ce_loss=None,
                  mse_loss=None,
-                 att_reg=False,
                  fc=True,
                  train_cfg=None,
                  test_cfg=None,
                  per_ref=True,
+                 mask_radius=-1,
                  pretrained=None
                  ):
         """ original vqvae tracker
@@ -58,7 +58,6 @@ class Vqvae_Tracker(BaseModel):
         self.multi_head_weight = multi_head_weight
         self.per_ref = per_ref
         self.temperature = temperature
-        self.att_reg = att_reg
 
         self.logger = get_root_logger()
 
@@ -112,8 +111,8 @@ class Vqvae_Tracker(BaseModel):
         # init weights
         self.init_weights(pretrained)
         
-        if self.att_reg:
-            self.att_reg_mask = make_mask(32, 5)
+        if mask_radius != -1:
+            self.mask = make_mask(32, mask_radius)
         
             
     def init_weights(self, pretrained):
@@ -1476,6 +1475,75 @@ class Vqvae_Tracker_V13(Vqvae_Tracker):
         
         # a = att[0,0,0].detach().cpu().reshape(32,32).numpy()
         # b = mask[0,0,0].detach().cpu().reshape(32,32).numpy()
+
+        if self.ce_loss:
+            for idx, i in enumerate(range(self.num_head)):
+                i = str(i).replace('0', '')
+                if self.fc:
+                    predict = getattr(self, f'predictor{i}')(out)
+                else:
+                    predict = self.embedding_layer(out)
+                    predict = nn.functional.normalize(predict, dim=-1)
+                    vq_emb = getattr(self, f'vq_emb{i}')
+                    predict = torch.mm(predict, nn.functional.normalize(vq_emb, dim=0))
+                    predict = torch.div(predict, 0.1) # temperature is set to 0.1
+                    
+                loss = self.ce_loss(predict, out_ind[idx])
+                losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
+                    
+        return losses
+    
+    
+@MODELS.register_module()
+class Vqvae_Tracker_V14(Vqvae_Tracker):
+    
+    def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
+        
+        bsz, num_clips, t, c, h, w = imgs.shape
+    
+        # vqvae tokenize for query frame
+        with torch.no_grad():
+            out_ind= []
+            out_quant = []
+            for i in range(self.num_head):
+                i = str(i).replace('0', '')
+                vqvae = getattr(self, f'vqvae{i}')
+                vq_enc = getattr(self, f'vq_enc{i}')
+                vqvae.eval()
+                emb, quant, _, ind_tar, _ = vq_enc(imgs[:, 0, -1])
+                
+                if self.per_ref:
+                    ind = ind_tar.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
+                    quant = quant.unsqueeze(1).repeat(1, t-1, 1, 1, 1).permute(0,1,3,4,2).flatten(0,3).detach()
+                else:
+                    ind = ind_tar.reshape(-1, 1).long().detach()
+                    quant = quant.permute(0,2,3,1).flatten(0,2).detach()
+                    
+                out_ind.append(ind)
+                out_quant.append(quant)
+                
+            emb, quant, _, ind_ref, _ = vq_enc(imgs[:, 0, 0])
+            
+        if jitter_imgs is not None:
+            imgs = jitter_imgs
+
+        # determined query
+        ind_tar = ind_tar.flatten(1).unsqueeze(-1).repeat(1,1,ind_tar.shape[-1] * ind_tar.shape[-2])
+        ind_ref = ind_ref.flatten(1).unsqueeze(1).repeat(1,ind_ref.shape[-1] * ind_ref.shape[-2],1)
+        mask_query_idx = ((ind_tar == ind_ref) * self.mask.unsqueeze(0)).sum(-1)
+        mask_query_idx = (mask_query_idx > 0)
+        if self.per_ref:
+            mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
+        
+        tar = self.backbone(imgs[:,0,-1])
+        refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
+
+        if self.patch_size != -1:
+            out, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
+        else:
+            out, att = non_local_attention(tar, refs, per_ref=self.per_ref, temprature=self.temperature)
+        
+        losses = {}
 
         if self.ce_loss:
             for idx, i in enumerate(range(self.num_head)):

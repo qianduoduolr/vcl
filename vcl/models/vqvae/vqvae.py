@@ -802,6 +802,8 @@ class VQVAE_V2(VQVAE):
 
 @MODELS.register_module()
 class VQCL_v5(VQCL_v2):
+    """V2
+    """
                 
 
     def forward_train(self, imgs):
