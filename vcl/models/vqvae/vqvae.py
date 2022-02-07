@@ -804,8 +804,6 @@ class VQVAE_V2(VQVAE):
 class VQCL_v5(VQCL_v2):
     """V2
     """
-                
-
     def forward_train(self, imgs):
         
         im_q = imgs[:, 0, 0]
