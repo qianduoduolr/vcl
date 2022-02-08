@@ -70,7 +70,10 @@ def frame_transform(att, refs, per_ref=True, local=False, patch_size=-1, flatten
         out: transformed feature map (B*T*H*W) x C  if per_ref else (B*H*W) x C
         
     """
-    
+    if isinstance(refs, list):
+        refs = torch.stack(refs, 1)
+        refs = refs.flatten(3).permute(0, 1, 3, 2)
+        
     if local:
         assert patch_size != -1
         bsz, t, feat_dim, w_, h_ = refs.shape
