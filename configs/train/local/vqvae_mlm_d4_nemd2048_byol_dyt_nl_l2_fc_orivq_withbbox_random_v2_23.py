@@ -3,12 +3,12 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_22'
+exp_name = 'vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_23'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 # model settings
 model = dict(
-    type='Vqvae_Tracker_V15',
+    type='Vqvae_Tracker_V16',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
     vqvae=dict(type='VQCL_v2', backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
                sim_siam_head=dict(type='SimSiamHead', in_channels=128, num_projection_fcs=3, projection_mid_channels=128,
@@ -17,7 +17,7 @@ model = dict(
                n_embed=2048, commitment_cost=1.0,),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
     patch_size=-1,
-    fc=False,
+    fc=True,
     temperature=1.0,
     mask_radius=4,
     # pretrained='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_2/epoch_3200.pth',
@@ -120,7 +120,7 @@ data = dict(
 # optimizer
 optimizers = dict(
     backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-    # predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
     )
 # learning policy
 # total_iters = 200000
