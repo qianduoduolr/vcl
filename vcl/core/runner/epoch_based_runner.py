@@ -10,6 +10,7 @@ import mmcv
 from mmcv.runner import BaseRunner
 from mmcv.runner import RUNNERS
 from mmcv.runner import save_checkpoint
+from torch.optim import Optimizer
 
 
 @RUNNERS.register_module()
@@ -179,3 +180,57 @@ class EpochBasedRunner_Custom(BaseRunner):
                 mmcv.symlink(filename, dst_file)
             else:
                 shutil.copy(filepath, dst_file)
+                
+    def resume(self,
+               checkpoint,
+               resume_optimizer=True,
+               map_location='default'):
+        if map_location == 'default':
+            if torch.cuda.is_available():
+                device_id = torch.cuda.current_device()
+                checkpoint = self.load_checkpoint(
+                    checkpoint,
+                    map_location=lambda storage, loc: storage.cuda(device_id))
+            else:
+                checkpoint = self.load_checkpoint(checkpoint)
+        else:
+            checkpoint = self.load_checkpoint(
+                checkpoint, map_location=map_location)
+
+        self._epoch = checkpoint['meta']['epoch']
+        self._iter = checkpoint['meta']['iter']
+        if self.meta is None:
+            self.meta = {}
+        self.meta.setdefault('hook_msgs', {})
+        # load `last_ckpt`, `best_score`, `best_ckpt`, etc. for hook messages
+        self.meta['hook_msgs'].update(checkpoint['meta'].get('hook_msgs', {}))
+
+        # Re-calculate the number of iterations when resuming
+        # models with different number of GPUs
+        # if 'config' in checkpoint['meta']:
+        #     config = mmcv.Config.fromstring(
+        #         checkpoint['meta']['config'], file_format='.py')
+        #     previous_gpu_ids = config.get('gpu_ids', None)
+        #     if previous_gpu_ids and len(previous_gpu_ids) > 0 and len(
+        #             previous_gpu_ids) != self.world_size:
+        #         self._iter = int(self._iter * len(previous_gpu_ids) /
+        #                          self.world_size)
+        #         self.logger.info('the iteration number is changed due to '
+        #                          'change of GPU number')
+
+        # resume meta information meta
+        self.meta = checkpoint['meta']
+
+        if 'optimizer' in checkpoint and resume_optimizer:
+            if isinstance(self.optimizer, Optimizer):
+                self.optimizer.load_state_dict(checkpoint['optimizer'])
+            elif isinstance(self.optimizer, dict):
+                for k in self.optimizer.keys():
+                    self.optimizer[k].load_state_dict(
+                        checkpoint['optimizer'][k])
+            else:
+                raise TypeError(
+                    'Optimizer should be dict or torch.optim.Optimizer '
+                    f'but got {type(self.optimizer)}')
+
+        self.logger.info('resumed epoch %d, iter %d', self.epoch, self.iter)

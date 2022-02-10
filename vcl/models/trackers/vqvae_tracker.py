@@ -625,7 +625,7 @@ class Vqvae_Tracker_V5(Vqvae_Tracker):
         refs_cross_video = [refs[0] for i in range(bsz)]
 
         out, att = non_local_attention(tar, refs, per_ref=True)
-        out_cross_video, _, att_cross_video = non_local_attention(tar, refs_cross_video, per_ref=False)
+        out_cross_video, att_cross_video = non_local_attention(tar, refs_cross_video, per_ref=False)
 
         losses = {}
 
@@ -640,6 +640,8 @@ class Vqvae_Tracker_V5(Vqvae_Tracker):
                 losses[f'ce{i}_cross_loss'] = (loss_cross_video * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
 
         if self.l1_loss:
+            num_feat = att_cross_video.shape[1]
+            att_cross_video = att_cross_video.reshape(bsz, num_feat, -1, num_feat).permute(0, 2, 1, 3)
             label = torch.zeros(*att_cross_video.shape).cuda()
             m = torch.eye(bsz).cuda()
             m = (1 - m)[:,:,None,None].repeat(1,1,*att_cross_video.shape[-2:])
@@ -1566,6 +1568,11 @@ class Vqvae_Tracker_V14(Vqvae_Tracker):
     
 @MODELS.register_module()
 class Vqvae_Tracker_V15(Vqvae_Tracker):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.fc:
+            self.predictor = nn.Linear(128, self.n_embed)
+            self.predictor.weight.data = self.vq_emb.permute(1,0)
     
     def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
         
