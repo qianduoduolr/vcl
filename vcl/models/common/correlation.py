@@ -70,21 +70,14 @@ def inter_intra_attention(tar, refs, per_ref=True, flatten=True, temprature=1.0,
     
     _, feat_dim, w_, h_ = refs.shape
     refs = refs.flatten(2).permute(0, 2, 1)
+    
+    # att = torch.matmul(tar, refs.permute(2,0,1).flatten(1,2))
     att = torch.einsum("bic,djc -> bdij", (tar, refs)) / temprature
-    
-    if mask is not None:
-        att *= mask
-    
-    if per_ref:
-        # return att for each ref
-        att = F.softmax(att, dim=-1)
-        out = frame_transform(att, refs, per_ref=per_ref, flatten=flatten)
-        return out, att  
-    else:
-        att_ = att.permute(0, 2, 1, 3).flatten(2)
-        att_ = F.softmax(att_, -1)
-        out = frame_transform(att_, refs, per_ref=per_ref, flatten=flatten)
-        return out, att_
+
+    att_ = att.permute(0, 2, 1, 3).flatten(2)
+    att_ = F.softmax(att_, -1)
+    out = frame_transform(att_, refs, per_ref=per_ref, flatten=flatten)
+    return out, att_
 
 def frame_transform(att, refs, per_ref=True, local=False, patch_size=-1, flatten=True):
     
