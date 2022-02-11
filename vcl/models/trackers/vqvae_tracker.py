@@ -1627,6 +1627,8 @@ class Vqvae_Tracker_V15(Vqvae_Tracker):
                     predict = getattr(self, f'predictor{i}')(out)
                 else:
                     vq_emb = getattr(self, f'vq_emb{i}')
+                    out = F.normalize(out, dim=-1)
+                    vq_emb = F.normalize(vq_emb, dim=0)
                     predict = torch.mm(out, vq_emb)
                     # predict = torch.div(predict, 0.1) # temperature is set to 0.1
                     
@@ -1689,6 +1691,16 @@ class Vqvae_Tracker_V16(Vqvae_Tracker):
             for idx, i in enumerate(range(self.num_head)):
                 i = str(i).replace('0', '')
                 vq_emb = getattr(self, f'vq_emb{i}')
+                
+                # predict = (
+                # out.pow(2).sum(1, keepdim=True)
+                # - 2 * out @ vq_emb
+                # + vq_emb.pow(2).sum(0, keepdim=True)
+                # ) 
+                
+                out = F.normalize(out, dim=-1)
+                vq_emb = F.normalize(vq_emb, dim=0)
+                
                 predict = torch.mm(out, vq_emb)
                 # predict = torch.div(predict, 0.1) # temperature is set to 0.1
                 loss = self.ce_loss(predict, out_ind[idx])
@@ -1696,6 +1708,6 @@ class Vqvae_Tracker_V16(Vqvae_Tracker):
         
         predict_tar = self.predictor(tar.permute(0,2,3,1).flatten(0,2))
         loss_tar = self.ce_loss(predict_tar, out_ind[0])
-        losses[f'target_ce_loss'] = (loss_tar * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
+        losses[f'target_ce_loss'] = 0.1 * (loss_tar * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
         
         return losses

@@ -3,12 +3,12 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_crossvideo'
-docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
+exp_name = 'vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_25'
+docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 # model settings
 model = dict(
-    type='Vqvae_Tracker_V5',
+    type='Vqvae_Tracker_V15',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
     vqvae=dict(type='VQCL_v2', backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
                sim_siam_head=dict(type='SimSiamHead', in_channels=128, num_projection_fcs=3, projection_mid_channels=128,
@@ -17,11 +17,10 @@ model = dict(
                n_embed=2048, commitment_cost=1.0,),
     ce_loss=dict(type='Ce_Loss',reduction='none'),
     patch_size=-1,
-    l1_loss=dict(type='L1Loss', reduction='mean', sample_wise=True),
-    fc=True,
+    fc=False,
     temperature=1.0,
     mask_radius=4,
-    pretrained='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_2/epoch_3200.pth',
+    # pretrained='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_2/epoch_3200.pth',
     pretrained_vq='/home/lr/expdir/VCL/group_vqvae_tracker/train_vqvae_video_d4_nemd2048_contrastive_byol_commit1.0_v2/epoch_3200.pth',
 )
 
@@ -89,7 +88,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=8, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=16, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -101,7 +100,7 @@ data = dict(
             p=0.8,
             root='/home/lr/dataset/YouTube-VOS',
             list_path='/home/lr/dataset/YouTube-VOS/2018/train',
-            data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
+            data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train/Flows_s256', ANNO='train/Annotations_s256'),
             mask_ratio=0.15,
             clip_length=2,
             vq_size=32,
@@ -120,8 +119,8 @@ data = dict(
 
 # optimizer
 optimizers = dict(
-    backbone=dict(type='Adam', lr=0.0001, betas=(0.9, 0.999)),
-    predictor=dict(type='Adam', lr=0.0001, betas=(0.9, 0.999))
+    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
+    # predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
     )
 # learning policy
 # total_iters = 200000
@@ -129,7 +128,7 @@ runner_type='epoch'
 max_epoch=3200
 lr_config = dict(
     policy='CosineAnnealing',
-    min_lr_ratio=0.0001,
+    min_lr_ratio=0.001,
     by_epoch=False,
     warmup_iters=10,
     warmup_ratio=0.1,
