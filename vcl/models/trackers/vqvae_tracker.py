@@ -623,14 +623,9 @@ class Vqvae_Tracker_V5(Vqvae_Tracker):
         fs = self.backbone(imgs.flatten(0,2))
         fs = fs.reshape(bsz, t, *fs.shape[-3:])
         tar, refs = fs[:, -1], fs[:, :-1]
-        refs_cross_video = []
-        for i in range(bsz):
-            rs = torch.cat([refs[i], fs[:i].flatten(0,1), fs[i+1:].flatten(0,1)], 0)
-            refs_cross_video.append(rs)
-        refs_cross_video = torch.stack(refs_cross_video, 0)
-
+        
         out, att = non_local_attention(tar, refs, per_ref=True)
-        out_cross_video, att_cross_video = non_local_attention(tar, refs_cross_video, per_ref=False)
+        out_cross_video, att_cross_video = inter_intra_attention(tar, refs[:,0], per_ref=False)
 
         losses = {}
 
@@ -648,9 +643,8 @@ class Vqvae_Tracker_V5(Vqvae_Tracker):
             num_feat = att_cross_video.shape[1]
             att_cross_video = att_cross_video.reshape(bsz, num_feat, -1, num_feat).permute(0, 2, 1, 3)
             label = torch.zeros(*att_cross_video.shape).cuda()
-            m = torch.ones(att_cross_video.shape[1]).cuda()
-            m[0] = 0
-            m = m[None, :, None, None].repeat(bsz, 1, *att_cross_video.shape[-2:])
+            m = torch.eye(bsz).cuda()
+            m = (1 - m)[:,:,None,None].repeat(1,1,*att_cross_video.shape[-2:])
             losses['l1_loss'] = self.l1_loss(att_cross_video, label, weight=m)
 
         return losses

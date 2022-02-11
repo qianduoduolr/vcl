@@ -40,13 +40,12 @@ def non_local_attention(tar, refs, per_ref=True, flatten=True, temprature=1.0, m
     if isinstance(refs, list):
         refs = torch.stack(refs, 1)
 
-    bsz, t, feat_dim, w_, h_ = refs.shape
-
     tar = tar.flatten(2).permute(0, 2, 1)
+    
+    _, t, feat_dim, w_, h_ = refs.shape
     refs = refs.flatten(3).permute(0, 1, 3, 2)
-    
-    att = torch.einsum("bic,btjc -> btij", (tar, refs)) / temprature
-    
+    att = torch.einsum("bic,btjc -> btij", (tar, refs)) / temprature 
+
     if mask is not None:
         att *= mask
     
@@ -61,6 +60,31 @@ def non_local_attention(tar, refs, per_ref=True, flatten=True, temprature=1.0, m
         out = frame_transform(att_, refs, per_ref=per_ref, flatten=flatten)
         return out, att_
 
+
+def inter_intra_attention(tar, refs, per_ref=True, flatten=True, temprature=1.0, mask=None):
+    
+    if isinstance(refs, list):
+        refs = torch.stack(refs, 1)
+
+    tar = tar.flatten(2).permute(0, 2, 1)
+    
+    _, feat_dim, w_, h_ = refs.shape
+    refs = refs.flatten(2).permute(0, 2, 1)
+    att = torch.einsum("bic,djc -> bdij", (tar, refs)) / temprature
+    
+    if mask is not None:
+        att *= mask
+    
+    if per_ref:
+        # return att for each ref
+        att = F.softmax(att, dim=-1)
+        out = frame_transform(att, refs, per_ref=per_ref, flatten=flatten)
+        return out, att  
+    else:
+        att_ = att.permute(0, 2, 1, 3).flatten(2)
+        att_ = F.softmax(att_, -1)
+        out = frame_transform(att_, refs, per_ref=per_ref, flatten=flatten)
+        return out, att_
 
 def frame_transform(att, refs, per_ref=True, local=False, patch_size=-1, flatten=True):
     
@@ -83,7 +107,10 @@ def frame_transform(att, refs, per_ref=True, local=False, patch_size=-1, flatten
         out = (unfold_fs * att).sum(2).reshape(bsz, feat_dim, -1).permute(0,2,1).reshape(-1, feat_dim)                                                                          
     else:
         if not per_ref:
-            out =  torch.einsum('bij,bjc -> bic', [att, refs.flatten(1,2)])
+            if refs.dim() == 4: 
+                out =  torch.einsum('bij,bjc -> bic', [att, refs.flatten(1,2)])
+            else:
+                out =  torch.einsum('bij,jc -> bic', [att, refs.flatten(0,1)])
         else:
             # "btij,btjc -> btic“
             out = torch.matmul(att, refs)
