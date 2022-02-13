@@ -1489,20 +1489,23 @@ class Grid(object):
 @PIPELINES.register_module()
 class Image2Patch(object):
 
-    def __init__(self, patch_size, stride, scale_jitter=(0.7, 0.9), keys='imgs'):
+    def __init__(self, patch_size=(64, 64, 3), stride=[0.5, 0.5], scale_jitter=(0.7, 0.9), keys='imgs'):
         self.patch_size = patch_size
         self.stride = stride
-        self.crop_trans = _RandomResizedCrop(patch_size, scale=scale_jitter)
+        self.crop_trans = _RandomResizedCrop(patch_size[:-1], scale=scale_jitter)
         self.keys = keys
+        
+        stride = np.random.random() * (stride[1] - stride[0]) + stride[0]
+        self.stride = [int(patch_size[0]*stride), int(patch_size[1]*stride), patch_size[2]]
 
     def __call__(self, results):
 
         patches = []
         for img in results[self.keys]:
-            patch = view_as_windows(img, self.patch_size, self.stride)
-            patches.extend(list(patch.view(-1, *patch.shape[2:])))
-        for i in range(len(patches)):
-            patches[i] = self.crop_trans(patches[i])
+            patch = view_as_windows(img, self.patch_size, step=self.stride)
+            patches.extend(list(patch.reshape(-1, *patch.shape[-3:])))
+        # for i in range(len(patches)):
+        #     patches[i] = self.crop_trans(patches[i])
         results[self.keys] = patches
 
         return results

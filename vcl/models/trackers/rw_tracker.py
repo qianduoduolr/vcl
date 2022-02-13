@@ -22,28 +22,23 @@ import torch
 import torch.nn.functional as F
 
 
-
-
 @MODELS.register_module()
 class RW_Tracker(BaseModel):
-    def __init__(self, backbone, temperature=0.07, edgedrop_rate=0.1, **kwargs):
+    def __init__(self, backbone, ce_loss, temperature=0.07, edgedrop_rate=0.1, train_cfg=None, test_cfg=None):
         """
         CRW (2021NIPS) with CNN model
         Args:
             temperature (float, optional): [description]. Defaults to 0.07.
             edgedrop_rate (float, optional): [description]. Defaults to 0.1.
         """
-        super().__init__(**kwargs)
+        super().__init__()
         self.backbone = build_backbone(backbone)
-        self.fc = nn.Sequential(
-            nn.Conv2d(512,2048,1),
-            nn.ReLU(),
-            nn.Conv2d(2048,512,1)
-        )
+        self.fc = nn.Linear(512, 128)
+        self.pool = nn.AdaptiveAvgPool2d(1)
         self._xent_targets = dict()
         self.edgedrop_rate = edgedrop_rate
         self.dropout = nn.Dropout(p=self.edgedrop_rate, inplace=False)
-        
+        self.ce_loss = build_loss(ce_loss)
         self.temperature = temperature
         
     
@@ -109,11 +104,8 @@ class RW_Tracker(BaseModel):
            N=1 -> list of images
         '''
         
-        bsz, T, C, H, W = q.shape
+        bsz, C, T, N = q.shape
         
-        q = q.flatten(0,1)
-        q = nn.functional.normalize(self.fc(q), dim=1).reshape(bsz, T, q.shape[1], -1).permute(0,2,1,3)
-
         #################################################################
         # Compute walks 
         #################################################################
@@ -144,7 +136,7 @@ class RW_Tracker(BaseModel):
 
         for name, (A, target) in walks.items():
             logits = torch.log(A+1e-20).flatten(0, -2)
-            loss = self.ce_loss(logits, target.unsqueeze(1)).mean()
+            loss = self.ce_loss(logits, target.unsqueeze(1))
             acc = (torch.argmax(logits, dim=-1) == target).float().mean()
             # diags.update({f"{H} xent {name}": loss.detach(),
             #               f"{H} acc {name}": acc})
@@ -153,20 +145,22 @@ class RW_Tracker(BaseModel):
 
         loss = sum(xents)/max(1, len(xents)-1)
         
-        return loss
+        return loss, acc
 
 
-    def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
+    def forward_train(self, imgs, jitter_imgs=None):
     
-        bsz, num_clips, t, c, h, w = imgs.shape
-        tar = self.backbone(imgs[:,0, 0])
-        refs = list([self.backbone(imgs[:,0,i]) for i in range(1,t)])
+        bsz, num_patch, c, t, h, w = imgs.shape
+        
+        # get node representations
+        imgs = imgs.permute(0, 1, 3, 2, 4, 5).flatten(0,2)
+        feats = self.backbone(imgs)
+        feats = self.pool(feats)[:,:,0,0]
+        feats = F.normalize(self.fc(feats), dim=-1)
+        feats = feats.reshape(bsz, num_patch, t, -1).permute(0, 3, 2, 1)
 
         losses = {}
 
-        # for long term cycle
-        refs.insert(0, tar)
-        all_feats = torch.stack(refs,1)
-        losses['cycle_loss'] = self.forward_train_cycle(all_feats)
+        losses['cycle_loss'], acc = self.forward_train_cycle(feats)
         
         return losses
