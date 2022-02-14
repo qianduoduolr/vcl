@@ -175,17 +175,11 @@ class Vqvae_Tracker(BaseModel):
                     predict = nn.functional.normalize(predict, dim=-1)
                     vq_emb = getattr(self, f'vq_emb{i}')
                     predict = torch.mm(predict, nn.functional.normalize(vq_emb, dim=0))
-                    predict = torch.div(predict, 0.1) # temperature is set to 0.1
+                    # predict = torch.div(predict, 0.1) # temperature is set to 0.1、
                     
                 loss = self.ce_loss(predict, out_ind[idx])
                 losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
                 
-        if self.mse_loss:
-            for idx, i in enumerate(range(self.num_head)):
-                i = str(i).replace('0', '')
-                predict = self.embedding_layer(out)
-                loss = self.mse_loss(predict, out_quant[idx]).mean(-1)
-                losses[f'mse{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
         
         if self.mask:
             mask = torch.ones(*att.shape).cuda() - self.mask
@@ -1499,82 +1493,23 @@ class Vqvae_Tracker_V13(Vqvae_Tracker):
     
     
 @MODELS.register_module()
-class Vqvae_Tracker_V14(Vqvae_Tracker):
-    
-    def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
-        
-        bsz, num_clips, t, c, h, w = imgs.shape
-    
-        # vqvae tokenize for query frame
-        with torch.no_grad():
-            out_ind= []
-            out_quant = []
-            for i in range(self.num_head):
-                i = str(i).replace('0', '')
-                vqvae = getattr(self, f'vqvae{i}')
-                vq_enc = getattr(self, f'vq_enc{i}')
-                vqvae.eval()
-                emb, quant, _, ind_tar, _ = vq_enc(imgs[:, 0, -1])
-                
-                if self.per_ref:
-                    ind = ind_tar.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
-                    quant = quant.unsqueeze(1).repeat(1, t-1, 1, 1, 1).permute(0,1,3,4,2).flatten(0,3).detach()
-                else:
-                    ind = ind_tar.reshape(-1, 1).long().detach()
-                    quant = quant.permute(0,2,3,1).flatten(0,2).detach()
-                    
-                out_ind.append(ind)
-                out_quant.append(quant)
-                
-            emb, quant, _, ind_ref, _ = vq_enc(imgs[:, 0, 0])
-            
-        if jitter_imgs is not None:
-            imgs = jitter_imgs
-
-        # determined query
-        ind_tar = ind_tar.flatten(1).unsqueeze(-1).repeat(1,1,ind_tar.shape[-1] * ind_tar.shape[-2])
-        ind_ref = ind_ref.flatten(1).unsqueeze(1).repeat(1,ind_ref.shape[-1] * ind_ref.shape[-2],1)
-        mask_query_idx = ((ind_tar == ind_ref) * self.mask.unsqueeze(0)).sum(-1)
-        mask_query_idx = (mask_query_idx > 0)
-        if self.per_ref:
-            mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
-        
-        tar = self.backbone(imgs[:,0,-1])
-        refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
-
-        if self.patch_size != -1:
-            out, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
-        else:
-            out, att = non_local_attention(tar, refs, per_ref=self.per_ref, temprature=self.temperature)
-        
-        losses = {}
-
-        if self.ce_loss:
-            for idx, i in enumerate(range(self.num_head)):
-                i = str(i).replace('0', '')
-                if self.fc:
-                    predict = getattr(self, f'predictor{i}')(out)
-                else:
-                    predict = self.embedding_layer(out)
-                    predict = nn.functional.normalize(predict, dim=-1)
-                    vq_emb = getattr(self, f'vq_emb{i}')
-                    predict = torch.mm(predict, nn.functional.normalize(vq_emb, dim=0))
-                    predict = torch.div(predict, 0.1) # temperature is set to 0.1
-                    
-                loss = self.ce_loss(predict, out_ind[idx])
-                losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
-                    
-        return losses
-    
-@MODELS.register_module()
 class Vqvae_Tracker_V15(Vqvae_Tracker):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, vq_sample=True, *args, **kwargs):
+        """ A video colorization-like vqvae_tracker. Refers to Video Colorization (ECCV 2017)
+
+        Args:
+            vq_sample (bool, optional): [description]. Defaults to True.
+        """
         super().__init__(*args, **kwargs)
+        
         if self.fc:
             self.predictor = nn.Linear(128, self.n_embed)
             self.predictor.weight.data = self.vq_emb.permute(1,0)
-    
-    def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
+        
+        self.vq_sample = vq_sample
+        
+        
+    def forward_train(self, imgs, mask_query_idx, frames_mask=None, jitter_imgs=None):
         
         bsz, num_clips, t, c, h, w = imgs.shape
     
@@ -1586,7 +1521,12 @@ class Vqvae_Tracker_V15(Vqvae_Tracker):
                 vqvae = getattr(self, f'vqvae{i}')
                 vq_enc = getattr(self, f'vq_enc{i}')
                 vqvae.eval()
-                emb, quant_tar, _, ind_tar, _ = vq_enc(imgs[:, 0, -1])
+                emb, quants, _, inds, _ = vq_enc(imgs.flatten(0,2))
+                
+                quants = quants.reshape(bsz, t, *quants.shape[-3:])
+                inds = inds.reshape(bsz, t, *inds.shape[-2:])
+                ind_tar = inds[:, -1]
+                ind_ref = inds[:, -2]
                 
                 if self.per_ref:
                     ind = ind_tar.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
@@ -1594,160 +1534,24 @@ class Vqvae_Tracker_V15(Vqvae_Tracker):
                     ind = ind_tar.reshape(-1, 1).long().detach()
                     
                 out_ind.append(ind)
-                
-                emb, quant_ref, _, ind_ref, _ = vq_enc(imgs[:, 0, 0])
+                out_quant_refs = quants[:, :-1].flatten(3).permute(0, 1, 3, 2)
             
         if jitter_imgs is not None:
             imgs = jitter_imgs
 
-        # determined query
-        ind_tar = ind_tar.flatten(1).unsqueeze(-1).repeat(1,1,ind_tar.shape[-1] * ind_tar.shape[-2])
-        ind_ref = ind_ref.flatten(1).unsqueeze(1).repeat(1,ind_ref.shape[-1] * ind_ref.shape[-2],1)
-        mask_query_idx = ((ind_tar == ind_ref) * self.mask.unsqueeze(0)).sum(-1)
-        mask_query_idx = (mask_query_idx > 0)
-        if self.per_ref:
-            mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
-        
-        tar = self.backbone(imgs[:,0,-1])
-        refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
-
-        if self.patch_size != -1:
-            _, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
+        if self.vq_sample:
+            mask_query_idx = self.query_vq_sample(ind_tar, ind_ref, t, self.mask, self.per_ref)
         else:
-            _, att = non_local_attention(tar, refs, per_ref=self.per_ref, temprature=self.temperature)
+            mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1) if self.per_ref else mask_query_idx.bool()
         
-        losses = {}
-        
-        out = frame_transform(att, [quant_ref])
-        
-        if self.ce_loss:
-            for idx, i in enumerate(range(self.num_head)):
-                i = str(i).replace('0', '')
-                if self.fc:
-                    predict = getattr(self, f'predictor{i}')(out)
-                else:
-                    vq_emb = getattr(self, f'vq_emb{i}')
-                    out = F.normalize(out, dim=-1)
-                    vq_emb = F.normalize(vq_emb, dim=0)
-                    predict = torch.mm(out, vq_emb)
-                    # predict = torch.div(predict, 0.1) # temperature is set to 0.1
-                    
-                loss = self.ce_loss(predict, out_ind[idx])
-                losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
-                    
-        return losses
-
-
-@MODELS.register_module()
-class Vqvae_Tracker_V16(Vqvae_Tracker):
-    
-    def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
-        
-        bsz, num_clips, t, c, h, w = imgs.shape
-    
-        # vqvae tokenize for query frame
-        with torch.no_grad():
-            out_ind= []
-            for i in range(self.num_head):
-                i = str(i).replace('0', '')
-                vqvae = getattr(self, f'vqvae{i}')
-                vq_enc = getattr(self, f'vq_enc{i}')
-                vqvae.eval()
-                emb, quant_tar, _, ind_tar, _ = vq_enc(imgs[:, 0, -1])
-                
-                if self.per_ref:
-                    ind = ind_tar.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
-                else:
-                    ind = ind_tar.reshape(-1, 1).long().detach()
-                    
-                out_ind.append(ind)
-                
-                emb, quant_ref, _, ind_ref, _ = vq_enc(imgs[:, 0, 0])
-            
-        if jitter_imgs is not None:
-            imgs = jitter_imgs
-
-        # determined query
-        ind_tar = ind_tar.flatten(1).unsqueeze(-1).repeat(1,1,ind_tar.shape[-1] * ind_tar.shape[-2])
-        ind_ref = ind_ref.flatten(1).unsqueeze(1).repeat(1,ind_ref.shape[-1] * ind_ref.shape[-2],1)
-        mask_query_idx = ((ind_tar == ind_ref) * self.mask.unsqueeze(0)).sum(-1)
-        mask_query_idx = (mask_query_idx > 0)
-        if self.per_ref:
-            mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
-        
-        tar = self.backbone(imgs[:,0,-1])
-        refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
-
-        if self.patch_size != -1:
-            _, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
+        fs = self.backbone(imgs.flatten(0,2))
+        fs = fs.reshape(bsz, t, *fs.shape[-3:])
+        tar, refs = fs[:, -1], fs[:, :-1]
+        if frames_mask is not None:
+            mask = frames_mask[:,:-1,None].flatten(3)
         else:
-            _, att = non_local_attention(tar, refs, per_ref=self.per_ref, temprature=self.temperature)
-        
-        losses = {}
-        
-        out = frame_transform(att, [quant_ref])
-        
-        if self.ce_loss:
-            for idx, i in enumerate(range(self.num_head)):
-                i = str(i).replace('0', '')
-                vq_emb = getattr(self, f'vq_emb{i}')
-                
-                # predict = (
-                # out.pow(2).sum(1, keepdim=True)
-                # - 2 * out @ vq_emb
-                # + vq_emb.pow(2).sum(0, keepdim=True)
-                # ) 
-                
-                out = F.normalize(out, dim=-1)
-                vq_emb = F.normalize(vq_emb, dim=0)
-                
-                predict = torch.mm(out, vq_emb)
-                # predict = torch.div(predict, 0.1) # temperature is set to 0.1
-                loss = self.ce_loss(predict, out_ind[idx])
-                losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
-        
-        predict_tar = self.predictor(tar.permute(0,2,3,1).flatten(0,2))
-        loss_tar = self.ce_loss(predict_tar, out_ind[0])
-        losses[f'target_ce_loss'] = 0.1 * (loss_tar * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
-        
-        return losses
-    
-@MODELS.register_module()
-class Vqvae_Tracker_V17(Vqvae_Tracker_V15):
-    
-    def forward_train(self, imgs, mask_query_idx, frames_mask, jitter_imgs=None):
-        
-        bsz, num_clips, t, c, h, w = imgs.shape
-    
-        # vqvae tokenize for query frame
-        with torch.no_grad():
-            out_ind= []
-            for i in range(self.num_head):
-                i = str(i).replace('0', '')
-                vqvae = getattr(self, f'vqvae{i}')
-                vq_enc = getattr(self, f'vq_enc{i}')
-                vqvae.eval()
-                emb, quant_tar, _, ind_tar, _ = vq_enc(imgs[:, 0, -1])
-                
-                if self.per_ref:
-                    mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
-                    ind = ind_tar.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
-                else:
-                    mask_query_idx = mask_query_idx.bool()
-                    ind = ind_tar.reshape(-1, 1).long().detach()
-                    
-                out_ind.append(ind)
-                
-                emb, quant_ref, _, ind_ref, _ = vq_enc(imgs[:, 0, 0])
+            mask = None
             
-        if jitter_imgs is not None:
-            imgs = jitter_imgs
-        
-        tar = self.backbone(imgs[:,0,-1])
-        refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
-        mask = frames_mask[:,:-1,None].flatten(3)
-        
-
         if self.patch_size != -1:
             _, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
         else:
@@ -1755,7 +1559,7 @@ class Vqvae_Tracker_V17(Vqvae_Tracker_V15):
         
         losses = {}
         
-        out = frame_transform(att, [quant_ref])
+        out = frame_transform(att, out_quant_refs, per_ref=self.per_ref)
         
         if self.ce_loss:
             for idx, i in enumerate(range(self.num_head)):
@@ -1773,3 +1577,15 @@ class Vqvae_Tracker_V17(Vqvae_Tracker_V15):
                 losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
                     
         return losses
+    
+    @staticmethod
+    def query_vq_sample(ind_tar, ind_ref, t, mask, per_ref):
+        # determined query
+        ind_tar = ind_tar.flatten(1).unsqueeze(-1).repeat(1,1,ind_tar.shape[-1] * ind_tar.shape[-2])
+        ind_ref = ind_ref.flatten(1).unsqueeze(1).repeat(1,ind_ref.shape[-1] * ind_ref.shape[-2],1)
+        mask_query_idx = ((ind_tar == ind_ref) * mask.unsqueeze(0)).sum(-1)
+        mask_query_idx = (mask_query_idx > 0)
+        if per_ref:
+            mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
+
+        return mask_query_idx
