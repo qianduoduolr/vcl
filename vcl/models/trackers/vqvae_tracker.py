@@ -1516,6 +1516,8 @@ class Vqvae_Tracker_V15(Vqvae_Tracker):
         # vqvae tokenize for query frame
         with torch.no_grad():
             out_ind= []
+            out_quants = []
+            vq_inds = []
             for i in range(self.num_head):
                 i = str(i).replace('0', '')
                 vqvae = getattr(self, f'vqvae{i}')
@@ -1527,6 +1529,7 @@ class Vqvae_Tracker_V15(Vqvae_Tracker):
                 inds = inds.reshape(bsz, t, *inds.shape[-2:])
                 ind_tar = inds[:, -1]
                 ind_ref = inds[:, -2]
+                vq_inds.append([ind_tar, ind_ref])
                 
                 if self.per_ref:
                     ind = ind_tar.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
@@ -1535,14 +1538,13 @@ class Vqvae_Tracker_V15(Vqvae_Tracker):
                     
                 out_ind.append(ind)
                 out_quant_refs = quants[:, :-1].flatten(3).permute(0, 1, 3, 2)
+                out_quants.append(out_quant_refs)
             
         if jitter_imgs is not None:
             imgs = jitter_imgs
 
-        if self.vq_sample:
-            mask_query_idx = self.query_vq_sample(ind_tar, ind_ref, t, self.mask, self.per_ref)
-        else:
-            mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1) if self.per_ref else mask_query_idx.bool()
+        # use pre-difined query
+        mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1) if self.per_ref else mask_query_idx.bool()
         
         fs = self.backbone(imgs.flatten(0,2))
         fs = fs.reshape(bsz, t, *fs.shape[-3:])
@@ -1558,12 +1560,17 @@ class Vqvae_Tracker_V15(Vqvae_Tracker):
             _, att = non_local_attention(tar, refs, per_ref=self.per_ref, temprature=self.temperature, mask=mask)
         
         losses = {}
-        
-        out = frame_transform(att, out_quant_refs, per_ref=self.per_ref)
-        
+                
         if self.ce_loss:
-            for idx, i in enumerate(range(self.num_head)):
+            for idx, i in enumerate(range(self.num_head)):                
                 i = str(i).replace('0', '')
+                
+                # change query if use vq sample
+                if self.vq_sample:
+                    mask_query_idx = self.query_vq_sample(vq_inds[idx][0], vq_inds[idx][1], t, self.mask, self.per_ref)
+                
+                out = frame_transform(att, out_quants[idx], per_ref=self.per_ref)
+                
                 if self.fc:
                     predict = getattr(self, f'predictor{i}')(out)
                 else:
