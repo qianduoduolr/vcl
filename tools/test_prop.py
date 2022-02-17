@@ -16,9 +16,9 @@ from vcl.models import build_model
 
 def parse_args():
     parser = argparse.ArgumentParser(description='mmediting tester')
-    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/train/local/vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_2.py')
+    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/train/local/vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_random_lab_colordrop.py')
     # parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_dyt_nl_l2_nofc_orivq/epoch_800.pth')
-    parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='')
+    parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='/home/lr/models/mast.pt')
     parser.add_argument('--out-indices', nargs='+', type=int, default=[2])
     parser.add_argument('--seed', type=int, default=None, help='random seed')
     parser.add_argument('--radius', type=int, default=-1, help='random seed')
@@ -128,25 +128,26 @@ def main():
     data_loader = build_dataloader(dataset, **loader_cfg)
 
     # build the model and load checkpoint
-    if cfg.model.backbone.type == 'ResNet':
+    if not eval_config.get('mast_prop', False):
+        
         model = mmcv.ConfigDict(type='VanillaTracker', backbone=cfg.model.backbone)
         model.backbone.out_indices = args.out_indices
         model.backbone.strides = cfg.test_cfg.strides
+        
         if 'torchvision_pretrained' in eval_config:
             model.backbone.pretrained = eval_config['torchvision_pretrained']
             eval_config.pop('torchvision_pretrained')
-    elif cfg.model.backbone.type == 'SwinTransformer':
-        model = mmcv.ConfigDict(type='VanillaTracker', backbone=cfg.model.backbone)
-        model.backbone.out_indices = args.out_indices
         
-    if args.radius is not -1:
-        cfg.test_cfg.neighbor_range = args.radius
-        print(cfg.test_cfg.neighbor_range)
+        if args.radius is not -1:
+            cfg.test_cfg.neighbor_range = args.radius
+            print(cfg.test_cfg.neighbor_range)
     
-    if args.temperature is not -1:
-        cfg.test_cfg.temperature = args.temperature
-        print(cfg.test_cfg.temperature)
-        
+        if args.temperature is not -1:
+            cfg.test_cfg.temperature = args.temperature
+            print(cfg.test_cfg.temperature)
+    else:
+        model = mmcv.ConfigDict(type='Memory_Tracker', backbone=cfg.model.backbone)
+        eval_config.pop('mast_prop')
 
     model = build_model(model, train_cfg=None, test_cfg=cfg.test_cfg)
 

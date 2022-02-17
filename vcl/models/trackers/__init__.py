@@ -5,3 +5,4 @@ from .dist_tracker import *
 from .pixel_tracker import *
 from .memory_tracker import *
 from .rw_tracker import RW_Tracker
+from .modules import *

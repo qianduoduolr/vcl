@@ -129,18 +129,16 @@ def main():
     data_loader = build_dataloader(dataset, **loader_cfg)
 
     # build the model and load checkpoint
-    if cfg.model.backbone.type == 'ResNet':
+    if not eval_config.get('mast_prop', False):
         model = mmcv.ConfigDict(type='VanillaTracker', backbone=cfg.model.backbone)
         model.backbone.out_indices = args.out_indices
         model.backbone.strides = cfg.test_cfg.strides
         if 'torchvision_pretrained' in eval_config:
             model.backbone.pretrained = eval_config['torchvision_pretrained']
             eval_config.pop('torchvision_pretrained')
-    elif cfg.model.backbone.type == 'SwinTransformer':
-        model = mmcv.ConfigDict(type='VanillaTracker', backbone=cfg.model.backbone)
-        model.backbone.out_indices = args.out_indices
-        
-
+    else:
+        model = mmcv.ConfigDict(type='Memory_Tracker', backbone=cfg.model.backbone)
+        eval_config.pop('mast_prop')
 
     model = build_model(model, train_cfg=None, test_cfg=cfg.test_cfg)
 

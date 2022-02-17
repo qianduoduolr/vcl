@@ -22,103 +22,12 @@ from davis2017.evaluation import DAVISEvaluation
 
 
 from .base_dataset import BaseDataset
+from .video_dataset import *
 from .registry import DATASETS
 
 
-MAX_OBJECT_NUM_PER_SAMPLE = 5
-
 @DATASETS.register_module()
-class VOS_dataset_base(BaseDataset):
-    def __init__(self, root,  
-                       list_path, 
-                       num_clips=1,
-                       clip_length=1,
-                       step=1,
-                       pipeline=None, 
-                       test_mode=False,
-                       filename_tmpl='{:05d}.jpg',
-                       temporal_sampling_mode='random',
-                       split='train'
-                       ):
-        super().__init__(pipeline, test_mode)
-
-        self.clip_length = clip_length
-        self.num_clips = num_clips
-        self.step = step
-        self.list_path = list_path
-        self.root = root
-        self.filename_tmpl = filename_tmpl
-        self.temporal_sampling_mode = temporal_sampling_mode
-        self.split = split
-
-    def To_onehot(self, mask):
-        M = np.zeros((self.K, mask.shape[0], mask.shape[1]), dtype=np.uint8)
-        for k in range(self.K):
-            M[k] = (mask == k).astype(np.uint8)
-        return M
-    
-    def All_to_onehot(self, masks):
-        Ms = np.zeros((self.K, masks.shape[0], masks.shape[1], masks.shape[2]), dtype=np.uint8)
-        for n in range(masks.shape[0]):
-            Ms[:,n] = self.To_onehot(masks[n])
-        return Ms
-
-    def mask_process(self,mask,f,num_object,ob_list):
-        n = num_object
-        mask_ = np.zeros(mask.shape).astype(np.uint8)
-        if f == 0:
-            for i in range(1,11):
-                if np.sum(mask == i) > 0:
-                    n += 1
-                    ob_list.append(i)
-            if n > MAX_OBJECT_NUM_PER_SAMPLE:
-                n = MAX_OBJECT_NUM_PER_SAMPLE
-                ob_list = random.sample(ob_list,n)
-        for i,l in enumerate(ob_list):
-            mask_[mask == l] = i + 1
-        return mask_,n,ob_list
-    
-    def temporal_sampling(self, num_frames, num_clips, clip_length, step, mode='random'):
-            
-        if mode == 'random':
-            offsets = [ random.randint(0, num_frames-clip_length * step) for i in range(num_clips) ]
-        elif mode == 'distant':
-            length_ext = num_frames / num_clips
-            offsets = np.floor(np.arange(num_clips) * length_ext + np.random.uniform(low=0.0, high=length_ext, size=(num_clips))).astype(np.uint8)
-        elif mode =='mast':
-            short_term_interval = 2
-            offsets_long_term = [0,1]
-            short_term_start = random.randint(2, num_frames-clip_length * step - (num_clips-2) * short_term_interval )
-            offsets_short_term = list([ short_term_start+i*short_term_interval for i in range(num_clips-2)])
-            offsets = offsets_long_term + offsets_short_term
-        
-        return offsets
-
-    def _parser_rgb_rawframe(self, offsets, frames_path, clip_length, step=1, flag='color', backend='cv2'):
-        """read frame"""
-        frame_list_all = []
-        for offset in offsets:
-            for idx in range(clip_length):
-                frame_path = frames_path[offset + idx]
-                frame = mmcv.imread(frame_path, backend=backend, flag=flag, channel_order='rgb')
-                frame_list_all.append(frame)
-        return frame_list_all
-
-    def _parser_rgb_lmdb(self, offsets, frames_path, clip_length, step=1, flag='color', backend='cv2'):
-        """read frame"""
-        frame_list_all = []
-        for offset in offsets:
-            frame_list = []
-            for idx in range(clip_length):
-                frame_path = frames_path[offset + idx]
-                frame = mmcv.imread(frame_path, backend=backend, flag=flag, channel_order='rgb')
-                frame_list.append(frame)
-            frame_list_all.append(frame_list)
-        return frame_list_all if len(frame_list_all) >= 2 else frame_list_all[0]
-
-
-@DATASETS.register_module()
-class VOS_davis_dataset_test(VOS_dataset_base):
+class VOS_davis_dataset_test(Video_dataset_base):
     PALETTE = [[0, 0, 0], [128, 0, 0], [0, 128, 0], [128, 128, 0], [0, 0, 128],
                [128, 0, 128], [0, 128, 128], [128, 128, 128], [64, 0, 0],
                [191, 0, 0], [64, 128, 0], [191, 128, 0], [64, 0, 128],
@@ -357,7 +266,7 @@ class VOS_davis_dataset_test(VOS_dataset_base):
 
 
 @DATASETS.register_module()
-class VOS_davis_dataset_rgb(VOS_dataset_base):
+class VOS_davis_dataset_rgb(Video_dataset_base):
     def __init__(self, data_prefix, 
                        year='2017',
                        per_video=False,
@@ -416,7 +325,7 @@ class VOS_davis_dataset_rgb(VOS_dataset_base):
     
     
 @DATASETS.register_module()
-class VOS_davis_dataset_mlm(VOS_dataset_base):
+class VOS_davis_dataset_mlm(Video_dataset_base):
     def __init__(self, data_prefix, 
                        mask_ratio=0.15,
                        vq_size=32,

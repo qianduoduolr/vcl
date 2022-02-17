@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from collections import OrderedDict
 import math
 from torch.autograd import Variable
+from ..registry import BACKBONES
 
 
 class ResidualBlock(nn.Module):
@@ -30,8 +31,14 @@ class ResidualBlock(nn.Module):
         out = self.activation(out)
         return out
 
+@BACKBONES.register_module()
 class ResNet18(nn.Module):
     def __init__(self, in_ch=1):
+        """ A ResNet arch in MAST
+
+        Args:
+            in_ch (int, optional): _description_. Defaults to 1.
+        """
         super(ResNet18, self).__init__()
         self.inchannel = 64
         self.conv1 = nn.Sequential(
@@ -44,6 +51,7 @@ class ResNet18(nn.Module):
         self.layer2 = self.make_layer(ResidualBlock, 128, 2, stride=2)
         self.layer3 = self.make_layer(ResidualBlock, 256, 2, stride=1)
         self.layer4 = self.make_layer(ResidualBlock, 256, 2, stride=1)
+        self.feat_dim = 256
 
 
     def make_layer(self, block, channels, num_blocks, stride):

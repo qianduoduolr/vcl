@@ -19,15 +19,15 @@ from mmcv import scandir
 import mmcv
 
 from .base_dataset import BaseDataset
+from .video_dataset import *
 from .registry import DATASETS
 from .pipelines.my_aug import ClipRandomSizedCrop, ClipMotionStatistic, ClipRandomHorizontalFlip
-from .vos_davis_dataset import VOS_dataset_base
 
 from .pipelines import Compose
 
 
 @DATASETS.register_module()
-class VOS_youtube_dataset_rgb(VOS_dataset_base):
+class VOS_youtube_dataset_rgb(Video_dataset_base):
     def __init__(self, data_prefix, 
                        year='2018',
                        per_video=False,
@@ -150,7 +150,7 @@ class VOS_youtube_dataset_rgb_withbbox(VOS_youtube_dataset_rgb):
 
 
 @DATASETS.register_module()
-class VOS_youtube_dataset_mlm(VOS_dataset_base):
+class VOS_youtube_dataset_mlm(Video_dataset_base):
     def __init__(self, data_prefix, 
                        mask_ratio=0.15,
                        vq_size=32,
@@ -392,66 +392,6 @@ class VOS_youtube_dataset_mlm_motion(VOS_youtube_dataset_mlm):
         data = {
             'imgs': results['imgs'],
             'mask_query_idx': mask_query_idx,
-            'modality': 'RGB',
-            'num_clips': self.num_clips,
-            'num_proposals':1,
-            'clip_len': self.clip_length
-        }
-
-        return self.pipeline(data)
-
-
-@DATASETS.register_module()
-class VOS_youtube_dataset_mlm_withbbox(VOS_youtube_dataset_mlm):
-
-    def load_annotations(self):
-        
-        self.samples = []
-        self.video_dir = osp.join(self.root, self.year, self.data_prefix['RGB'])
-        self.mask_dir = osp.join(self.root, self.year, self.data_prefix['ANNO'])
-        self.meta = mmcv.load(osp.join(self.list_path, 'ytvos_s256_flow_raft.json'))[self.split]
-
-        for vid in self.meta:
-            sample = dict()
-            vname = vid["base_path"].split('/')[-1]
-            sample['frames_path'] = []
-            sample['frames_bbox'] = []
-            sample['num_frames'] = len(vid['frame'])
-
-            for frame in vid['frame']:
-                sample['frames_path'].append(osp.join(self.video_dir, vname, frame['img_path']))
-                sample['frames_bbox'].append(frame['objs'][0]['bbox'])
-            
-            if sample['num_frames'] < self.clip_length * self.step:
-                continue
-
-            self.samples.append(sample)
-    
-    def prepare_train_data(self, idx):
-        sample = self.samples[idx]
-        frames_path = sample['frames_path']
-        frames_bbox = sample['frames_bbox']
-        num_frames = sample['num_frames']
-
-        offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, self.step)
-
-
-        if self.load_to_ram:
-            frames = (sample['frames'])[offsets[0]:offsets[0]+self.clip_length]
-        else:
-            frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length, step=1)
-            
-        bboxs = []
-        for off in offsets:
-            for l in self.clip_length:
-                bboxs.append(frames_bbox[off+l])
-        
-
-        data = {
-            'imgs': frames,
-            'bboxs': bboxs,
-            'mask_ratio': self.mask_ratio,
-            'mask_sample_size': (self.vq_res, self.vq_res),
             'modality': 'RGB',
             'num_clips': self.num_clips,
             'num_proposals':1,

@@ -32,6 +32,7 @@ class Vqvae_Tracker(BaseModel):
                  vqvae,
                  patch_size,
                  pretrained_vq,
+                 vq_size=32,
                  temperature=1.0,
                  sim_siam_head=None,
                  multi_head_weight=[1.0],
@@ -112,7 +113,7 @@ class Vqvae_Tracker(BaseModel):
         self.init_weights(pretrained)
         
         if mask_radius != -1:
-            self.mask = make_mask(32, mask_radius)
+            self.mask = make_mask(vq_size, mask_radius)
         else:
             self.mask = None
         
@@ -1494,7 +1495,7 @@ class Vqvae_Tracker_V13(Vqvae_Tracker):
     
 @MODELS.register_module()
 class Vqvae_Tracker_V15(Vqvae_Tracker):
-    def __init__(self, vq_sample=True, *args, **kwargs):
+    def __init__(self, vq_sample=True, post_convolution=None, *args, **kwargs):
         """ A video colorization-like vqvae_tracker. Refers to Video Colorization (ECCV 2017)
 
         Args:
@@ -1505,6 +1506,11 @@ class Vqvae_Tracker_V15(Vqvae_Tracker):
         if self.fc:
             self.predictor = nn.Linear(128, self.n_embed)
             self.predictor.weight.data = self.vq_emb.permute(1,0)
+        
+        if post_convolution is not None:
+            self.post_convolution = nn.Conv2d(post_convolution[0], post_convolution[1], 3, 1, 1)
+        else:
+            self.post_convolution = None
         
         self.vq_sample = vq_sample
         
@@ -1547,12 +1553,17 @@ class Vqvae_Tracker_V15(Vqvae_Tracker):
         mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1) if self.per_ref else mask_query_idx.bool()
         
         fs = self.backbone(imgs.flatten(0,2))
+        if self.post_convolution is not None:
+            fs = self.post_convolution(fs)
+        
         fs = fs.reshape(bsz, t, *fs.shape[-3:])
         tar, refs = fs[:, -1], fs[:, :-1]
+        
         if frames_mask is not None:
             mask = frames_mask[:,:-1,None].flatten(3)
         else:
-            mask = None
+            mask = self.mask
+
             
         if self.patch_size != -1:
             _, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
