@@ -1,1 +1,1 @@
-vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_30
+train_vqvae_video_d2_nemd2048_contrastive_byol_commit1.0_v2_2

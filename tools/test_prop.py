@@ -18,7 +18,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='mmediting tester')
     parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/train/local/vqvae_mlm_d4_nemd32_byol_dyt_nl_l2_fc_orivq_withbbox_random_lab_colordrop.py')
     # parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_dyt_nl_l2_nofc_orivq/epoch_800.pth')
-    parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='/home/lr/models/mast.pt')
+    parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='/home/lr/models/mamp.pt')
     parser.add_argument('--out-indices', nargs='+', type=int, default=[2])
     parser.add_argument('--seed', type=int, default=None, help='random seed')
     parser.add_argument('--radius', type=int, default=-1, help='random seed')

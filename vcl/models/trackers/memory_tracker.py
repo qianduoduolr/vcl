@@ -37,7 +37,7 @@ class Memory_Tracker(BaseModel):
         self.C = 7
 
         # self.backbone = build_backbone(backbone)
-        self.backbone = ResNet18(3)
+        self.feature_extraction = ResNet18(3)
         self.post_convolution = nn.Conv2d(256, 64, 3, 1, 1)
         self.D = 4
 
@@ -51,8 +51,8 @@ class Memory_Tracker(BaseModel):
         self.colorizer = Colorizer(self.D, self.R, self.C)
         
     def forward_train(self, rgb_r, quantized_r, rgb_t, ref_index=None,current_ind=None):
-        feats_r = [self.post_convolution(self.backbone(rgb)) for rgb in rgb_r]
-        feats_t = self.post_convolution(self.backbone(rgb_t))
+        feats_r = [self.post_convolution(self.feature_extraction(rgb)) for rgb in rgb_r]
+        feats_t = self.post_convolution(self.feature_extraction(rgb_t))
 
         quantized_t = self.colorizer(feats_r, feats_t, quantized_r, ref_index, current_ind)
         return quantized_t

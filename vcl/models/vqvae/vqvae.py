@@ -448,21 +448,13 @@ class VQCL_v2(BaseModel):
         
         self.mask = make_mask(32, 1, eq=False)
 
-        self.init_weights(pretrained, per_vq)
+        if pretrained is not None:
+            self.init_weights(pretrained, per_vq)
             
     def init_weights(self, pretrained, per_vq):
         
-        self.backbone.init_weights()
-        if pretrained is not None:
-            _ = load_checkpoint(self, pretrained, map_location='cpu')
-        
-        if self.per_vq:
-            for name in per_vq:
-                vq = getattr(self, f'quantize_{name}')
-                root = '/'.join(pretrained.split('/')[:3])
-                vq_path = os.path.join(root, f'expdir/VCL/group_vqvae_tracker/per_video_vq/{name}/epoch_1.pth')
-                _ = load_checkpoint(vq, vq_path, map_location='cpu')
-                
+        _ = load_checkpoint(self, pretrained, map_location='cpu')
+    
 
     def forward_train(self, imgs):
         
@@ -814,8 +806,12 @@ class VQCL_v5(VQCL_v2):
 
         bsz, c, _, _ = q.shape
 
-        q_emb = self.quantize_conv(q)
-        k_emb = self.quantize_conv(k)
+        if c != self.embed_dim:
+            q_emb = self.quantize_conv(q)
+            k_emb = self.quantize_conv(k)
+        else:
+            q_emb = q
+            k_emb = k
         
         quant, diff, ind, embed = self.quantize(q_emb.permute(0, 2, 3, 1).contiguous())
     

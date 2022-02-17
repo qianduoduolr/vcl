@@ -52,6 +52,8 @@ class ResNet18(nn.Module):
         self.layer3 = self.make_layer(ResidualBlock, 256, 2, stride=1)
         self.layer4 = self.make_layer(ResidualBlock, 256, 2, stride=1)
         self.feat_dim = 256
+        self.strides  = (1,2,1,1)
+        self.out_indices=(3, )
 
 
     def make_layer(self, block, channels, num_blocks, stride):
