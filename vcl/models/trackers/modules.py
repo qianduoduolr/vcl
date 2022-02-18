@@ -33,7 +33,7 @@ class ResidualBlock(nn.Module):
 
 @BACKBONES.register_module()
 class ResNet18(nn.Module):
-    def __init__(self, in_ch=1):
+    def __init__(self, in_ch=1, strides=(1,2,1,1), out_indices=(3, )):
         """ A ResNet arch in MAST
 
         Args:
@@ -52,8 +52,8 @@ class ResNet18(nn.Module):
         self.layer3 = self.make_layer(ResidualBlock, 256, 2, stride=1)
         self.layer4 = self.make_layer(ResidualBlock, 256, 2, stride=1)
         self.feat_dim = 256
-        self.strides  = (1,2,1,1)
-        self.out_indices=(3, )
+        self.strides  = strides
+        self.out_indices = out_indices
 
 
     def make_layer(self, block, channels, num_blocks, stride):

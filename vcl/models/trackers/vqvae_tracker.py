@@ -43,6 +43,8 @@ class Vqvae_Tracker(BaseModel):
                  test_cfg=None,
                  per_ref=True,
                  mask_radius=-1,
+                 temp_window=False,
+                 norm=False,
                  pretrained=None
                  ):
         """ original vqvae tracker
@@ -59,7 +61,8 @@ class Vqvae_Tracker(BaseModel):
         self.multi_head_weight = multi_head_weight
         self.per_ref = per_ref
         self.temperature = temperature
-
+        self.temp_window = temp_window
+        self.norm = norm
         self.logger = get_root_logger()
 
         self.backbone = build_backbone(backbone)
@@ -1508,7 +1511,7 @@ class Vqvae_Tracker_V15(Vqvae_Tracker):
             self.predictor.weight.data = self.vq_emb.permute(1,0)
         
         if post_convolution is not None:
-            self.post_convolution = nn.Conv2d(post_convolution[0], post_convolution[1], 3, 1, 1)
+            self.post_convolution = nn.Conv2d(post_convolution['in_c'], post_convolution['out_c'], post_convolution['ks'], 1, post_convolution['pad'])
         else:
             self.post_convolution = None
         
@@ -1555,6 +1558,8 @@ class Vqvae_Tracker_V15(Vqvae_Tracker):
         fs = self.backbone(imgs.flatten(0,2))
         if self.post_convolution is not None:
             fs = self.post_convolution(fs)
+        if self.norm:
+            fs = F.normalize(fs, dim=1)
         
         fs = fs.reshape(bsz, t, *fs.shape[-3:])
         tar, refs = fs[:, -1], fs[:, :-1]
@@ -1562,7 +1567,7 @@ class Vqvae_Tracker_V15(Vqvae_Tracker):
         if frames_mask is not None:
             mask = frames_mask[:,:-1,None].flatten(3)
         else:
-            mask = self.mask
+            mask = self.mask if self.temp_window else None
 
             
         if self.patch_size != -1:

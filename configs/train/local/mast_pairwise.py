@@ -1,32 +1,14 @@
 import os
-from random import sample
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'train_vqvae_video_d2_nemd2048_contrastive_byol_commit1.0_v2_2'
-docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corres'
+exp_name = 'mast_pairwise'
+docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 # model settings
 model = dict(
-    type='VQCL_v5',
-    backbone=dict(type='ResNet18', in_ch=3),
-    sim_siam_head=dict(
-        type='SimSiamHead',
-        in_channels=64,
-        # norm_cfg=dict(type='SyncBN'),
-        num_projection_fcs=3,
-        projection_mid_channels=64,
-        projection_out_channels=64,
-        num_predictor_fcs=2,
-        predictor_mid_channels=64,
-        predictor_out_channels=64,
-        with_norm=True,
-        spatial_type='avg'),
-    loss=dict(type='CosineSimLoss', negative=False),
-    embed_dim=64,
-    n_embed=2048,
-    commitment_cost=1.0,
+    type='Memory_Tracker',
 )
 
 # model training and testing settings
@@ -44,40 +26,35 @@ test_cfg = dict(
     output_dir='eval_results')
 
 # dataset settings
-train_dataset_type = 'VOS_youtube_dataset_rgb'
+train_dataset_type = 'VOS_youtube_dataset_mlm_withbbox_random'
 
 val_dataset_type = None
 test_dataset_type = 'VOS_davis_dataset_test'
 
 
 # train_pipeline = None
-img_norm_cfg = dict(
-    mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
+img_norm_cfg = dict(mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
+img_norm_cfg_lab = dict(mean=[50, 0, 0], std=[50, 127, 127], to_bgr=False)
 
 train_pipeline = [
-    dict(type='RandomResizedCrop', area_range=(0.2,1.0), aspect_ratio_range=(1.5, 2.0), same_across_clip=False,
-        same_on_clip=False),
+    dict(type='RandomResizedCrop', area_range=(0.6,1.0), aspect_ratio_range=(1.5, 2.0),),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
-    dict(type='Flip', flip_ratio=0.5, same_across_clip=False, same_on_clip=False),
-    # dict(
-    #     type='ColorJitter',
-    #     brightness=0.5,
-    #     contrast=0.5,
-    #     saturation=0.5,
-    #     hue=0.1,
-    #     p=0.8,
-    #     same_across_clip=False,
-    #     same_on_clip=False),
+    dict(type='Flip', flip_ratio=0.5),
+    dict(type='RGB2LAB', output_keys='images_lab'),
     dict(type='Normalize', **img_norm_cfg),
-    dict(type='FormatShape', input_format='NPTCHW'),
-    dict(type='Collect', keys=['imgs'], meta_keys=[]),
-    dict(type='ToTensor', keys=['imgs'])
+    dict(type='Normalize', **img_norm_cfg_lab, keys='images_lab'),
+    # dict(type='ColorDropout', keys='jitter_imgs', drop_rate=0.8),
+    dict(type='FormatShape', input_format='NCTHW'),
+    dict(type='FormatShape', input_format='NCTHW', keys='images_lab'),
+    dict(type='Collect', keys=['imgs', 'images_lab'], meta_keys=[]),
+    dict(type='ToTensor', keys=['imgs', 'images_lab'])
 ]
 
 val_pipeline = [
     dict(type='Resize', scale=(-1, 480), keep_ratio=True),
     dict(type='Flip', flip_ratio=0),
-    dict(type='Normalize', **img_norm_cfg),
+    dict(type='RGB2LAB'),
+    dict(type='Normalize', **img_norm_cfg_lab),
     dict(type='FormatShape', input_format='NCTHW'),
     dict(
         type='Collect',
@@ -97,13 +74,16 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
+            size=256,
+            p=0.8,
             root='/home/lr/dataset/YouTube-VOS',
             list_path='/home/lr/dataset/YouTube-VOS/2018/train',
-            data_prefix=dict(RGB='train/JPEGImages_s256', ANNO='train/Annotations'),
-            clip_length=1,
-            num_clips=2,
-            pipeline=train_pipeline
-            ),
+            data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
+            mask_ratio=0.15,
+            clip_length=2,
+            vq_size=32,
+            pipeline=train_pipeline,
+            test_mode=False),
 
     test =  dict(
             type=test_dataset_type,
@@ -116,23 +96,23 @@ data = dict(
 )
 
 # optimizer
-optimizers = dict(type='SGD', lr=0.05, momentum=0.9, weight_decay=0.0001)
-
+optimizers = dict(
+    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
+    )
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=3200
+max_epoch=800
 lr_config = dict(
     policy='CosineAnnealing',
-    min_lr_ratio=0,
+    min_lr_ratio=0.001,
     by_epoch=False,
-    warmup='linear',
     warmup_iters=10,
-    warmup_ratio=0.00001,
+    warmup_ratio=0.1,
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=1600, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=400, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
@@ -152,14 +132,14 @@ work_dir = f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
+                  checkpoint_path=f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth',
+                  mast_prop=True
                 )
+
 
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
-test_mode = True
-
 
 
 if __name__ == '__main__':

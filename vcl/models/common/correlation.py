@@ -45,6 +45,8 @@ def non_local_attention(tar, refs, per_ref=True, flatten=True, temprature=1.0, m
     _, t, feat_dim, w_, h_ = refs.shape
     refs = refs.flatten(3).permute(0, 1, 3, 2)
     att = torch.einsum("bic,btjc -> btij", (tar, refs)) / temprature 
+    # scaling
+    # att = att / torch.sqrt(torch.tensor(feat_dim).float()) 
 
     if mask is not None:
         att *= mask
@@ -200,6 +202,8 @@ class Colorizer(nn.Module):
             corrs[ind] = corrs[ind].reshape([b, self.P*self.P, h1*w1])
 
         corr = torch.cat(corrs, 1)  # b,nref*N,HW
+        corr = corr / torch.sqrt(torch.tensor(c).float()) # update in MAMP
+        
         corr = F.softmax(corr, dim=1)
         corr = corr.unsqueeze(1)
 

@@ -1,1 +1,1 @@
-train_vqvae_video_d2_nemd2048_contrastive_byol_commit1.0_v2
+train_dry_run

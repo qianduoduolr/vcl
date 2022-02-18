@@ -20,7 +20,7 @@ from .modules import *
 @MODELS.register_module()
 class Memory_Tracker(BaseModel):
     def __init__(self,
-                 backbone,
+                 downsample_rate=4,
                  test_cfg=None,
                  train_cfg=None
                  ):
@@ -37,9 +37,9 @@ class Memory_Tracker(BaseModel):
         self.C = 7
 
         # self.backbone = build_backbone(backbone)
-        self.feature_extraction = ResNet18(3)
+        self.backbone = ResNet18(3)
         self.post_convolution = nn.Conv2d(256, 64, 3, 1, 1)
-        self.D = 4
+        self.D = downsample_rate
 
         self.test_cfg = test_cfg
         self.train_cfg = train_cfg
@@ -50,9 +50,9 @@ class Memory_Tracker(BaseModel):
 
         self.colorizer = Colorizer(self.D, self.R, self.C)
         
-    def forward_train(self, rgb_r, quantized_r, rgb_t, ref_index=None,current_ind=None):
-        feats_r = [self.post_convolution(self.feature_extraction(rgb)) for rgb in rgb_r]
-        feats_t = self.post_convolution(self.feature_extraction(rgb_t))
+    def forward_colorization(self, rgb_r, quantized_r, rgb_t, ref_index=None,current_ind=None):
+        feats_r = [self.post_convolution(self.backbone(rgb)) for rgb in rgb_r]
+        feats_t = self.post_convolution(self.backbone(rgb_t))
 
         quantized_t = self.colorizer(feats_r, feats_t, quantized_r, ref_index, current_ind)
         return quantized_t
@@ -64,13 +64,13 @@ class Memory_Tracker(BaseModel):
                 iteration=None):
         num_frame = imgs.shape[3]
         
-        images_rgb = [imgs[:,0,:,i] for i in range(num_frame)]
+        imgs = [imgs[:,0,:,i] for i in range(num_frame)]
         annotations = [ref_seg_map[:,None,:]]
 
         all_seg_preds = []
         seg_preds = []
         
-        N = len(images_rgb)
+        N = len(imgs)
         outputs = [annotations[0].contiguous()]
 
         for i in range(N-1):
@@ -86,15 +86,15 @@ class Memory_Tracker(BaseModel):
             else:
                 raise NotImplementedError
 
-            rgb_0 = [images_rgb[ind] for ind in ref_index]
-            rgb_1 = images_rgb[i+1]
+            rgb_0 = [imgs[ind] for ind in ref_index]
+            rgb_1 = imgs[i+1]
 
             anno_0 = [outputs[ind] for ind in ref_index]
 
             _, _, h, w = anno_0[0].size()
 
             with torch.no_grad():
-                _output = self.forward_train(rgb_0, anno_0, rgb_1, ref_index, i+1)
+                _output = self.forward_colorization(rgb_0, anno_0, rgb_1, ref_index, i+1)
                 _output = F.interpolate(_output, (h,w), mode='bilinear')
 
                 output = torch.argmax(_output, 1, keepdim=True).float()
@@ -129,6 +129,23 @@ class Memory_Tracker(BaseModel):
             # unravel batch dim
             return list(all_seg_preds)
 
+    def forward_train(self, images_lab, imgs):
+        
+        bsz, n, c, t, h, w = imgs.shape
+        
+        images_lab_gt = [images_lab[:,0,:,i].clone() for i in range(t)]
+        images_lab = [images_lab[:,0,:,i] for i in range(t)]
+        imgs = [imgs[:,0,:,i] for i in range(t)]
+        
+        _, ch = self.dropout2d_lab(images_lab)
+        
+        losses = {}
+        sum_loss, err_maps = self.compute_lphoto(images_lab, images_lab_gt, ch)
+        losses['l1_loss'] = sum_loss
+        
+        return losses
+
+        
 
     def dropout2d_lab(self, arr): # drop same layers for all images
         if not self.training:
@@ -143,3 +160,21 @@ class Memory_Tracker(BaseModel):
             a *= (3 / (3 - drop_ch_num))
 
         return arr, drop_ch_ind # return channels not masked
+    
+    def compute_lphoto(self, image_lab, images_lab_gt, ch):
+        b, c, h, w = image_lab[0].size()
+
+        ref_x = [lab for lab in image_lab[:-1]]   # [im1, im2, im3]
+        ref_y = [rgb[:,ch] for rgb in images_lab_gt[:-1]]  # [y1, y2, y3]
+        tar_x = image_lab[-1]  # im4
+        tar_y = images_lab_gt[-1][:,ch]  # y4
+
+
+        outputs = self.forward_colorization(ref_x, ref_y, tar_x, [0,2], 4)   # only train with pairwise data
+
+        outputs = F.interpolate(outputs, (h, w), mode='bilinear')
+        loss = F.smooth_l1_loss(outputs*20, tar_y*20, reduction='mean')
+
+        err_maps = torch.abs(outputs - tar_y).sum(1).detach()
+
+        return loss, err_maps
