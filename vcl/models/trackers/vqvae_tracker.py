@@ -45,6 +45,7 @@ class Vqvae_Tracker(BaseModel):
                  per_ref=True,
                  mask_radius=-1,
                  temp_window=False,
+                 scaling_att=False,
                  norm=False,
                  pretrained=None
                  ):
@@ -64,6 +65,8 @@ class Vqvae_Tracker(BaseModel):
         self.temperature = temperature
         self.temp_window = temp_window
         self.norm = norm
+        self.scaling_att = scaling_att
+        
         self.logger = get_root_logger()
 
         self.backbone = build_backbone(backbone)
@@ -1573,7 +1576,7 @@ class Vqvae_Tracker_V15(Vqvae_Tracker):
         if self.patch_size != -1:
             _, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
         else:
-            _, att = non_local_attention(tar, refs, per_ref=self.per_ref, temprature=self.temperature, mask=mask)
+            _, att = non_local_attention(tar, refs, per_ref=self.per_ref, temprature=self.temperature, mask=mask, scaling=self.scaling_att)
         
         losses = {}
                 
