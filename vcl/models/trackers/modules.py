@@ -33,7 +33,7 @@ class ResidualBlock(nn.Module):
 
 @BACKBONES.register_module()
 class ResNet18(nn.Module):
-    def __init__(self, in_ch=1, strides=(1,2,1,1), out_indices=(3, )):
+    def __init__(self, in_ch=3, strides=(1,2,1,1), out_indices=(3, )):
         """ A ResNet arch in MAST
 
         Args:
