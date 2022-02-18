@@ -32,6 +32,7 @@ class Vqvae_Tracker(BaseModel):
                  vqvae,
                  patch_size,
                  pretrained_vq,
+                 post_convolution=None,
                  vq_size=32,
                  temperature=1.0,
                  sim_siam_head=None,
@@ -66,6 +67,10 @@ class Vqvae_Tracker(BaseModel):
         self.logger = get_root_logger()
 
         self.backbone = build_backbone(backbone)
+        if post_convolution is not None:
+            self.post_convolution = nn.Conv2d(post_convolution['in_c'], post_convolution['out_c'], post_convolution['ks'], 1, post_convolution['pad'])
+        else:
+            self.post_convolution = None
         if sim_siam_head is not None:
             self.head = build_components(sim_siam_head)
             self.head.init_weights()
@@ -1498,7 +1503,7 @@ class Vqvae_Tracker_V13(Vqvae_Tracker):
     
 @MODELS.register_module()
 class Vqvae_Tracker_V15(Vqvae_Tracker):
-    def __init__(self, vq_sample=True, post_convolution=None, *args, **kwargs):
+    def __init__(self, vq_sample=True, *args, **kwargs):
         """ A video colorization-like vqvae_tracker. Refers to Video Colorization (ECCV 2017)
 
         Args:
@@ -1509,11 +1514,6 @@ class Vqvae_Tracker_V15(Vqvae_Tracker):
         if self.fc:
             self.predictor = nn.Linear(128, self.n_embed)
             self.predictor.weight.data = self.vq_emb.permute(1,0)
-        
-        if post_convolution is not None:
-            self.post_convolution = nn.Conv2d(post_convolution['in_c'], post_convolution['out_c'], post_convolution['ks'], 1, post_convolution['pad'])
-        else:
-            self.post_convolution = None
         
         self.vq_sample = vq_sample
         

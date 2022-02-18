@@ -4,6 +4,7 @@ import tempfile
 import mmcv
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.runner import auto_fp16
 
@@ -32,9 +33,13 @@ class BaseTracker(BaseModel):
         test_cfg (dict): Config for testing. Default: None.
     """
 
-    def __init__(self, backbone, train_cfg=None, test_cfg=None):
+    def __init__(self, backbone, post_convolution=None, train_cfg=None, test_cfg=None):
         super().__init__()
         self.backbone = build_backbone(backbone)
+        if post_convolution is not None:
+            self.post_convolution = nn.Conv2d(post_convolution['in_c'], post_convolution['out_c'], post_convolution['ks'], 1, post_convolution['pad'])
+        else:
+            self.post_convolution = None
 
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
@@ -58,6 +63,11 @@ class BaseTracker(BaseModel):
             torch.tensor: The extracted features.
         """
         x = self.backbone(imgs)
+        
+        if self.post_convolution is not None:
+            if x.shape[1] == self.post_convolution.in_channels:
+                x = self.post_convolution(x)
+        
         return x
 
 

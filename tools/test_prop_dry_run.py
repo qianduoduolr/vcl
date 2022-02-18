@@ -130,7 +130,8 @@ def main():
 
     # build the model and load checkpoint
     if not eval_config.get('mast_prop', False):
-        model = mmcv.ConfigDict(type='VanillaTracker', backbone=cfg.model.backbone)
+        post_convolution = cfg.model.get('post_convolution', None)
+        model = mmcv.ConfigDict(type='VanillaTracker', backbone=cfg.model.backbone, post_convolution=post_convolution)
         model.backbone.out_indices = args.out_indices
         model.backbone.strides = cfg.test_cfg.strides
         if 'torchvision_pretrained' in eval_config:

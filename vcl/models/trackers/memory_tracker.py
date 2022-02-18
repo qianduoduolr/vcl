@@ -20,7 +20,10 @@ from .modules import *
 @MODELS.register_module()
 class Memory_Tracker(BaseModel):
     def __init__(self,
+                 backbone,
+                 post_convolution=dict(in_c=256,out_c=64, ks=3, pad=1),
                  downsample_rate=4,
+                 radius=12,
                  test_cfg=None,
                  train_cfg=None
                  ):
@@ -37,8 +40,8 @@ class Memory_Tracker(BaseModel):
         self.C = 7
 
         # self.backbone = build_backbone(backbone)
-        self.backbone = ResNet18(3)
-        self.post_convolution = nn.Conv2d(256, 64, 3, 1, 1)
+        self.backbone = build_backbone(backbone)
+        self.post_convolution = self.post_convolution = nn.Conv2d(post_convolution['in_c'], post_convolution['out_c'], post_convolution['ks'], 1, post_convolution['pad'])
         self.D = downsample_rate
 
         self.test_cfg = test_cfg
@@ -46,7 +49,7 @@ class Memory_Tracker(BaseModel):
         
         self.test_cfg.ref = 2
 
-        self.R = 12 # radius
+        self.R = radius # radius
 
         self.colorizer = Colorizer(self.D, self.R, self.C)
         
