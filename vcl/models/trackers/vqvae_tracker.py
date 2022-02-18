@@ -1539,14 +1539,12 @@ class Vqvae_Tracker_V15(Vqvae_Tracker):
                 
                 quants = quants.reshape(bsz, t, *quants.shape[-3:])
                 inds = inds.reshape(bsz, t, *inds.shape[-2:])
-                ind_tar = inds[:, -1]
-                ind_ref = inds[:, -2]
-                vq_inds.append([ind_tar, ind_ref])
+                vq_inds.append([inds[:, -1], inds[:, -2]])
                 
                 if self.per_ref:
-                    ind = ind_tar.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
+                    ind = inds[:, -1].unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
                 else:
-                    ind = ind_tar.reshape(-1, 1).long().detach()
+                    ind = inds[:, -1].reshape(-1, 1).long().detach()
                     
                 out_ind.append(ind)
                 out_quant_refs = quants[:, :-1].flatten(3).permute(0, 1, 3, 2)
