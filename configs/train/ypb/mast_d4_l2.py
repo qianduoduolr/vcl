@@ -141,6 +141,7 @@ eval_config= dict(
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
+test_mode = True
 
 
 if __name__ == '__main__':

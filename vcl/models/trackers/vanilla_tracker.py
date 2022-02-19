@@ -38,6 +38,7 @@ class BaseTracker(BaseModel):
         self.backbone = build_backbone(backbone)
         if post_convolution is not None:
             self.post_convolution = nn.Conv2d(post_convolution['in_c'], post_convolution['out_c'], post_convolution['ks'], 1, post_convolution['pad'])
+            self.post_in = post_convolution['in_c']
         else:
             self.post_convolution = None
 
@@ -65,7 +66,7 @@ class BaseTracker(BaseModel):
         x = self.backbone(imgs)
         
         if self.post_convolution is not None:
-            if x.shape[1] == self.post_convolution.in_channels:
+            if x.shape[1] == self.post_in:
                 x = self.post_convolution(x)
         
         return x
