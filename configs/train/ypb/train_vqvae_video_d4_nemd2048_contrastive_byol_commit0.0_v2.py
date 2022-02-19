@@ -11,7 +11,7 @@ docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corres'
 # model settings
 model = dict(
     type='VQCL_v5',
-    backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
+    backbone=dict(type='ResNet', depth=18, strides=(1, 1, 1, 1), out_indices=(3, )),
     sim_siam_head=dict(
         type='SimSiamHead',
         in_channels=128,
