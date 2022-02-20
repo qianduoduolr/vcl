@@ -900,3 +900,28 @@ class VQCL_v6(VQCL_v2):
             p2, z1.detach()) * 0.5
         losses['loss_feat'] = loss_feat * weight
         return losses
+    
+
+
+@MODELS.register_module()
+class VQCL_v7(VQCL_v2):
+
+
+    def forward_train(self, imgs):
+        
+        im_q = imgs[:, 0, 0]
+        im_k = imgs[:, 0, 1]
+
+        q_emb, q = self.backbone(im_q)
+        k_emb, k = self.backbone(im_k)
+
+        bsz, c, _, _ = q.shape
+        
+        quant, diff, ind, embed = self.quantize(q_emb.permute(0, 2, 3, 1).contiguous())
+    
+        losses = {}
+        losses['cts_loss'] = self.forward_img_head(q, k)
+        losses['diff'] = diff * self.commitment_cost
+        
+
+        return losses, diff.item()

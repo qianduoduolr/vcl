@@ -1613,3 +1613,153 @@ class Vqvae_Tracker_V15(Vqvae_Tracker):
             mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
 
         return mask_query_idx
+    
+    
+    
+
+@MODELS.register_module()
+class Vqvae_Tracker_V16(Vqvae_Tracker_V15):
+    '''  Combine with MAST CVPR2020 '''
+    
+    def __init__(self, l1_loss=False, downsample_rate=8, *args, **kwargs):
+        
+        super().__init__(*args, **kwargs)
+        
+        self.downsample_rate = downsample_rate
+        self.l1_loss = l1_loss
+    
+    def prep(self, image):
+        _,c,_,_ = image.size()
+        x = image.float()[:,:,::self.downsample_rate,::self.downsample_rate]
+
+        return x
+        
+    def forward_train(self, imgs, mask_query_idx, frames_mask=None, images_lab=None):
+        
+        bsz, num_clips, t, c, h, w = imgs.shape
+        
+        # use pre-difined query
+        mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1) if self.per_ref else mask_query_idx.bool()
+        
+        images_lab_gt = [images_lab[:,0,i,:].clone() for i in range(t)]
+        images_lab = [images_lab[:,0,i,:] for i in range(t)]
+        _, ch = self.dropout2d_lab(images_lab)
+        
+        # forward to get feature
+        fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        if self.post_convolution is not None:
+            fs = self.post_convolution(fs)
+        if self.norm:
+            fs = F.normalize(fs, dim=1)
+        fs = fs.reshape(bsz, t, *fs.shape[-3:])
+        tar, refs = fs[:, -1], fs[:, :-1]
+        
+        # get correlation attention map
+        if frames_mask is not None:
+            mask = frames_mask[:,:-1,None].flatten(3)
+        else:
+            mask = self.mask if self.temp_window else None
+            
+        if self.patch_size != -1:
+            _, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
+        else:
+            _, att = non_local_attention(tar, refs, per_ref=self.per_ref, temprature=self.temperature, mask=mask, scaling=self.scaling_att)
+        
+        
+        losses = {}
+        
+        # for mast l1_loss
+        if self.l1_loss:
+            ref_gt = [self.prep(gt[:,ch]) for gt in images_lab_gt[:-1]]
+            outputs = frame_transform(att, ref_gt, flatten=False)
+            outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, *fs.shape[-2:])     
+            losses['l1_loss'], _ = self.compute_lphoto(images_lab_gt, ch, outputs)
+        
+        # for ce_loss
+        if self.ce_loss:
+            # vqvae tokenize for query frame
+            with torch.no_grad():
+                out_ind= []
+                out_quants = []
+                vq_inds = []
+                for i in range(self.num_head):
+                    i = str(i).replace('0', '')
+                    vqvae = getattr(self, f'vqvae{i}')
+                    vq_enc = getattr(self, f'vq_enc{i}')
+                    vqvae.eval()
+                    emb, quants, _, inds, _ = vq_enc(imgs.flatten(0,2))
+                    
+                    quants = quants.reshape(bsz, t, *quants.shape[-3:])
+                    inds = inds.reshape(bsz, t, *inds.shape[-2:])
+                    vq_inds.append([inds[:, -1], inds[:, -2]])
+                    
+                    if self.per_ref:
+                        ind = inds[:, -1].unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
+                    else:
+                        ind = inds[:, -1].reshape(-1, 1).long().detach()
+                        
+                    out_ind.append(ind)
+                    out_quant_refs = quants[:, :-1].flatten(3).permute(0, 1, 3, 2)
+                    out_quants.append(out_quant_refs)
+            
+            
+            for idx, i in enumerate(range(self.num_head)):                
+                i = str(i).replace('0', '')
+                
+                # change query if use vq sample
+                if self.vq_sample:
+                    mask_query_idx = self.query_vq_sample(vq_inds[idx][0], vq_inds[idx][1], t, self.mask, self.per_ref)
+                
+                out = frame_transform(att, out_quants[idx], per_ref=self.per_ref)
+                
+                if self.fc:
+                    predict = getattr(self, f'predictor{i}')(out)
+                else:
+                    vq_emb = getattr(self, f'vq_emb{i}')
+                    out = F.normalize(out, dim=-1)
+                    vq_emb = F.normalize(vq_emb, dim=0)
+                    predict = torch.mm(out, vq_emb)
+                    # predict = torch.div(predict, 0.1) # temperature is set to 0.1
+                    
+                loss = self.ce_loss(predict, out_ind[idx])
+                losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
+                    
+        return losses
+    
+    @staticmethod
+    def query_vq_sample(ind_tar, ind_ref, t, mask, per_ref):
+        # determined query
+        ind_tar = ind_tar.flatten(1).unsqueeze(-1).repeat(1,1,ind_tar.shape[-1] * ind_tar.shape[-2])
+        ind_ref = ind_ref.flatten(1).unsqueeze(1).repeat(1,ind_ref.shape[-1] * ind_ref.shape[-2],1)
+        mask_query_idx = ((ind_tar == ind_ref) * mask.unsqueeze(0)).sum(-1)
+        mask_query_idx = (mask_query_idx > 0)
+        if per_ref:
+            mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
+
+        return mask_query_idx
+    
+    def dropout2d_lab(self, arr): # drop same layers for all images
+        if not self.training:
+            return arr
+
+        drop_ch_num = int(np.random.choice(np.arange(1, 2), 1))
+        drop_ch_ind = np.random.choice(np.arange(1,3), drop_ch_num, replace=False)
+
+        for a in arr:
+            for dropout_ch in drop_ch_ind:
+                a[:, dropout_ch] = 0
+            a *= (3 / (3 - drop_ch_num))
+
+        return arr, drop_ch_ind # return channels not masked
+    
+    def compute_lphoto(self, images_lab_gt, ch, outputs):
+        b, c, h, w = images_lab_gt[0].size()
+
+        tar_y = images_lab_gt[-1][:,ch]  # y4
+
+        outputs = F.interpolate(outputs, (h, w), mode='bilinear')
+        loss = F.smooth_l1_loss(outputs*20, tar_y*20, reduction='mean')
+
+        err_maps = torch.abs(outputs - tar_y).sum(1).detach()
+
+        return loss, err_maps

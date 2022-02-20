@@ -352,6 +352,7 @@ class ResNet(nn.Module):
                  strides=(1, 2, 2, 2),
                  dilations=(1, 1, 1, 1),
                  out_indices=(3, ),
+                 planes_custom=None,
                  style='pytorch',
                  frozen_stages=-1,
                  conv_cfg=dict(type='Conv'),
@@ -396,7 +397,10 @@ class ResNet(nn.Module):
         for i, num_blocks in enumerate(self.stage_blocks):
             stride = strides[i]
             dilation = dilations[i]
-            planes = 64 * 2**i
+            if planes_custom is not None:
+                planes = planes_custom[i]
+            else:
+                planes = 64 * 2**i
             res_layer = make_res_layer(
                 self.block,
                 self.inplanes,
