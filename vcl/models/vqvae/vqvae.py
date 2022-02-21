@@ -921,7 +921,7 @@ class VQCL_v7(VQCL_v2):
     
         losses = {}
         losses['cts_loss'] = self.forward_img_head(q, k)
-        losses['diff'] = diff * self.commitment_cost
+        losses['diff_loss'] = diff * self.commitment_cost
         
 
         return losses, diff.item()
