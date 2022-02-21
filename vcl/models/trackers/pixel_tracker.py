@@ -28,13 +28,13 @@ class Pixel_Tracker(BaseModel):
                  backbone,
                  temperature,
                  thres=0.9,
-                 radius=[2,2,3,5,5],
+                 radius=[2,2,3,5],
                  cts_loss=None,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None
                  ):
-        """ Space-Time Memory Network for Video Object Segmentation
+        """ Mining examples in CVPR2021
 
         Args:
             depth ([type]): ResNet depth for encoder
@@ -47,6 +47,7 @@ class Pixel_Tracker(BaseModel):
         self.backbone = build_backbone(backbone)
         self.sinkhorn = SinkhornDistance(eps=0.01, max_iter=30, reduction=None)
         self.masks = self.make_mask(32, radius).cuda()
+        self.cts_loss = build_loss(cts_loss)
         self.THRES = thres
 
 
@@ -65,8 +66,15 @@ class Pixel_Tracker(BaseModel):
         # C = Ts * 1
 
         losses= {}
-        sim = 1 - affs
-        losses['rec_loss'] = (sim * C).sum() / (C.sum() + 1e-3)
+        pos_logit = (affs * C).sum(-1, keepdim=True)
+        neg_logit = (affs * (1 - C))
+        logit = torch.cat([pos_logit, neg_logit], dim=-1).flatten(0,2).div(0.05)
+        label = torch.zeros((logit.shape[0],1)).long().cuda()
+        loss = self.cts_loss(logit, label)  
+        C_ = (C.sum(-1) > 0).view(-1)
+        # print((C.sum(-1) > 1).sum())
+        losses['cts_loss'] = ( C_ * loss ).sum() / (C_.sum() + 1e-3 )  
+        # losses['rec_loss'] = (sim * C).sum() / (C.sum() + 1e-3)
         # print(losses['rec_loss'].item(), C.max())
 
         return losses
