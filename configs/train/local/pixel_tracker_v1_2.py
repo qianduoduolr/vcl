@@ -3,14 +3,14 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'pixel_tracker_v1'
+exp_name = 'pixel_tracker_v1_2'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
     type='Pixel_Tracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
-    thres=0.95,
+    thres=0.9,
     temperature=1.0,
     cts_loss=dict(type='Ce_Loss',reduction='none'),
 )

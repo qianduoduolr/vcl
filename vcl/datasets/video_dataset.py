@@ -54,7 +54,7 @@ class Video_dataset_base(BaseDataset):
         frame_list_all = []
         for offset in offsets:
             for idx in range(clip_length):
-                frame_path = frames_path[offset + idx]
+                frame_path = frames_path[offset + idx * step]
                 frame = mmcv.imread(frame_path, backend=backend, flag=flag, channel_order='rgb')
                 frame_list_all.append(frame)
         return frame_list_all
@@ -65,7 +65,7 @@ class Video_dataset_base(BaseDataset):
         for offset in offsets:
             frame_list = []
             for idx in range(clip_length):
-                frame_path = frames_path[offset + idx]
+                frame_path = frames_path[offset + idx * step]
                 frame = mmcv.imread(frame_path, backend=backend, flag=flag, channel_order='rgb')
                 frame_list.append(frame)
             frame_list_all.append(frame_list)

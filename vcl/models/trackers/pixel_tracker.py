@@ -45,7 +45,7 @@ class Pixel_Tracker(BaseModel):
         """
         super().__init__()
         self.backbone = build_backbone(backbone)
-        self.sinkhorn = SinkhornDistance(eps=0.01, max_iter=30, reduction=None)
+        self.sinkhorn = SinkhornDistance(eps=0.05, max_iter=30, reduction=None)
         self.masks = self.make_mask(32, radius).cuda()
         self.cts_loss = build_loss(cts_loss)
         self.THRES = thres
