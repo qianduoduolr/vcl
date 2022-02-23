@@ -181,3 +181,169 @@ class Memory_Tracker(BaseModel):
         err_maps = torch.abs(outputs - tar_y).sum(1).detach()
 
         return loss, err_maps
+    
+    
+
+@MODELS.register_module()
+class Memory_Tracker_Custom(BaseModel):
+    def __init__(self,
+                 backbone,
+                 post_convolution=None,
+                 downsample_rate=4,
+                 radius=12,
+                 feat_size=64,
+                 test_cfg=None,
+                 train_cfg=None
+                 ):
+        """ MAST  (CVPR2020)
+
+        Args:
+            backbone ([type]): [description]
+            test_cfg ([type], optional): [description]. Defaults to None.
+            train_cfg ([type], optional): [description]. Defaults to None.
+        """
+        super().__init__()
+
+        self.backbone = build_backbone(backbone)
+        self.downsample_rate = downsample_rate
+        if post_convolution is not None:
+            self.post_convolution =  nn.Conv2d(post_convolution['in_c'], post_convolution['out_c'], post_convolution['ks'], 1, post_convolution['pad'])
+
+        self.test_cfg = test_cfg
+        self.train_cfg = train_cfg
+        
+        self.mask = make_mask(feat_size, radius)
+        
+
+        self.R = radius # radius
+
+
+    def forward_train(self, imgs, images_lab=None):
+            
+        bsz, num_clips, t, c, h, w = imgs.shape
+        
+        images_lab_gt = [images_lab[:,0,i,:].clone() for i in range(t)]
+        images_lab = [images_lab[:,0,i,:] for i in range(t)]
+        _, ch = self.dropout2d_lab(images_lab)
+        
+        # forward to get feature
+        fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        if self.post_convolution is not None:
+            fs = self.post_convolution(fs)
+        if self.norm:
+            fs = F.normalize(fs, dim=1)
+        fs = fs.reshape(bsz, t, *fs.shape[-3:])
+        tar, refs = fs[:, -1], fs[:, :-1]
+        
+        # get correlation attention map            
+        if self.patch_size != -1:
+            _, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
+        else:
+            _, att = non_local_attention(tar, refs, per_ref=self.per_ref, temprature=self.temperature, mask=self.mask, scaling=self.scaling_att)
+        
+        
+        losses = {}
+        
+        # for mast l1_loss
+        ref_gt = [self.prep(gt[:,ch]) for gt in images_lab_gt[:-1]]
+        outputs = frame_transform(att, ref_gt, flatten=False)
+        outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, *fs.shape[-2:])     
+        losses['l1_loss'], _ = self.compute_lphoto(images_lab_gt, ch, outputs)
+        
+        return losses
+        
+    
+    def dropout2d_lab(self, arr): # drop same layers for all images
+        if not self.training:
+            return arr
+
+        drop_ch_num = int(np.random.choice(np.arange(1, 2), 1))
+        drop_ch_ind = np.random.choice(np.arange(1,3), drop_ch_num, replace=False)
+
+        for a in arr:
+            for dropout_ch in drop_ch_ind:
+                a[:, dropout_ch] = 0
+            a *= (3 / (3 - drop_ch_num))
+
+        return arr, drop_ch_ind # return channels not masked
+    
+    def compute_lphoto(self, images_lab_gt, ch, outputs):
+        b, c, h, w = images_lab_gt[0].size()
+
+        tar_y = images_lab_gt[-1][:,ch]  # y4
+
+        outputs = F.interpolate(outputs, (h, w), mode='bilinear')
+        loss = F.smooth_l1_loss(outputs*20, tar_y*20, reduction='mean')
+
+        err_maps = torch.abs(outputs - tar_y).sum(1).detach()
+
+        return loss, err_maps
+    
+    def prep(self, image):
+        _,c,_,_ = image.size()
+        x = image.float()[:,:,::self.downsample_rate,::self.downsample_rate]
+
+        return x
+    
+    
+@MODELS.register_module()
+class Memory_Tracker_Custom_Pyramid(Memory_Tracker_Custom):
+    def __init__(self,
+                num_stage=2,
+                feat_size=[64, 32],
+                radius=[12, 6],
+                downsample_rate=[4, 8],
+                *args,
+                **kwargs
+                 ):
+        """ MAST  (CVPR2020)
+
+        Args:
+            backbone ([type]): [description]
+            test_cfg ([type], optional): [description]. Defaults to None.
+            train_cfg ([type], optional): [description]. Defaults to None.
+        """
+        super().__init__(*args, **kwargs)
+        
+        self.num_stage = num_stage
+        self.feat_size = feat_size
+        self.downsample_rate = downsample_rate
+
+
+        self.mask = [ make_mask(feat_size[i], radius[i]) for i in range(len(radius)) ]
+
+    def forward_train(self, imgs, images_lab=None):
+            
+        bsz, num_clips, t, c, h, w = imgs.shape
+        
+        images_lab_gt = [images_lab[:,0,i,:].clone() for i in range(t)]
+        images_lab = [images_lab[:,0,i,:] for i in range(t)]
+        _, ch = self.dropout2d_lab(images_lab)
+        
+        # forward to get feature
+        fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        fs = [f.reshape(bsz, t, *f.shape[-3:]) for f in fs]
+        
+        tar_pyramid, refs_pyramid = [f[:, -1] for f in fs], [ f[:, :-1] for f in fs]
+        
+        losses = {}
+        
+        
+        for idx, (tar, refs) in enumerate(zip(tar_pyramid, refs_pyramid)):
+            # get correlation attention map            
+            _, att = non_local_attention(tar, refs, mask=self.mask[idx], scaling=True)            
+            # for mast l1_loss
+            ref_gt = [self.prep(gt[:,ch], downsample_rate=self.downsample_rate[idx]) for gt in images_lab_gt[:-1]]
+            outputs = frame_transform(att, ref_gt, flatten=False)
+            outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, self.feat_size[idx], self.feat_size[idx])     
+            losses[f'stage{idx}_l1_loss'], _ = self.compute_lphoto(images_lab_gt, ch, outputs)
+        
+        return losses
+    
+    def prep(self, image, downsample_rate):
+        _,c,_,_ = image.size()
+        x = image.float()[:,:,::downsample_rate,::downsample_rate]
+
+        return x
+
+
