@@ -41,7 +41,7 @@ class Memory_Tracker(BaseModel):
 
         # self.backbone = build_backbone(backbone)
         self.backbone = build_backbone(backbone)
-        self.post_convolution = self.post_convolution = nn.Conv2d(post_convolution['in_c'], post_convolution['out_c'], post_convolution['ks'], 1, post_convolution['pad'])
+        self.post_convolution = nn.Conv2d(post_convolution['in_c'], post_convolution['out_c'], post_convolution['ks'], 1, post_convolution['pad'])
         self.D = downsample_rate
 
         self.test_cfg = test_cfg
@@ -230,16 +230,11 @@ class Memory_Tracker_Custom(BaseModel):
         fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
         if self.post_convolution is not None:
             fs = self.post_convolution(fs)
-        if self.norm:
-            fs = F.normalize(fs, dim=1)
-        fs = fs.reshape(bsz, t, *fs.shape[-3:])
+
         tar, refs = fs[:, -1], fs[:, :-1]
         
         # get correlation attention map            
-        if self.patch_size != -1:
-            _, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
-        else:
-            _, att = non_local_attention(tar, refs, per_ref=self.per_ref, temprature=self.temperature, mask=self.mask, scaling=self.scaling_att)
+        _, att = non_local_attention(tar, refs, mask=self.mask, scaling=True)
         
         
         losses = {}
