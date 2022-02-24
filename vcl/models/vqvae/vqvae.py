@@ -925,3 +925,36 @@ class VQCL_v7(VQCL_v2):
         
 
         return losses, diff.item()
+    
+
+
+
+@MODELS.register_module()
+class VQCL_v8(VQCL_v2):
+    """V2
+    """
+    def forward_train(self, imgs):
+        
+        im_q = imgs[:, 0, 0]
+        im_k = imgs[:, 0, 1]
+
+        q = self.backbone(im_q)
+        k = self.backbone(im_k)
+
+        bsz, c, _, _ = q.shape
+
+        if c != self.embed_dim:
+            q_emb = self.quantize_conv(q)
+            k_emb = self.quantize_conv(k)
+        else:
+            q_emb = q
+            k_emb = k
+        
+        quant, diff, ind, embed = self.quantize(q_emb.permute(0, 2, 3, 1).contiguous())
+    
+        losses = {}
+        losses['cts_loss'] = self.forward_img_head(q_emb, k_emb)
+        losses['diff_loss'] = diff * self.commitment_cost
+        
+
+        return losses, diff.item()
