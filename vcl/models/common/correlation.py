@@ -50,7 +50,8 @@ def non_local_attention(tar, refs, per_ref=True, flatten=True, temprature=1.0, m
         att = att / torch.sqrt(torch.tensor(feat_dim).float()) 
 
     if mask is not None:
-        att *= mask
+        # att *= mask
+        att.masked_fill_(~mask.bool(), float('-inf'))
     
     if per_ref:
         # return att for each ref
