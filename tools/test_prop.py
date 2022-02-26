@@ -133,6 +133,8 @@ def main():
         model = mmcv.ConfigDict(type='VanillaTracker', backbone=cfg.model.backbone, post_convolution=post_convolution)
         model.backbone.out_indices = args.out_indices
         model.backbone.strides = cfg.test_cfg.strides
+        if cfg.test_cfg.get('dilations', False):
+            model.backbone.dilations = cfg.test_cfg.dilations
         
         if 'torchvision_pretrained' in eval_config:
             model.backbone.pretrained = eval_config['torchvision_pretrained']
