@@ -34,9 +34,9 @@ test_cfg = dict(
     precede_frames=20,
     topk=10,
     temperature=0.07,
-    strides=(1, 2, 1, 1),
+    strides=(1, 1, 1, 1),
     out_indices=(3, ),
-    neighbor_range=24,
+    neighbor_range=48,
     with_first=True,
     with_first_neighbor=True,
     output_dir='eval_results')
@@ -154,6 +154,7 @@ eval_config= dict(
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
+test_mode = True
 
 
 if __name__ == '__main__':
