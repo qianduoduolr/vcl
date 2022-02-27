@@ -244,6 +244,7 @@ class Memory_Tracker_Custom(BaseModel):
         outputs = frame_transform(att, ref_gt, flatten=False)
         outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, *fs.shape[-2:])     
         losses['l1_loss'], _ = self.compute_lphoto(images_lab_gt, ch, outputs)
+    
         
         return losses
         
@@ -274,8 +275,9 @@ class Memory_Tracker_Custom(BaseModel):
 
         return loss, err_maps
     
-    def prep(self, image):
+    def prep(self, image, mode='default'):
         _,c,_,_ = image.size()
+
         x = image.float()[:,:,::self.downsample_rate,::self.downsample_rate]
 
         return x

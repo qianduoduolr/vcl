@@ -1617,17 +1617,22 @@ class Vqvae_Tracker_V15(Vqvae_Tracker):
 class Vqvae_Tracker_V16(Vqvae_Tracker_V15):
     '''  Combine with MAST CVPR2020 '''
     
-    def __init__(self, l1_loss=False, downsample_rate=8, *args, **kwargs):
+    def __init__(self, l1_loss=False, downsample_rate=8, downsample_mode='default', *args, **kwargs):
         
         super().__init__(*args, **kwargs)
         
         self.downsample_rate = downsample_rate
         self.l1_loss = l1_loss
+        self.downsample_mode = downsample_mode
     
-    def prep(self, image):
-        _,c,_,_ = image.size()
-        x = image.float()[:,:,::self.downsample_rate,::self.downsample_rate]
-
+    def prep(self, image, mode='default'):
+        bsz,c,_,_ = image.size()
+        if mode == 'default':
+            x = image.float()[:,:,::self.downsample_rate,::self.downsample_rate]
+        elif mode == 'unfold':
+            x = F.unfold(image, self.downsample_rate+1, padding=self.downsample_rate//2)
+            x = x.reshape(bsz, -1, *image.shape[-2:]).mean(1, keepdim=True)
+            x = x.float()[:,:,::self.downsample_rate,::self.downsample_rate]
         return x
         
     def forward_train(self, imgs, mask_query_idx, frames_mask=None, images_lab=None):
@@ -1666,7 +1671,7 @@ class Vqvae_Tracker_V16(Vqvae_Tracker_V15):
         
         # for mast l1_loss
         if self.l1_loss:
-            ref_gt = [self.prep(gt[:,ch]) for gt in images_lab_gt[:-1]]
+            ref_gt = [self.prep(gt[:,ch], mode=self.downsample_mode) for gt in images_lab_gt[:-1]]
             outputs = frame_transform(att, ref_gt, flatten=False)
             outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, *fs.shape[-2:])     
             losses['l1_loss'], _ = self.compute_lphoto(images_lab_gt, ch, outputs)
@@ -1751,9 +1756,12 @@ class Vqvae_Tracker_V16(Vqvae_Tracker_V15):
     def compute_lphoto(self, images_lab_gt, ch, outputs):
         b, c, h, w = images_lab_gt[0].size()
 
-        tar_y = images_lab_gt[-1][:,ch]  # y4
-
-        outputs = F.interpolate(outputs, (h, w), mode='bilinear')
+        if self.downsample_mode == 'default':
+            tar_y = images_lab_gt[-1][:,ch]  # y4
+            outputs = F.interpolate(outputs, (h, w), mode='bilinear')
+        else:
+            tar_y = self.prep(images_lab_gt[-1][:,ch], mode=self.downsample_mode)
+        
         loss = F.smooth_l1_loss(outputs*20, tar_y*20, reduction='mean')
 
         err_maps = torch.abs(outputs - tar_y).sum(1).detach()

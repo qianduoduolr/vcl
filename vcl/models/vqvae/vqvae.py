@@ -907,7 +907,7 @@ class VQCL_v6(VQCL_v2):
 class VQCL_v7(VQCL_v2):
 
 
-    def forward_train(self, imgs):
+    def forward_train(self, imgs): 
         
         im_q = imgs[:, 0, 0]
         im_k = imgs[:, 0, 1]
@@ -958,3 +958,5 @@ class VQCL_v8(VQCL_v2):
         
 
         return losses, diff.item()
+    
+    
