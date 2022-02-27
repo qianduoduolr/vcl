@@ -1,3 +1,4 @@
+from base64 import encode
 import mmcv
 from mmcv.runner import auto_fp16, load_checkpoint
 from dall_e  import map_pixels, unmap_pixels, load_model
@@ -514,8 +515,14 @@ class VQCL_v2(BaseModel):
         """
         # Encoding
         enc = self.backbone(x)
+        
+        bsz, c, _, _ = enc.shape
+        
+        if c != self.embed_dim:
+            q_emb = self.quantize_conv(enc).permute(0, 2, 3, 1)
+        else:
+            q_emb = enc.permute(0, 2, 3, 1)
 
-        q_emb = self.quantize_conv(enc).permute(0, 2, 3, 1)
         quant, diff, ind, embed = self.quantize(q_emb.contiguous())
 
         # Converting back the quantized map to B x C x H x W
