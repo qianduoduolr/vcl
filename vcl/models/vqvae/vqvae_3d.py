@@ -21,7 +21,8 @@ import torch.nn as nn
 import torch
 import torch.nn.functional as F
 from ..components import MultiHeadAttention
-from ...utils import shift_dim
+from vcl.models.common.utils import shift_dim
+
 
 @MODELS.register_module()
 class VQVAE_3D(BaseModel):

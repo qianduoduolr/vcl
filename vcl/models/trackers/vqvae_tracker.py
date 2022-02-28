@@ -2,14 +2,15 @@
 import numbers
 import os.path as osp
 from collections import *
+from tkinter.tix import Tree
 
 import mmcv
 from mmcv.runner import auto_fp16, load_checkpoint
-from dall_e  import map_pixels, unmap_pixels, load_model
 from vcl.models.common.correlation import frame_transform
 
 from vcl.models.losses.losses import Ce_Loss
 from vcl.models.common.correlation import *
+from vcl.models.common.utils import  *
 
 from ..base import BaseModel
 from ..builder import build_backbone, build_loss, build_components, build_model
@@ -131,6 +132,7 @@ class Vqvae_Tracker(BaseModel):
             
     def init_weights(self, pretrained):
         
+        self.backbone.init_weights()
         if pretrained:
             _ = load_checkpoint(self, pretrained, map_location='cpu')
             self.logger.info('load pretrained model successfully')
@@ -1617,13 +1619,14 @@ class Vqvae_Tracker_V15(Vqvae_Tracker):
 class Vqvae_Tracker_V16(Vqvae_Tracker_V15):
     '''  Combine with MAST CVPR2020 '''
     
-    def __init__(self, l1_loss=False, downsample_rate=8, downsample_mode='default', *args, **kwargs):
+    def __init__(self, l1_loss=False, downsample_rate=8, downsample_mode='default', use_quant=True, *args, **kwargs):
         
         super().__init__(*args, **kwargs)
         
         self.downsample_rate = downsample_rate
         self.l1_loss = l1_loss
         self.downsample_mode = downsample_mode
+        self.use_quant = use_quant
     
     def prep(self, image, mode='default'):
         bsz,c,_,_ = image.size()
@@ -1681,16 +1684,24 @@ class Vqvae_Tracker_V16(Vqvae_Tracker_V15):
             # vqvae tokenize for query frame
             with torch.no_grad():
                 out_ind= []
-                out_quants = []
+                outs = []
                 vq_inds = []
                 for i in range(self.num_head):
                     i = str(i).replace('0', '')
                     vqvae = getattr(self, f'vqvae{i}')
                     vq_enc = getattr(self, f'vq_enc{i}')
                     vqvae.eval()
-                    emb, quants, _, inds, _ = vq_enc(imgs.flatten(0,2))
+                    encs, quants, _, inds, _ = vq_enc(imgs.flatten(0,2))
                     
-                    quants = quants.reshape(bsz, t, *quants.shape[-3:])
+                    if self.use_quant:
+                        quants = quants.reshape(bsz, t, *quants.shape[-3:])
+                        out_quant_refs = quants[:, :-1].flatten(3).permute(0, 1, 3, 2)
+                        outs.append(out_quant_refs)
+                    else:
+                        encs = encs.reshape(bsz, t, *encs.shape[-3:])
+                        out_enc_refs = encs[:, :-1].flatten(3).permute(0, 1, 3, 2)
+                        outs.append(out_enc_refs)
+                    
                     inds = inds.reshape(bsz, t, *inds.shape[-2:])
                     vq_inds.append([inds[:, -1], inds[:, -2]])
                     
@@ -1700,9 +1711,7 @@ class Vqvae_Tracker_V16(Vqvae_Tracker_V15):
                         ind = inds[:, -1].reshape(-1, 1).long().detach()
                         
                     out_ind.append(ind)
-                    out_quant_refs = quants[:, :-1].flatten(3).permute(0, 1, 3, 2)
-                    out_quants.append(out_quant_refs)
-            
+
             
             for idx, i in enumerate(range(self.num_head)):                
                 i = str(i).replace('0', '')
@@ -1711,7 +1720,7 @@ class Vqvae_Tracker_V16(Vqvae_Tracker_V15):
                 if self.vq_sample:
                     mask_query_idx = self.query_vq_sample(vq_inds[idx][0], vq_inds[idx][1], t, self.mask, self.per_ref)
                 
-                out = frame_transform(att, out_quants[idx], per_ref=self.per_ref)
+                out = frame_transform(att, outs[idx], per_ref=self.per_ref)
                 
                 if self.fc:
                     predict = getattr(self, f'predictor{i}')(out)

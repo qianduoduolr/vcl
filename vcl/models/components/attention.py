@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
-from ...utils import shift_dim, view_range, tensor_slice
+from vcl.models.common.utils import shift_dim, view_range, tensor_slice
 
 
 class AttentionStack(nn.Module):

@@ -4,16 +4,16 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'train_vqvae_video_d4_nemd2048_contrastive_byol_commit0.0_v3_kinetics'
+exp_name = 'train_vqvae_video_d4_nemd2048_contrastive_byol_commit0.0_v2_kinetics'
 docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corres'
 
 # model settings
 model = dict(
-    type='VQCL_v6',
-    backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
+    type='VQCL_v7',
+    backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(2, 3), pretrained='/home/lr/models/ssl/vcl/vfs_pretrain/r18_nc_sgd_cos_100e_r2_1xNx8_k400-db1a4c0d.pth'),
     sim_siam_head=dict(
         type='SimSiamHead',
-        in_channels=128,
+        in_channels=512,
         # norm_cfg=dict(type='SyncBN'),
         num_projection_fcs=3,
         projection_mid_channels=128,
@@ -22,13 +22,11 @@ model = dict(
         predictor_mid_channels=128,
         predictor_out_channels=128,
         with_norm=True,
-        spatial_type='avg',
-    ),
-    loss=dict(type='CosineSimLoss', negative=False, reduction='none'),
-    loss_feat=dict(type='CosineSimLoss', negative=False, reduction='mean'),
-    embed_dim=128,
+        spatial_type='avg'),
+    loss=dict(type='CosineSimLoss', negative=False),
+    embed_dim=256,
     n_embed=2048,
-    commitment_cost=0.0,
+    commitment_cost=1.0,
 )
 
 # model training and testing settings
@@ -57,12 +55,21 @@ img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
 
 train_pipeline = [
-    dict(type='RandomResizedCrop', area_range=(0.2,1.0), same_across_clip=False,
+    dict(type='RandomResizedCrop', area_range=(0.2,1.0), aspect_ratio_range=(1.5, 2.0), same_across_clip=False,
         same_on_clip=False),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
     dict(type='Flip', flip_ratio=0.5, same_across_clip=False, same_on_clip=False),
+    # dict(
+    #     type='ColorJitter',
+    #     brightness=0.5,
+    #     contrast=0.5,
+    #     saturation=0.5,
+    #     hue=0.1,
+    #     p=0.8,
+    #     same_across_clip=False,
+    #     same_on_clip=False),
     dict(type='Normalize', **img_norm_cfg),
-    dict(type='FormatShape', input_format='NCTHW'),
+    dict(type='FormatShape', input_format='NPTCHW'),
     dict(type='Collect', keys=['imgs'], meta_keys=[]),
     dict(type='ToTensor', keys=['imgs'])
 ]
@@ -82,7 +89,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=4, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=16, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -93,7 +100,7 @@ data = dict(
             root='/home/lr/dataset/Kinetics/Kinetics_t30_s256/data',
             list_path='/home/lr/dataset/Kinetics/Kinetics_t30_s256',
             clip_length=1,
-            num_clips=8,
+            num_clips=2,
             pipeline=train_pipeline,
             temporal_sampling_mode='distant'
             ),
@@ -109,7 +116,7 @@ data = dict(
 )
 
 # optimizer
-optimizers = dict(type='SGD', lr=0.05, momentum=0.9, weight_decay=0.0001)
+optimizers = dict(type='SGD', lr=0.00, momentum=0.9, weight_decay=0.0001)
 
 # learning policy
 # total_iters = 200000

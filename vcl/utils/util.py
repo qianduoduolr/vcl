@@ -14,6 +14,9 @@ from shutil import get_terminal_size
 import mmcv
 from PIL import Image
 import copy
+import matplotlib.pyplot as plt
+from vcl.models.common.correlation import *
+
 
 def show_cam_on_image(img, mask):
     heatmap = cv2.applyColorMap(np.uint8(mask), cv2.COLORMAP_JET)
@@ -171,73 +174,6 @@ def make_local_config(exp_name):
         f.write(config_data)
 
 
-@torch.no_grad()
-def concat_all_gather(tensor):
-    """
-    Performs all_gather operation on the provided tensors.
-    *** Warning ***: torch.distributed.all_gather has no gradient.
-    """
-    tensors_gather = [torch.ones_like(tensor)
-        for _ in range(torch.distributed.get_world_size())]
-    torch.distributed.all_gather(tensors_gather, tensor, async_op=False)
-
-    output = torch.cat(tensors_gather, dim=0)
-    return output
-
-def shift_dim(x, src_dim=-1, dest_dim=-1, make_contiguous=True):
-    n_dims = len(x.shape)
-    if src_dim < 0:
-        src_dim = n_dims + src_dim
-    if dest_dim < 0:
-        dest_dim = n_dims + dest_dim
-
-    assert 0 <= src_dim < n_dims and 0 <= dest_dim < n_dims
-
-    dims = list(range(n_dims))
-    del dims[src_dim]
-
-    permutation = []
-    ctr = 0
-    for i in range(n_dims):
-        if i == dest_dim:
-            permutation.append(src_dim)
-        else:
-            permutation.append(dims[ctr])
-            ctr += 1
-    x = x.permute(permutation)
-    if make_contiguous:
-        x = x.contiguous()
-    return x
-
-
-def view_range(x, i, j, shape):
-    shape = tuple(shape)
-
-    n_dims = len(x.shape)
-    if i < 0:
-        i = n_dims + i
-
-    if j is None:
-        j = n_dims
-    elif j < 0:
-        j = n_dims + j
-
-    assert 0 <= i < j <= n_dims
-
-    x_shape = x.shape
-    target_shape = x_shape[:i] + shape + x_shape[j:]
-    return x.view(target_shape)
-
-    
-def tensor_slice(x, begin, size):
-    assert all([b >= 0 for b in begin])
-    size = [l - b if s == -1 else s
-            for s, b, l in zip(size, begin, x.shape)]
-    assert all([s >= 0 for s in size])
-
-    slices = [slice(b, b + s) for b, s in zip(begin, size)]
-    return x[slices]
-
 
 def PCA_numpy(X, embed_dim):
     bsz, c, h, w = X.shape
@@ -271,21 +207,6 @@ def PCA_torch_v2(X, embed_dim):
     return X.permute(0, 2, 1).reshape(bsz, embed_dim, h, w)
 
 
-def make_mask(size, t_size, eq=True):
-    masks = []
-    for i in range(size):
-        for j in range(size):
-            mask = torch.zeros((size, size)).cuda()
-            if eq:
-                mask[max(0, i-t_size):min(size, i+t_size+1), max(0, j-t_size):min(size, j+t_size+1)] = 1
-            else:
-                mask[max(0, i-t_size):min(size, i+t_size+1), max(0, j-t_size):min(size, j+t_size+1)] = 0.7
-                mask[i,j] = 1
-                
-            masks.append(mask.reshape(-1))
-    return torch.stack(masks)
-
-
 def video2images(imgs):
     batches, channels, clip_len = imgs.shape[:3]
     if clip_len == 1:
@@ -308,85 +229,6 @@ def images2video(imgs, clip_len):
     return new_imgs
 
 
-def gaussian(window_size, sigma):
-    def gauss_fcn(x):
-        return -(x - window_size // 2)**2 / float(2 * sigma**2)
-    gauss = torch.stack(
-        [torch.exp(torch.tensor(gauss_fcn(x))) for x in range(window_size)])
-    return gauss / gauss.sum()
-
-
-def get_gaussian_kernel(ksize: int, sigma: float) -> torch.Tensor:
-    r"""Function that returns Gaussian filter coefficients.
-
-    Args:
-        ksize (int): filter size. It should be odd and positive.
-        sigma (float): gaussian standard deviation.
-
-    Returns:
-        Tensor: 1D tensor with gaussian filter coefficients.
-
-    Shape:
-        - Output: :math:`(ksize,)`
-
-    Examples::
-
-        >>> tgm.image.get_gaussian_kernel(3, 2.5)
-        tensor([0.3243, 0.3513, 0.3243])
-
-        >>> tgm.image.get_gaussian_kernel(5, 1.5)
-        tensor([0.1201, 0.2339, 0.2921, 0.2339, 0.1201])
-    """
-    if not isinstance(ksize, int) or ksize % 2 == 0 or ksize <= 0:
-        raise TypeError("ksize must be an odd positive integer. Got {}"
-                        .format(ksize))
-    window_1d: torch.Tensor = gaussian(ksize, sigma)
-    return window_1d
-
-
-
-def get_gaussian_kernel2d(ksize, sigma) -> torch.Tensor:
-    r"""Function that returns Gaussian filter matrix coefficients.
-
-    Args:
-        ksize ([int, int]): filter sizes in the x and y direction.
-         Sizes should be odd and positive.
-        sigma ([int, int]): gaussian standard deviation in the x and y
-         direction.
-
-    Returns:
-        Tensor: 2D tensor with gaussian filter matrix coefficients.
-
-    Shape:
-        - Output: :math:`(ksize_x, ksize_y)`
-
-    Examples::
-
-        >>> tgm.image.get_gaussian_kernel2d((3, 3), (1.5, 1.5))
-        tensor([[0.0947, 0.1183, 0.0947],
-                [0.1183, 0.1478, 0.1183],
-                [0.0947, 0.1183, 0.0947]])
-
-        >>> tgm.image.get_gaussian_kernel2d((3, 5), (1.5, 1.5))
-        tensor([[0.0370, 0.0720, 0.0899, 0.0720, 0.0370],
-                [0.0462, 0.0899, 0.1123, 0.0899, 0.0462],
-                [0.0370, 0.0720, 0.0899, 0.0720, 0.0370]])
-    """
-    if not isinstance(ksize, tuple) or len(ksize) != 2:
-        raise TypeError("ksize must be a tuple of length two. Got {}"
-                        .format(ksize))
-    if not isinstance(sigma, tuple) or len(sigma) != 2:
-        raise TypeError("sigma must be a tuple of length two. Got {}"
-                        .format(sigma))
-    ksize_x, ksize_y = ksize
-    sigma_x, sigma_y = sigma
-    kernel_x: torch.Tensor = get_gaussian_kernel(ksize_x, sigma_x)
-    kernel_y: torch.Tensor = get_gaussian_kernel(ksize_y, sigma_y)
-    kernel_2d: torch.Tensor = torch.matmul(
-        kernel_x.unsqueeze(-1), kernel_y.unsqueeze(-1).t())
-    return kernel_2d
-
-
 class AverageMeter(object):
     """Computes and stores the average and current value"""
 
@@ -406,6 +248,136 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 
-if __name__ == '__main__':
-    k = get_gaussian_kernel2d((7,7), (0.4,0.4))
-    print('haha')
+def visualize_vqvae(z1_q, z2_q, frame1, frame2, x_rec1, x_rec2, nembed=2048, rescale=True, mask=None):
+    frame_vq_1 = z1_q.permute(1,2,0).numpy()
+    frame_vq_2 = z2_q.permute(1,2,0).numpy()
+
+    print(len(np.unique(frame_vq_1)))
+
+    if rescale:
+        frame_vq_1 = (frame_vq_1 * 255 / nembed).astype(np.uint8)
+        frame_vq_2 = (frame_vq_2 * 255 / nembed).astype(np.uint8)
+    else:
+        frame_vq_1 = (frame_vq_1).astype(np.uint8)
+        frame_vq_2 = (frame_vq_2).astype(np.uint8)
+
+    if mask is not None:
+
+        frame_vq_2 = frame_vq_2 * mask
+
+    plt.rcParams['figure.dpi'] = 200
+
+    plt.figure()
+
+    if x_rec1 is not None:
+        plt.subplot(3,2,1)
+        plt.imshow(frame_vq_1, cmap=plt.get_cmap('jet'))
+        plt.subplot(3,2,2)
+        plt.imshow(frame_vq_2, cmap=plt.get_cmap('jet'))
+
+        plt.subplot(3,2,3)
+        plt.imshow(np.array(frame1))
+
+        plt.subplot(3,2,4)
+        plt.imshow(np.array(frame2))
+
+        plt.subplot(3,2,5)
+        plt.imshow(np.array(x_rec1))
+
+        plt.subplot(3,2,6)
+        plt.imshow(np.array(x_rec2))
+
+        plt.show()
+    else:
+        plt.subplot(2,2,1)
+        plt.imshow(frame_vq_1, cmap=plt.get_cmap('jet'))
+        plt.subplot(2,2,2)
+        plt.imshow(frame_vq_2, cmap=plt.get_cmap('jet'))
+
+        plt.subplot(2,2,3)
+        plt.imshow(np.array(frame1))
+
+        plt.subplot(2,2,4)
+        plt.imshow(np.array(frame2))
+
+
+def visualize_correspondence(z1_q, z2_q, sample_idx, frame1, frame2, scale=32):
+    plt.rcParams['figure.dpi'] = 200
+
+    z1_q = z1_q[0].numpy()
+    z2_q = z2_q[0].numpy()
+    find = False
+    count = 0
+
+    while not find:
+        x, y = sample_idx % scale, sample_idx // scale
+
+        query = z1_q[y,x]
+        m = (z2_q == query).astype(np.uint8) * 255
+        count += 1
+
+        if m.max() > 1:
+            find = True
+        else:
+            # sample_idx = random.randint(0, scale*scale -1)
+            sample_idx = random.randint(210, 250)
+            print('not find, change query')
+        
+    print(f"find correspodence at {count}")   
+
+    querys_map = np.zeros((scale,scale))
+    querys_map[y,x] = 255
+    querys_map = querys_map.astype(np.uint8)
+    
+
+    plt.figure()
+    plt.subplot(2,2,1)
+    plt.imshow(querys_map, cmap=plt.get_cmap('jet'))
+    plt.subplot(2,2,2)
+    plt.imshow(m, cmap=plt.get_cmap('jet'))
+    plt.subplot(2,2,3)
+    plt.imshow(np.array(frame1))
+
+    plt.subplot(2,2,4)
+    plt.imshow(np.array(frame2))
+    
+def visualize_correspondence_quant(z1_q, z2_q, sample_idx, frame1, frame2, scale=32):
+    plt.rcParams['figure.dpi'] = 200
+
+    x, y = sample_idx % scale, sample_idx // scale
+
+    querys_map = np.zeros((scale,scale))
+    querys_map[y,x] = 255
+    querys_map = querys_map.astype(np.uint8)
+    
+    _, att = non_local_attention(z1_q, [z2_q], flatten=False)
+    att = att[0, 0, sample_idx].reshape(scale,scale).detach().cpu().numpy() * 255
+    
+
+    plt.figure()
+    plt.subplot(2,2,1)
+    plt.imshow(querys_map)
+    plt.subplot(2,2,2)
+    plt.imshow(att)
+    plt.subplot(2,2,3)
+    plt.imshow(np.array(frame1))
+
+    plt.subplot(2,2,4)
+    plt.imshow(np.array(frame2))
+    
+    
+    
+
+def preprocess_(img):
+    
+    mean=np.array([123.675, 116.28, 103.53])
+    std=np.array([58.395, 57.12, 57.375])
+    
+    # resize
+    img = img.astype(np.float32)
+    
+    mmcv.imnormalize_(img, mean, std, False)
+    
+    out = torch.from_numpy(img).unsqueeze(0).permute(0, 3, 1, 2)
+    return out
+

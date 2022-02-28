@@ -9,7 +9,7 @@ from ..components import *
 from ..builder import build_backbone, build_loss, build_components
 from ..registry import MODELS
 from vcl.utils.helpers import *
-from vcl.utils import *
+from vcl.models.common import *
 from .modules import *
 
 
@@ -448,13 +448,13 @@ class VQCL_v2(BaseModel):
             self.head = None
         
         self.mask = make_mask(32, 1, eq=False)
-
-        if pretrained is not None:
-            self.init_weights(pretrained, per_vq)
+        self.init_weights(pretrained)
             
-    def init_weights(self, pretrained, per_vq):
+    def init_weights(self, pretrained):
         
-        _ = load_checkpoint(self, pretrained, map_location='cpu')
+        self.backbone.init_weights()
+        if pretrained is not None:
+            _ = load_checkpoint(self, pretrained, map_location='cpu')
     
 
     def forward_train(self, imgs):
@@ -838,7 +838,7 @@ class VQCL_v6(VQCL_v2):
         
 
     def forward_train(self, imgs):
-        
+                
         bsz, _, c, _, h, w = imgs.shape
         imgs = imgs.reshape(bsz, 2, -1, c, h, w).permute(0, 1, 3, 2, 4, 5)
         
@@ -916,11 +916,16 @@ class VQCL_v7(VQCL_v2):
 
     def forward_train(self, imgs): 
         
+        self.eval()
+        
+        
         im_q = imgs[:, 0, 0]
         im_k = imgs[:, 0, 1]
 
         q_emb, q = self.backbone(im_q)
         k_emb, k = self.backbone(im_k)
+        
+        self.train()
 
         bsz, c, _, _ = q.shape
         
