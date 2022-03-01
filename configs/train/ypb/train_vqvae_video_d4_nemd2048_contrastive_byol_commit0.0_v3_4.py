@@ -4,28 +4,28 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'train_vqvae_video_d4_nemd2048_contrastive_byol_commit0.0_v3_2'
+exp_name = 'train_vqvae_video_d4_nemd2048_contrastive_byol_commit0.0_v3_4'
 docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corres'
 
 # model settings
 model = dict(
     type='VQCL_v6',
-    backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
+    backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(2, 3, )),
     sim_siam_head=dict(
         type='SimSiamHead',
-        in_channels=128,
+        in_channels=512,
         # norm_cfg=dict(type='SyncBN'),
         num_projection_fcs=3,
-        projection_mid_channels=128,
-        projection_out_channels=128,
+        projection_mid_channels=512,
+        projection_out_channels=512,
         num_predictor_fcs=2,
         predictor_mid_channels=128,
-        predictor_out_channels=128,
+        predictor_out_channels=512,
         with_norm=True,
-        spatial_type='avg',
+        spatial_type='avg'
     ),
     loss=dict(type='CosineSimLoss', negative=False, reduction='none'),
-    embed_dim=128,
+    embed_dim=256,
     n_embed=2048,
     commitment_cost=0.0,
 )
@@ -81,7 +81,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=4, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -89,8 +89,8 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            root='/home/lr/dataset/YouTube-VOS',
-            list_path='/home/lr/dataset/YouTube-VOS/2018/train_all_frames',
+            root='/dev/shm',
+            list_path='/dev/shm/2018/train_all_frames',
             data_prefix=dict(RGB='train_all_frames/JPEGImages_s256', ANNO='train/Annotations'),
             clip_length=1,
             num_clips=8,
@@ -100,8 +100,8 @@ data = dict(
 
     test =  dict(
             type=test_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -118,11 +118,7 @@ max_epoch=3200
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0,
-    by_epoch=False,
-    warmup='linear',
-    warmup_iters=10,
-    warmup_ratio=0.00001,
-    warmup_by_epoch=True
+    by_epoch=False
     )
 
 checkpoint_config = dict(interval=1600, save_optimizer=True, by_epoch=True)
@@ -141,11 +137,11 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}'
+work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
+                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
                 )
 
 

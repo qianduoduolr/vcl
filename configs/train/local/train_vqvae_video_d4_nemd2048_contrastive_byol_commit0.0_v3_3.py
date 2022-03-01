@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'train_vqvae_video_d4_nemd2048_contrastive_byol_commit0.0_v3_2'
+exp_name = 'train_vqvae_video_d4_nemd2048_contrastive_byol_commit0.0_v3_3'
 docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corres'
 
 # model settings
@@ -13,19 +13,19 @@ model = dict(
     backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
     sim_siam_head=dict(
         type='SimSiamHead',
-        in_channels=128,
+        in_channels=512,
         # norm_cfg=dict(type='SyncBN'),
         num_projection_fcs=3,
-        projection_mid_channels=128,
-        projection_out_channels=128,
+        projection_mid_channels=512,
+        projection_out_channels=512,
         num_predictor_fcs=2,
         predictor_mid_channels=128,
-        predictor_out_channels=128,
+        predictor_out_channels=512,
         with_norm=True,
-        spatial_type='avg',
+        spatial_type='avg'
     ),
     loss=dict(type='CosineSimLoss', negative=False, reduction='none'),
-    embed_dim=128,
+    embed_dim=512,
     n_embed=2048,
     commitment_cost=0.0,
 )
@@ -118,11 +118,7 @@ max_epoch=3200
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0,
-    by_epoch=False,
-    warmup='linear',
-    warmup_iters=10,
-    warmup_ratio=0.00001,
-    warmup_by_epoch=True
+    by_epoch=False
     )
 
 checkpoint_config = dict(interval=1600, save_optimizer=True, by_epoch=True)
