@@ -1663,7 +1663,7 @@ class Vqvae_Tracker_V16(Vqvae_Tracker_V15):
             mask = frames_mask[:,:-1,None].flatten(3)
         else:
             mask = self.mask if self.temp_window else None
-            
+                        
         if self.patch_size != -1:
             _, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
         else:

@@ -438,3 +438,51 @@ class VQCL_v8(VQCL_v2):
         return losses, diff.item()
     
     
+
+
+
+@MODELS.register_module()
+class VQCL_v9(VQCL_v6):
+
+
+    def forward_train(self, imgs):         
+        
+        bsz, _, c, _, h, w = imgs.shape
+                
+        imgs = imgs.reshape(bsz, 2, -1, c, h, w).permute(0, 1, 3, 2, 4, 5)        
+        
+        assert imgs.size(1) == 2
+        assert imgs.ndim == 6
+        clip_len = imgs.size(3)
+
+        imgs1 = video2images(imgs[:,
+                                  0].contiguous().reshape(-1, *imgs.shape[2:]))
+        imgs2 = video2images(imgs[:,
+                                  1].contiguous().reshape(-1, *imgs.shape[2:]))
+        
+        x1 = self.backbone(imgs1)
+        x2 = self.backbone(imgs2)
+    
+        if isinstance(x1, tuple):
+            q_emb = x1[0]
+            k_emb = x2[0]
+        else:
+            c = x1.shape[1]
+            
+            if c != self.embed_dim:
+                q_emb = self.quantize_conv(x1)
+                k_emb = self.quantize_conv(x2)
+            else:
+                q_emb = x1
+                k_emb = x2
+                
+        quant, diff, ind, embed = self.quantize(q_emb.permute(0, 2, 3, 1).contiguous())
+        
+        losses = dict()
+
+        loss_img_head = self.forward_img_head(q_emb, k_emb, clip_len) if not isinstance(x1, tuple) else self.forward_img_head(x1[-1], x2[-1], clip_len)
+        losses.update(add_prefix(loss_img_head, prefix='img_head'))
+        
+        losses['diff'] = diff * self.commitment_cost
+        
+        return losses, diff.item()
