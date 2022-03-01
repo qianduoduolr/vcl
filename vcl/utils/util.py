@@ -343,7 +343,7 @@ def visualize_correspondence(z1_q, z2_q, sample_idx, frame1, frame2, scale=32):
     
 def visualize_correspondence_quant(z1_q, z2_q, sample_idx, frame1, frame2, scale=32):
     plt.rcParams['figure.dpi'] = 200
-
+    
     x, y = sample_idx % scale, sample_idx // scale
 
     querys_map = np.zeros((scale,scale))
