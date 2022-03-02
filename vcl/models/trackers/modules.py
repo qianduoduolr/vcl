@@ -5,7 +5,13 @@ from collections import OrderedDict
 import math
 from torch.autograd import Variable
 from ..registry import BACKBONES
+import os
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
+import torchvision.models.resnet as torch_resnet
+from torchvision.models.resnet import BasicBlock
 
 class ResidualBlock(nn.Module):
     def __init__(self, inchannel, outchannel, stride=1, kernel_size=3, activation=F.relu):
@@ -560,7 +566,3 @@ class ResNet18Crop(nn.Module):
         out = self.layer3(out)
         out = self.layer4(out)
         return out
-
-
-
-
