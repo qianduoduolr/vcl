@@ -1,5 +1,5 @@
 import os
-exp_name = 'duv'
+exp_name = 'duv_d4_test'
 docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corr'
 
 # model settings
@@ -162,6 +162,7 @@ eval_config= dict(
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
+test_mode = True
 
 
 def make_pbs():
