@@ -1,5 +1,5 @@
 import os
-exp_name = 'duv_d4_test'
+exp_name = 'duv_d4_eval'
 docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corr'
 
 # model settings
@@ -38,7 +38,7 @@ test_cfg = dict(
     output_dir='eval_results')
 
 # dataset settings
-train_dataset_type = 'VOS_youtube_dataset_mlm_withbbox'
+train_dataset_type = 'VOS_youtube_dataset_mlm_withbbox_random'
 
 val_dataset_type = None
 test_dataset_type = 'VOS_davis_dataset_test'
@@ -51,16 +51,16 @@ img_norm_cfg = dict(
 #     mean=[0, 0, 0], std=[255, 255, 255], to_bgr=False)
 
 train_pipeline = [
-    dict(type='RandomResizedCrop', area_range=(0.2,1.0)),
+    dict(type='RandomResizedCrop', area_range=(0.6,1.0), aspect_ratio_range=(1.5, 2.0),),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
     dict(type='Flip', flip_ratio=0.5),
     dict(
         type='ColorJitter',
-        brightness=0.4,
-        contrast=0.4,
-        saturation=0.4,
-        hue=0.1,
-        p=0.8,
+        brightness=0.7,
+        contrast=0.7,
+        saturation=0.7,
+        hue=0.3,
+        p=0.9,
         same_across_clip=False,
         same_on_clip=False,
         output_keys='jitter_imgs'),
@@ -87,7 +87,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=16, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -95,9 +95,11 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            root='/gdata/lirui/dataset/YouTube-VOS',
-            list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
-            data_prefix='2018',
+            size=256,
+            p=0.8,
+            root='/dev/shm',
+            list_path='/dev/shm/2018/train',
+            data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train/Flows_s256', ANNO='train/Annotations_s256'),
             mask_ratio=0.15,
             clip_length=2,
             vq_size=32,
