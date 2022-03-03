@@ -113,7 +113,7 @@ optimizers = dict(type='SGD', lr=0.05, momentum=0.9, weight_decay=0.0001)
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=3200
+max_epoch=800
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0,
@@ -124,7 +124,7 @@ lr_config = dict(
     # warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=1600, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=800, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
