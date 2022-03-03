@@ -486,3 +486,52 @@ class VQCL_v9(VQCL_v6):
         losses['diff'] = diff * self.commitment_cost
         
         return losses, diff.item()
+    
+    
+
+@MODELS.register_module()
+class VQCL_v10(VQCL_v5):
+    """V2
+    """
+    def forward_train(self, imgs):
+        
+        im_q = imgs[:, 0, 0]
+        im_k = imgs[:, 0, 1]
+
+        with torch.no_grad():
+            self.backbone.eval()
+            x = self.backbone(im_q)
+            x = self.backbone(im_k)
+            
+            if isinstance(x, tuple):
+                q_emb = x[0]
+            else:
+                q_emb = x
+        
+        quant, diff, ind, embed = self.quantize(q_emb.permute(0, 2, 3, 1).contiguous())
+    
+        losses = {}
+
+        return losses, diff.item()
+    
+    def train_step(self, data_batch, optimizer, progress_ratio):
+        # parser loss
+        losses, diff = self(**data_batch, test_mode=False)
+        # loss, log_vars = self.parse_losses(losses)
+
+        # optimizer
+        # optimizer.zero_grad()
+        
+        # loss.backward()
+
+        # optimizer.step()
+        
+        log_vars = {}
+
+        log_vars['diff_item'] = diff
+        outputs = dict(
+            log_vars=log_vars,
+            num_samples=len(data_batch['imgs'])
+        )
+
+        return outputs
