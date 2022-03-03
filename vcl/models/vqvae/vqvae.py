@@ -491,7 +491,7 @@ class VQCL_v9(VQCL_v6):
 
 @MODELS.register_module()
 class VQCL_v10(VQCL_v5):
-    """V2
+    """Only for cluster
     """
     def forward_train(self, imgs):
         
@@ -500,13 +500,13 @@ class VQCL_v10(VQCL_v5):
 
         with torch.no_grad():
             self.backbone.eval()
-            x = self.backbone(im_q)
-            x = self.backbone(im_k)
+            x1 = self.backbone(im_q)
+            x2 = self.backbone(im_k)
             
-            if isinstance(x, tuple):
-                q_emb = x[0]
+            if isinstance(x1, tuple):
+                q_emb = x1[0]
             else:
-                q_emb = x
+                q_emb = x1
         
         quant, diff, ind, embed = self.quantize(q_emb.permute(0, 2, 3, 1).contiguous())
     
