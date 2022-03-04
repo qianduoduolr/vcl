@@ -3,6 +3,7 @@ import numbers
 from os import stat_result
 import os.path as osp
 from collections import *
+from tkinter.messagebox import NO
 
 import mmcv
 from mmcv.runner import auto_fp16, load_state_dict, load_checkpoint
@@ -12,6 +13,7 @@ from ..builder import build_backbone, build_loss
 from ..registry import MODELS
 from vcl.utils.helpers import *
 from vcl.utils import *
+from vcl.models.common import *
 
 
 import torch.nn as nn
@@ -25,16 +27,19 @@ class Dist_Tracker(BaseModel):
 
     def __init__(self,
                  backbone,
-                 patch_size,
-                 moment,
+                 backbone_t,
+                 momentum,
                  temperature,
-                 dilated_search=False,
+                 downsample_rate=8,
+                 feat_size=32,
+                 mask_radius=-1,
                  loss=None,
+                 l1_loss=None,
                  train_cfg=None,
                  test_cfg=None,
-                 pretrained=None
+                 pretrained=None,
                  ):
-        """ Space-Time Memory Network for Video Object Segmentation
+        """ Distilation tracker
 
         Args:
             depth ([type]): ResNet depth for encoder
@@ -48,72 +53,76 @@ class Dist_Tracker(BaseModel):
 
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
-        self.loss_config = loss
-        self.patch_size = patch_size
-        self.moment = moment
-        self.dilated_search = dilated_search
+        self.l1_loss  = l1_loss
+        self.downsample_rate = downsample_rate
+
+        self.momentum = momentum
         self.pretrained = pretrained
+        self.temperature = temperature
 
         logger = get_root_logger()
 
         self.backbone = build_backbone(backbone)
-        self.backbone_t = build_backbone(backbone)
+        self.backbone_t = build_backbone(backbone_t)
 
         # loss
         self.loss = build_loss(loss)
         
-        if self.pretrained is not None:
-            self.init_weights()
+        if mask_radius != -1:
+            self.mask = make_mask(feat_size, mask_radius)
+        else:
+            self.mask = None
+
+        
+        self.init_weights()
     
     def init_weights(self):
-        _ = load_checkpoint(self, self.pretrained, map_location='cpu', revise_keys=[(r'^backbone', 'backbone_t')])
+        
+        self.backbone.init_weights()
+        self.backbone_t.init_weights()
+        
+        if self.pretrained is not None:
+            _ = load_checkpoint(self, self.pretrained, map_location='cpu', revise_keys=[(r'^backbone', 'backbone_t')])
 
 
-    def forward_train(self, imgs, mask_query_idx, jitter_imgs=None, progress_ratio=0.0):
+    def forward_train(self, imgs, images_lab=None):
 
-        bsz, num_clips, t, c, h, w = jitter_imgs.shape
-        mask_query_idx = mask_query_idx.bool()
+        bsz, num_clips, t, c, h, w = imgs.shape
 
-        tar = self.backbone(jitter_imgs[:,0,-1])
-        refs = list([self.backbone(jitter_imgs[:,0,i]) for i in range(t-1)])
-        _, predict_att = self.non_local_attention(tar, refs, bsz, return_att=True)
+        images_lab_gt = [images_lab[:,0,i,:].clone() for i in range(t)]
+        images_lab = [images_lab[:,0,i,:] for i in range(t)]
+        _, ch = self.dropout2d_lab(images_lab)
+        
+        # forward to get feature
+        fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        fs = fs.reshape(bsz, t, *fs.shape[-3:])
+        tar, refs = fs[:, -1], fs[:, :-1]
+        _, att_g = non_local_attention(tar, refs)
+        _, att = non_local_attention(tar, refs, mask=self.mask)
 
-        h_,w_ = tar.shape[-2:]
-        if self.patch_size != -1:
-            if self.dilated_search:
-                patch_size = self.patch_size + int((h_ // 2 - self.patch_size - 1) * progress_ratio)
-            else:
-                patch_size = self.patch_size
-            t_masks = self.make_mask(h_, patch_size)
 
         with torch.no_grad():
-            tar_t = self.backbone_t(imgs[:,0,-1])
-            refs_t = list([self.backbone_t(imgs[:,0,i]) for i in range(t-1)])
+            fs_t = self.backbone_t(imgs.flatten(0,2))
+            fs_t = fs_t.reshape(bsz, t, *fs_t.shape[-3:])
+            tar_t, refs_t = fs_t[:, -1], fs_t[:, :-1]
 
-        _, target_att = self.non_local_attention(tar_t, refs_t, bsz, return_att=True)
-        if self.patch_size != -1:
-            target_att = target_att * t_masks.unsqueeze(0)
-        else:
-            pass
-
-        target = target_att.reshape(-1, target_att.shape[-1]).detach()
-        predict_att = predict_att.reshape(-1, predict_att.shape[-1])
+            _, target_att = non_local_attention(tar_t, refs_t)
 
         losses = {}
-        losses['att_loss'] = self.loss(predict_att, target, weight=mask_query_idx.reshape(-1, 1))
+        losses['att_loss'] = self.loss(att_g, target_att)
+        
+        
+        # for mast l1_loss
+        if self.l1_loss:
+            ref_gt = [self.prep(gt[:,ch]) for gt in images_lab_gt[:-1]]
+            outputs = frame_transform(att, ref_gt, flatten=False)
+            outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, *fs.shape[-2:])     
+            losses['l1_loss'], _ = self.compute_lphoto(images_lab_gt, ch, outputs)
 
         return losses
 
 
-    def forward(self, test_mode=False, **kwargs):   
-        if test_mode:
-            return self.forward_test(**kwargs)
-
-        return self.forward_train(**kwargs)
-
     def train_step(self, data_batch, optimizer, progress_ratio):
-
-        data_batch = {**data_batch, 'progress_ratio':progress_ratio}
 
         # parser loss
         losses = self(**data_batch, test_mode=False)
@@ -127,7 +136,8 @@ class Dist_Tracker(BaseModel):
         for k,opz in optimizer.items():
             opz.step()
 
-        moment_update(self.backbone, self.backbone_t, self.moment)
+        if self.momentum is not -1:
+            moment_update(self.backbone, self.backbone_t, self.momentum)
 
         log_vars.pop('loss')
         outputs = dict(
@@ -136,52 +146,36 @@ class Dist_Tracker(BaseModel):
         )
 
         return outputs
-
-
-
-    def local_attention(self, tar, refs, bsz, t):
-
-        _, feat_dim, w_, h_ = tar.shape
-        corrs = []
-        for i in range(t-1):
-            corr = self.correlation_sampler(tar.contiguous(), refs[i].contiguous()).reshape(bsz, -1, w_, h_)
-            corrs.append(corr)
-
-        corrs = torch.cat(corrs, 1)
-        att = F.softmax(corrs, 1).unsqueeze(1)
-
-        unfold_fs = list([ F.unfold(ref, kernel_size=self.patch_size, \
-            padding=int((self.patch_size-1)/2)).reshape(bsz, feat_dim, -1, w_, h_) for ref in refs])
-        unfold_fs = torch.cat(unfold_fs, 2)
-
-        out = (unfold_fs * att).sum(2).reshape(bsz, feat_dim, -1).permute(0,2,1).reshape(-1, feat_dim)
-
-        return out, att
     
-    def non_local_attention(self, tar, refs, bsz, return_att=False):
+    def dropout2d_lab(self, arr): # drop same layers for all images
+        if not self.training:
+            return arr
 
-        refs = torch.stack(refs, 2)
-        _, feat_dim, w_, h_ = tar.shape
+        drop_ch_num = int(np.random.choice(np.arange(1, 2), 1))
+        drop_ch_ind = np.random.choice(np.arange(1,3), drop_ch_num, replace=False)
 
-        refs = refs.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
-        tar = tar.reshape(bsz, feat_dim, -1).permute(0, 2, 1)
+        for a in arr:
+            for dropout_ch in drop_ch_ind:
+                a[:, dropout_ch] = 0
+            a *= (3 / (3 - drop_ch_num))
 
-        att = torch.einsum("bic,bjc -> bij", (tar, refs))
+        return arr, drop_ch_ind # return channels not masked
+    
+    def compute_lphoto(self, images_lab_gt, ch, outputs):
+        b, c, h, w = images_lab_gt[0].size()
+
+        tar_y = images_lab_gt[-1][:,ch]  # y4
+        outputs = F.interpolate(outputs, (h, w), mode='bilinear')
+
         
-        if return_att:
-            return None, att
+        loss = F.smooth_l1_loss(outputs*20, tar_y*20, reduction='mean')
 
-        att = F.softmax(att, dim=-1)
+        err_maps = torch.abs(outputs - tar_y).sum(1).detach()
 
-        out = torch.matmul(att, refs).reshape(-1, feat_dim)
-
-        return out, att
+        return loss, err_maps
     
-    def make_mask(self, size, t_size):
-        masks = []
-        for i in range(size):
-            for j in range(size):
-                mask = torch.zeros((size, size)).cuda()
-                mask[max(0, i-t_size):min(size, i+t_size+1), max(0, j-t_size):min(size, j+t_size+1)] = 1
-                masks.append(mask.reshape(-1))
-        return torch.stack(masks)
+    def prep(self, image, mode='default'):
+        bsz,c,_,_ = image.size()
+        x = image.float()[:,:,::self.downsample_rate,::self.downsample_rate]
+
+        return x

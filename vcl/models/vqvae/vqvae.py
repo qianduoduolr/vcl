@@ -300,7 +300,7 @@ class VQCL_v6(VQCL_v2):
     def forward_train(self, imgs):
                 
         bsz, _, c, _, h, w = imgs.shape
-                
+            
         imgs = imgs.reshape(bsz, 2, -1, c, h, w).permute(0, 1, 3, 2, 4, 5)        
         
         assert imgs.size(1) == 2
