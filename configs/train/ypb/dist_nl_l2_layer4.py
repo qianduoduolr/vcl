@@ -1,32 +1,22 @@
 import os
-from random import sample
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'train_vqvae_video_d4_nemd2048_contrastive_byol_commit0.0_v2_kinetics'
-docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corres'
+exp_name = 'dist_nl_l2_layer4'
+docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='VQCL_v6',
-    backbone=dict(type='ResNet', depth=18, strides=(1, 2, 2, 2), out_indices=(3,), pretrained='/home/lr/models/ssl/vcl/vfs_pretrain/r18_nc_sgd_cos_100e_r2_1xNx8_k400-db1a4c0d.pth'),
-    sim_siam_head=dict(
-        type='SimSiamHead',
-        in_channels=512,
-        # norm_cfg=dict(type='SyncBN'),
-        num_projection_fcs=3,
-        projection_mid_channels=512,
-        projection_out_channels=512,
-        num_predictor_fcs=2,
-        predictor_mid_channels=128,
-        predictor_out_channels=512,
-        with_norm=True,
-        spatial_type='avg'),
-    loss=dict(type='CosineSimLoss', negative=False),
-    embed_dim=512,
-    n_embed=2048,
-    commitment_cost=1.0,
+    type='Dist_Tracker',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
+    backbone_t=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(2, ),pretrained='/gdata/lirui/models/ssl/vcl/vfs_pretrain/r18_nc_sgd_cos_100e_r2_1xNx8_k400-db1a4c0d.pth'),
+    loss=dict(type='MSELoss',reduction='mean', loss_weight=10),
+    l1_loss=True,
+    temperature=1.0,
+    momentum=-1,
+    mask_radius=6,
+    pretrained=None
 )
 
 # model training and testing settings
@@ -44,31 +34,35 @@ test_cfg = dict(
     output_dir='eval_results')
 
 # dataset settings
-train_dataset_type = 'Kinetics_dataset_rgb'
+train_dataset_type = 'VOS_youtube_dataset_rgb'
 
 val_dataset_type = None
 test_dataset_type = 'VOS_davis_dataset_test'
 
 
 # train_pipeline = None
-img_norm_cfg = dict(
-    mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
+img_norm_cfg = dict(mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
+img_norm_cfg_lab = dict(mean=[50, 0, 0], std=[50, 127, 127], to_bgr=False)
 
 train_pipeline = [
-    dict(type='RandomResizedCrop', area_range=(0.2,1.0), same_across_clip=False,
-        same_on_clip=False),
+    dict(type='RandomResizedCrop', area_range=(0.6,1.0), aspect_ratio_range=(1.5, 2.0),),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
-    dict(type='Flip', flip_ratio=0.5, same_across_clip=False, same_on_clip=False),
+    dict(type='Flip', flip_ratio=0.5),
+    dict(type='RGB2LAB', output_keys='images_lab'),
     dict(type='Normalize', **img_norm_cfg),
-    dict(type='FormatShape', input_format='NCTHW'),
-    dict(type='Collect', keys=['imgs'], meta_keys=[]),
-    dict(type='ToTensor', keys=['imgs'])
+    dict(type='Normalize', **img_norm_cfg_lab, keys='images_lab'),
+    # dict(type='ColorDropout', keys='jitter_imgs', drop_rate=0.8),
+    dict(type='FormatShape', input_format='NPTCHW'),
+    dict(type='FormatShape', input_format='NPTCHW', keys='images_lab'),
+    dict(type='Collect', keys=['imgs', 'images_lab'], meta_keys=[]),
+    dict(type='ToTensor', keys=['imgs', 'images_lab'])
 ]
 
 val_pipeline = [
     dict(type='Resize', scale=(-1, 480), keep_ratio=True),
     dict(type='Flip', flip_ratio=0),
-    dict(type='Normalize', **img_norm_cfg),
+    dict(type='RGB2LAB'),
+    dict(type='Normalize', **img_norm_cfg_lab),
     dict(type='FormatShape', input_format='NCTHW'),
     dict(
         type='Collect',
@@ -80,7 +74,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=16, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -88,42 +82,40 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            root='/home/lr/dataset/Kinetics/Kinetics_t30_s256/data',
-            list_path='/home/lr/dataset/Kinetics/Kinetics_t30_s256',
-            clip_length=1,
-            num_clips=4,
+            root='/dev/shm',
+            list_path='/dev/shm/2018/train',
+            data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
+            clip_length=2,
             pipeline=train_pipeline,
-            temporal_sampling_mode='distant'
-            ),
+            test_mode=False),
 
     test =  dict(
             type=test_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
             ),
 )
-
 # optimizer
-optimizers = dict(type='SGD', lr=0.05, momentum=0.9, weight_decay=0.0001)
-
+optimizers = dict(
+    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    )
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=50
+max_epoch=3200
 lr_config = dict(
     policy='CosineAnnealing',
-    min_lr_ratio=0,
+    min_lr_ratio=0.001,
     by_epoch=False,
-    warmup='linear',
-    warmup_iters=4,
-    warmup_ratio=0.00001,
+    warmup_iters=10,
+    warmup_ratio=0.1,
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=10, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=1600, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
@@ -139,11 +131,11 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}'
+work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
+                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
                 )
 
 
