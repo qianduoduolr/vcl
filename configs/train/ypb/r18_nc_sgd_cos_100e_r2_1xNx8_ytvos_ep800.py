@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'r18_nc_sgd_cos_100e_r2_1xNx8_ytvos_ep400'
+exp_name = 'r18_nc_sgd_cos_100e_r2_1xNx8_ytvos_ep800'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 model = dict(
@@ -157,7 +157,6 @@ load_from = None
 resume_from = None
 workflow = [('train', 1)]
 find_unused_parameters = False
-test_mode = True
 
 
 if __name__ == '__main__':
