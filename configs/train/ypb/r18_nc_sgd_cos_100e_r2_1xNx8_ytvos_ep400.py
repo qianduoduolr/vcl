@@ -68,8 +68,7 @@ train_pipeline = [
 val_pipeline = [
     dict(type='Resize', scale=(-1, 480), keep_ratio=True),
     dict(type='Flip', flip_ratio=0),
-    dict(type='RGB2LAB'),
-    dict(type='Normalize', **img_norm_cfg_lab),
+    dict(type='Normalize', **img_norm_cfg),
     dict(type='FormatShape', input_format='NCTHW'),
     dict(
         type='Collect',
