@@ -358,27 +358,58 @@ def visualize_correspondence_quant(z1_q, z2_q, sample_idx, frame1, frame2, scale
     querys_map = querys_map.astype(np.uint8)
     
     _, att = non_local_attention(z1_q, [z2_q], flatten=False)
+    
+    # print(att[0,0, sample_idx].max(), att[0,0,sample_idx].sum())
+    
     att = att[0, 0, sample_idx].reshape(scale,scale).detach().cpu().numpy() * 255
     
+    # print(att.max())
+    att = ((att - att.min()) * 255 / (att.max() - att.min())).astype(np.uint8)
+    
+    att = cv2.resize(att, (256,256))
+    querys_map = cv2.resize(querys_map, (256,256))
+    
+    att_map = cv2.applyColorMap(att.astype(np.uint8), cv2.COLORMAP_BONE)
+    att_query_map = cv2.applyColorMap(querys_map, cv2.COLORMAP_BONE)
+
+
+    tar = Image.fromarray(frame1).convert('RGBA')
+    query = Image.fromarray(att_query_map).convert('RGBA')
+    blend_out_query = Image.blend(tar, query, 0.8)
+    blend_out_query = np.array(blend_out_query)
+
+    ref = Image.fromarray(frame2).convert('RGBA')
+    result = Image.fromarray(att_map).convert('RGBA')
+    blend_out_result = Image.blend(ref, result, 0.8)
+    blend_out_result = np.array(blend_out_result)
+
 
     plt.figure()
     plt.subplot(2,2,1)
-    plt.imshow(querys_map)
+    plt.imshow(blend_out_query)
     plt.subplot(2,2,2)
-    plt.imshow(att)
+    plt.imshow(blend_out_result)
     plt.subplot(2,2,3)
-    plt.imshow(np.array(frame1))
-
+    plt.imshow(querys_map)
     plt.subplot(2,2,4)
-    plt.imshow(np.array(frame2))
+    plt.imshow(att)
     
-    
-    
+    # plt.figure()
+    # plt.subplot(1,2,1)
+    # plt.imshow(querys_map)
+    # plt.subplot(1,2,2)
+    # plt.imshow(att)
 
-def preprocess_(img):
+def preprocess_(img, mode='rgb'):
     
-    mean=np.array([123.675, 116.28, 103.53])
-    std=np.array([58.395, 57.12, 57.375])
+    if mode == 'rgb':
+        mean=np.array([123.675, 116.28, 103.53])
+        std=np.array([58.395, 57.12, 57.375])
+    else:
+        mean=np.array([50, 0, 0])
+        std=np.array([50, 127, 127])
+        img = (img / 255.0).astype(np.float32)
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2Lab)
     
     # resize
     img = img.astype(np.float32)
@@ -387,4 +418,7 @@ def preprocess_(img):
     
     out = torch.from_numpy(img).unsqueeze(0).permute(0, 3, 1, 2)
     return out
+
+
+
 

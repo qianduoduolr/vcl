@@ -117,6 +117,10 @@ def main():
 
     model = build_model(
         cfg.model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
+    if cfg.get('model_test', False) and cfg.get('evaluation', False):
+        model_test = build_model(cfg.model_test, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
+    else:
+        model_test = None
     
     if cfg.train_cfg.get('syncbn', False) and distributed:
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)

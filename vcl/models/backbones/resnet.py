@@ -358,6 +358,7 @@ class ResNet(nn.Module):
                  conv_cfg=dict(type='Conv'),
                  norm_cfg=dict(type='BN2d', requires_grad=True),
                  act_cfg=dict(type='ReLU', inplace=True),
+                 pool_type='max',
                  norm_eval=False,
                  partial_bn=False,
                  with_cp=False,
@@ -390,6 +391,7 @@ class ResNet(nn.Module):
         self.block, stage_blocks = self.arch_settings[depth]
         self.stage_blocks = stage_blocks[:num_stages]
         self.inplanes = 64
+        self.pool_type = pool_type
 
         self._make_stem_layer()
 
@@ -436,7 +438,10 @@ class ResNet(nn.Module):
             conv_cfg=self.conv_cfg,
             norm_cfg=self.norm_cfg,
             act_cfg=self.act_cfg)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        if self.pool_type == 'max':
+            self.pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        else:
+            self.pool = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
 
     def _load_conv_params(self, conv, state_dict_tv, module_name_tv,
                           loaded_param_names):
@@ -567,7 +572,7 @@ class ResNet(nn.Module):
             by the backbone.
         """
         x = self.conv1(x)
-        x = self.maxpool(x)
+        x = self.pool(x)
         outs = []
         for i, layer_name in enumerate(self.res_layers):
             res_layer = getattr(self, layer_name)
