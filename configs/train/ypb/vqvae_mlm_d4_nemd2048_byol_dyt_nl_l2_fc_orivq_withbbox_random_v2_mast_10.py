@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_mast_9'
+exp_name = 'vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_mast_10'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 # model settings
@@ -164,8 +164,7 @@ eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
                   checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
                 )
-evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True
-                  )
+evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True)
 
 
 load_from = None
