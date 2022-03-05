@@ -97,6 +97,15 @@ data = dict(
             pipeline=val_pipeline,
             test_mode=True
             ),
+    
+    val = dict(
+            type=test_dataset_type,
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
+            data_prefix='2017',
+            pipeline=val_pipeline,
+            test_mode=True
+            ),
 )
 # optimizer
 optimizers = dict(
@@ -132,6 +141,8 @@ visual_config = None
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
+
+
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',

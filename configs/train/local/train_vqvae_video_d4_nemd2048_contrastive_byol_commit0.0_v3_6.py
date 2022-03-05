@@ -114,7 +114,7 @@ optimizers = dict(type='SGD', lr=0.05, momentum=0.9, weight_decay=0.0001)
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=3200
+max_epoch=100
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0,
@@ -148,6 +148,8 @@ eval_config= dict(
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
+find_unused_parameters = True
+
 
 
 
