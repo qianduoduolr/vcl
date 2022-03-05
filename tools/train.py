@@ -19,7 +19,7 @@ from vcl.utils import collect_env, get_root_logger
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train an editor')
-    parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/local/dist_nl_l2_layer4.py')
+    parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/local/vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_41.py')
     parser.add_argument('--work-dir', help='the dir to save logs and models')
     parser.add_argument(
         '--resume-from', help='the checkpoint file to resume from')
@@ -111,8 +111,13 @@ def main():
         set_random_seed(args.seed, deterministic=args.deterministic)
     cfg.seed = args.seed
 
+    # build model and test model
     model = build_model(
         cfg.model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
+    if cfg.get('model_test', False) and cfg.get('evaluation', False):
+        model_test = build_model(cfg.model_test, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
+    else:
+        model_test = None
     
     if cfg.train_cfg.get('syncbn', False) and distributed:
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -146,7 +151,8 @@ def main():
         distributed=distributed,
         validate=(not args.no_validate),
         timestamp=timestamp,
-        meta=meta)
+        meta=meta,
+        model_test=model_test)
 
     work_dir_local = osp.join('/home/lr','/'.join(cfg.work_dir.split('/')[3:-1]))
     os.system(f"rsync -a  {cfg.work_dir} lirui@192.168.161.4:{work_dir_local}/")

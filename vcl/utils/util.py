@@ -16,6 +16,7 @@ from PIL import Image
 import copy
 import matplotlib.pyplot as plt
 from vcl.models.common.correlation import *
+from mmcv.runner import load_state_dict
 
 
 def show_cam_on_image(img, mask):
@@ -149,6 +150,12 @@ def moment_update(model, model_ema, m):
     for p1, p2 in zip(model.parameters(), model_ema.parameters()):
         p2.data.mul_(m).add_(1 - m, p1.detach().data)
 
+def copy_params(model, model_test):
+    origin_params = {}
+    for name, param in model.state_dict().items():
+        if name in model_test.state_dict().keys():
+            origin_params[name.replace('module.','')] = param.data.detach().cpu()
+    load_state_dict(model_test,origin_params, strict=False)
 
 def make_pbs(exp_name, docker_name):
     pbs_data = ""

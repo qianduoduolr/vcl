@@ -7,11 +7,12 @@ import warnings
 import mmcv
 import numpy as np
 import torch
-from mmcv.parallel import MMDataParallel
+from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import HOOKS, IterBasedRunner
 from mmcv.utils import build_from_cfg
 
-from vcl.core import DistEvalIterHook, EvalIterHook, build_optimizers, IterBasedRunner_Custom, EpochBasedRunner_Custom
+from vcl.core import DistEvalIterHook, EvalIterHook, build_optimizers, IterBasedRunner_Custom, EpochBasedRunner_Custom, DistEvalHook_Custom, \
+    EvalHook_Custom
 from vcl.core.distributed_wrapper import DistributedDataParallelWrapper
 from vcl.datasets.builder import build_dataloader, build_dataset
 from vcl.utils import get_root_logger
@@ -42,6 +43,7 @@ def set_random_seed(seed, deterministic=False):
 def train_model(model,
                 dataset,
                 cfg,
+                model_test=None,
                 distributed=False,
                 validate=False,
                 timestamp=None,
@@ -67,6 +69,7 @@ def train_model(model,
             model,
             dataset,
             cfg,
+            model_test=model_test,
             validate=validate,
             logger=logger,
             timestamp=timestamp,
@@ -76,6 +79,7 @@ def train_model(model,
             model,
             dataset,
             cfg,
+            model_test=model_test,
             validate=validate,
             logger=logger,
             timestamp=timestamp,
@@ -85,6 +89,7 @@ def train_model(model,
 def _dist_train(model,
                 dataset,
                 cfg,
+                model_test=None,
                 validate=False,
                 logger=None,
                 timestamp=None,
@@ -128,17 +133,37 @@ def _dist_train(model,
 
     # put model on gpus
     find_unused_parameters = cfg.get('find_unused_parameters', False)
+    
     model = DistributedDataParallelWrapper(
         model,
         device_ids=[torch.cuda.current_device()],
         broadcast_buffers=False,
         find_unused_parameters=find_unused_parameters)
+    if model_test is not None:
+        model_test = DistributedDataParallelWrapper(
+                    model_test,
+                    device_ids=[torch.cuda.current_device()],
+                    broadcast_buffers=False,
+                    find_unused_parameters=find_unused_parameters)
+        
+    # model = MMDistributedDataParallel(
+    #                 model.cuda(),
+    #                 device_ids=[torch.cuda.current_device()],
+    #                 broadcast_buffers=False,
+    #                 find_unused_parameters=find_unused_parameters)
+    # if model_test is not None:
+    #     model_test = MMDistributedDataParallel(
+    #                 model_test.cuda(),
+    #                 device_ids=[torch.cuda.current_device()],
+    #                 broadcast_buffers=False,
+    #                 find_unused_parameters=find_unused_parameters)
 
     # build runner
     optimizer = build_optimizers(model, cfg.optimizers)
     if cfg.runner_type is 'iter':
         runner = IterBasedRunner_Custom(
             model,
+            model_test,
             optimizer=optimizer,
             work_dir=cfg.work_dir,
             logger=logger,
@@ -146,6 +171,7 @@ def _dist_train(model,
     else:
         runner = EpochBasedRunner_Custom(
             model,
+            model_test,
             optimizer=optimizer,
             work_dir=cfg.work_dir,
             logger=logger,
@@ -190,7 +216,7 @@ def _dist_train(model,
         data_loader = build_dataloader(dataset, **val_loader_cfg)
         save_path = osp.join(cfg.work_dir, 'val_visuals')
         runner.register_hook(
-            DistEvalIterHook(
+            DistEvalHook_Custom(
                 data_loader, save_path=save_path, **cfg.evaluation),
             priority='LOW')
 
@@ -222,6 +248,7 @@ def _dist_train(model,
 def _non_dist_train(model,
                     dataset,
                     cfg,
+                    model_test=None,
                     validate=False,
                     logger=None,
                     timestamp=None,
@@ -269,6 +296,9 @@ def _non_dist_train(model,
 
     # put model on gpus
     model = MMDataParallel(model, device_ids=range(cfg.gpus)).cuda()
+    if model_test is not None:
+        model_test = MMDataParallel(model_test, device_ids=range(cfg.gpus)).cuda()
+        
 
     # build runner
     optimizer = build_optimizers(model, cfg.optimizers)
@@ -276,6 +306,7 @@ def _non_dist_train(model,
     if cfg.runner_type is 'iter':
         runner = IterBasedRunner_Custom(
             model,
+            model_test,
             optimizer=optimizer,
             work_dir=cfg.work_dir,
             logger=logger,
@@ -283,6 +314,7 @@ def _non_dist_train(model,
     else:
         runner = EpochBasedRunner_Custom(
             model,
+            model_test,      
             optimizer=optimizer,
             work_dir=cfg.work_dir,
             logger=logger,
@@ -327,7 +359,7 @@ def _non_dist_train(model,
         data_loader = build_dataloader(dataset, **val_loader_cfg)
         save_path = osp.join(cfg.work_dir, 'val_visuals')
         runner.register_hook(
-            EvalIterHook(data_loader, save_path=save_path, **cfg.evaluation),
+            EvalHook_Custom(data_loader, save_path=save_path, **cfg.evaluation),
             priority='LOW')
 
     # user-defined hooks

@@ -231,7 +231,7 @@ class VOS_davis_dataset_test(Video_dataset_base):
 
         return eval_results
 
-    def evaluate(self, results, metrics='daivs', output_dir=None, logger=None):
+    def evaluate(self, results, metrics='davis', output_dir=None, logger=None):
         metrics = metrics if isinstance(metrics, (list, tuple)) else [metrics]
         allowed_metrics = ['davis']
         for metric in metrics:

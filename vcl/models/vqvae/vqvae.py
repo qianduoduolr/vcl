@@ -202,12 +202,19 @@ class VQCL_v2(BaseModel):
         losses, diff = self(**data_batch, test_mode=False)
         loss, log_vars = self.parse_losses(losses)
 
-        # optimizer
-        optimizer.zero_grad()
-        
-        loss.backward()
+       # optimizer
+        if isinstance(optimizer, dict):
+            for k,opz in optimizer.items():
+                opz.zero_grad()
 
-        optimizer.step()
+            loss.backward()
+            for k,opz in optimizer.items():
+                opz.step()
+        else:
+            optimizer.zero_grad()
+
+            loss.backward()
+            optimizer.step()
 
         log_vars.pop('loss')
         log_vars['diff_item'] = diff

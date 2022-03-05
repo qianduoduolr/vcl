@@ -19,6 +19,10 @@ class EpochBasedRunner_Custom(BaseRunner):
 
     This runner train models epoch by epoch.
     """
+    
+    def __init__(self, model, model_test, *args, **kwargs):
+        super().__init__(model=model, *args, **kwargs)
+        self.model_test = model_test
 
     def run_iter(self, data_batch, train_mode, **kwargs):
         if self.batch_processor is not None:

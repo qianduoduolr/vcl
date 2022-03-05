@@ -1,5 +1,5 @@
 from ..registry import COMPONENTS
-from ..builder import build_components, build_loss
+from ..builder import build_components, build_loss, build_drop_layer
 from mmcv.cnn import ConvModule, build_norm_layer, build_plugin_layer
 import torch
 import torch.nn as nn
@@ -89,6 +89,7 @@ class SimSiamHead(nn.Module):
                  predictor_out_channels=2048,
                  drop_predictor_fc=False,
                  with_norm=True,
+                 loss_feat=dict(type='CosineSimLoss', negative=False),
                  spatial_type='avg'):
         super().__init__()
         self.in_channels = in_channels
@@ -97,6 +98,8 @@ class SimSiamHead(nn.Module):
         self.norm_cfg = norm_cfg
         self.act_cfg = act_cfg
         self.with_norm = with_norm
+        self.loss_feat = build_loss(loss_feat)
+        
         convs = []
         last_channels = in_channels
         for i in range(num_convs):
@@ -203,4 +206,15 @@ class SimSiamHead(nn.Module):
         p = self.predictor_fcs(z)
 
         return z, p
+    
+    def loss(self, p1, z1, p2, z2, mask12=None, mask21=None, weight=1.):
+        assert mask12 is None
+        assert mask21 is None
+
+        losses = dict()
+
+        loss_feat = self.loss_feat(p1, z2.detach()) * 0.5 + self.loss_feat(
+            p2, z1.detach()) * 0.5
+        losses['loss_feat'] = loss_feat * weight
+        return losses
 

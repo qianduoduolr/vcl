@@ -333,11 +333,11 @@ class CosineSimLoss(nn.Module):
         else:
             loss = 2 - 2 * prod.mean(dim=-1)
         
-        if self.reduction == 'mean':
-            loss = loss.mean()
-        elif self.reduction == 'sum':
-            loss = loss.sum()
-        else:
-            pass
+        # if self.reduction == 'mean':
+        #     loss = loss.mean()
+        # elif self.reduction == 'sum':
+        #     loss = loss.sum()
+        # else:
+        #     pass
             
         return loss * self.loss_weight
