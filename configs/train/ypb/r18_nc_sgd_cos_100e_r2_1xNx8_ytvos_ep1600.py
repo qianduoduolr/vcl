@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'r18_nc_sgd_cos_100e_r2_1xNx8_ytvos_ep800'
+exp_name = 'r18_nc_sgd_cos_100e_r2_1xNx8_ytvos_ep1600'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 model = dict(
@@ -122,8 +122,8 @@ optimizers = dict(type='SGD', lr=0.05, momentum=0.9, weight_decay=0.0001)
 # learning policy
 lr_config = dict(policy='CosineAnnealing', min_lr=0, by_epoch=False)
 runner_type='epoch'
-max_epoch = 800
-checkpoint_config = dict(interval=800, save_optimizer=True, by_epoch=True)
+max_epoch = 1600
+checkpoint_config = dict(interval=1600, save_optimizer=True, by_epoch=True)
 # evaluation = dict(
 #     interval=1,
 #     metrics='davis',
