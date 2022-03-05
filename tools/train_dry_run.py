@@ -151,6 +151,7 @@ def main():
         model,
         datasets,
         cfg,
+        model_test=model_test,
         distributed=distributed,
         validate=(not args.no_validate),
         timestamp=timestamp,
