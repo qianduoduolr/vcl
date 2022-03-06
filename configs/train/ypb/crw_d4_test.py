@@ -4,13 +4,13 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'crw_d4_eval'
+exp_name = 'crw_d4_test'
 docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corr'
 
 # model settings
 model = dict(
     type='VanillaTracker',
-    backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(2, ), pretrained='/home/lr/models/vcl/r18_crw_revise_key.pth'),
+    backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(2, )),
     test_cfg=dict(),
     train_cfg=dict()
 )
@@ -149,7 +149,7 @@ eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
                 #   checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
                   checkpoint_path=None,
-                  torchvision_pretrained='/gdata/lirui/models/vcl/ytvos_e060_res4_revise_keys.pth'
+                  torchvision_pretrained='/gdata/lirui/models/vcl/r18_crw_revise_key.pth'
                 )
 
 
