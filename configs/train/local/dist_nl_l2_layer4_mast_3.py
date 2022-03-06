@@ -3,16 +3,16 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'dist_nl_l2_layer4_mast_2'
+exp_name = 'dist_nl_l2_layer4_mast_3'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
     type='Dist_Tracker',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
-    backbone_t=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, ),pretrained='/home/lr/models/ssl/vcl/vfs_pretrain/r18_nc_sgd_cos_100e_r2_1xNx8_k400-db1a4c0d.pth'),
-    loss=dict(type='MSELoss',reduction='mean', loss_weight=10),
-    l1_loss=False,
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, ), pool_type='mean'),
+    backbone_t=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(2, ),pretrained='/home/lr/models/ssl/vcl/vfs_pretrain/r18_nc_sgd_cos_100e_r2_1xNx8_k400-db1a4c0d.pth'),
+    loss=dict(type='MSELoss',reduction='mean', loss_weight=100),
+    l1_loss=True,
     temperature=1.0,
     momentum=-1,
     mask_radius=6,
@@ -21,7 +21,7 @@ model = dict(
 
 model_test = dict(
     type='VanillaTracker',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(2, )),
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, ), pool_type='mean'),
 )
 
 # model training and testing settings
