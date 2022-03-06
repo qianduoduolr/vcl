@@ -2,5 +2,5 @@
 from .logger import get_root_logger
 from .misc import *
 from .util import *
-
+from .visualize import *
 
