@@ -17,7 +17,6 @@ import copy
 import matplotlib.pyplot as plt
 from vcl.models.common.correlation import *
 from mmcv.runner import load_state_dict
-from sklearn.decomposition import PCA
 
 
 def show_cam_on_image(img, mask):

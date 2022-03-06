@@ -8,6 +8,7 @@ from PIL import Image
 import copy
 import matplotlib.pyplot as plt
 from vcl.models.common.correlation import *
+from .util import *
 
 
 
@@ -35,7 +36,6 @@ def visualize_att(imgs, atts, idx, abs_att=False, query_idx=None, feat_size=25, 
 
     blend_outs = []
     for index, i in enumerate(range(atts.shape[0])):
-        
         if patch_size == -1:
             attr = atts[i].reshape(feat_size, feat_size)
             # attr = (att[:, query_idx.item()]).reshape(feat_size, feat_size)
