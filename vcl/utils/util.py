@@ -375,12 +375,12 @@ def visualize_correspondence_quant(z1_q, z2_q, sample_idx, frame1, frame2, scale
 
     tar = Image.fromarray(frame1).convert('RGBA')
     query = Image.fromarray(att_query_map).convert('RGBA')
-    blend_out_query = Image.blend(tar, query, 0.8)
+    blend_out_query = Image.blend(tar, query, 0.7)
     blend_out_query = np.array(blend_out_query)
 
     ref = Image.fromarray(frame2).convert('RGBA')
     result = Image.fromarray(att_map).convert('RGBA')
-    blend_out_result = Image.blend(ref, result, 0.8)
+    blend_out_result = Image.blend(ref, result, 0.7)
     blend_out_result = np.array(blend_out_result)
 
 
