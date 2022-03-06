@@ -4,17 +4,29 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'crw_d4_test'
+exp_name = 'crw_d4'
 docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corr'
 
 # model settings
 model = dict(
-    type='VanillaTracker',
-    backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(2, )),
-    test_cfg=dict(),
-    train_cfg=dict()
+    type='Vqvae_Tracker_V16',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
+    vqvae=dict(type='VQCL_v2', backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
+               sim_siam_head=dict(type='SimSiamHead', in_channels=128, num_projection_fcs=3, projection_mid_channels=128,
+               projection_out_channels=128, num_predictor_fcs=2, predictor_mid_channels=128, predictor_out_channels=128,
+               with_norm=True, spatial_type='avg'),loss=dict(type='CosineSimLoss', negative=False), embed_dim=128,
+               n_embed=2048, commitment_cost=1.0,),
+    ce_loss=dict(type='Ce_Loss',reduction='none'),
+    l1_loss=False,
+    patch_size=-1,
+    fc=False,
+    temperature=1.0,
+    mask_radius=6,
+    scaling_att=True,
+    temp_window=True,
+    # pretrained='/gdata/lirui/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_2/epoch_3200.pth',
+    pretrained_vq='/gdata/lirui/expdir/VCL/group_vqvae_tracker/train_vqvae_video_d4_nemd2048_contrastive_byol_commit1.0_v2/epoch_3200.pth',
 )
-
 # model training and testing settings
 train_cfg = dict(syncbn=True)
 
