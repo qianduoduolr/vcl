@@ -64,3 +64,57 @@ def tensor2img(tensor, out_type=np.uint8, min_max=(0, 1), norm_mode='0-1'):
 
 
 
+def moment_update(model, model_ema, m):
+    """ model_ema = m * model_ema + (1 - m) model """
+    for p1, p2 in zip(model.parameters(), model_ema.parameters()):
+        p2.data.mul_(m).add_(1 - m, p1.detach().data)
+
+def copy_params(model, model_test):
+    origin_params = {}
+    for name, param in model.state_dict().items():
+        if name in model_test.state_dict().keys():
+            origin_params[name.replace('module.','')] = param.data.detach().cpu()
+    load_state_dict(model_test,origin_params, strict=False)
+
+def make_pbs(exp_name, docker_name):
+    pbs_data = ""
+    with open('/home/lr/project/vcl/configs/pbs/template.pbs', 'r') as f:
+        for line in f:
+            line = line.replace('exp_name',f'{exp_name}')
+            line = line.replace('docker_name', f'{docker_name}')
+            pbs_data += line
+
+    with open(f'/home/lr/project/vcl/configs/pbs/{exp_name}.pbs',"w") as f:
+        f.write(pbs_data)
+
+def make_local_config(exp_name):
+    config_data = ""
+    with open(f'/home/lr/project/vcl/configs/train/local/{exp_name}.py', 'r') as f:
+        for line in f:
+            line = line.replace('/home/lr','/gdata/lirui')
+            line = line.replace('/gdata/lirui/dataset/YouTube-VOS','/dev/shm')
+            # line = line.replace('/home/lr/dataset','/home/lr/dataset')
+            config_data += line
+
+    with open(f'/home/lr/project/vcl/configs/train/ypb/{exp_name}.py',"w") as f:
+        f.write(config_data)
+
+
+
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
