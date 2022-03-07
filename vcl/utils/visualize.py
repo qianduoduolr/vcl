@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from .util import *
 from .dim_reduction import *
 from matplotlib import cm
-import cvbase
+
 
 class Correspondence_Visualizer(object):
     def __init__(self, mode, show_mode='plt', flow_show_mode='rgb', nembed=2048, scale=32):
