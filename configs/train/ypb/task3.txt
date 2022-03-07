@@ -1,1 +1,1 @@
-moco_d4_eval
+detco_d4_eval
