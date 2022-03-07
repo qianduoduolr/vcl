@@ -179,3 +179,47 @@ class Dist_Tracker(BaseModel):
         x = image.float()[:,:,::self.downsample_rate,::self.downsample_rate]
 
         return x
+    
+
+
+@MODELS.register_module()
+class Dist_Tracker_V2(Dist_Tracker):
+    
+    def forward_train(self, imgs, images_lab=None):
+        bsz, num_clips, t, c, h, w = imgs.shape
+
+        images_lab_gt = [images_lab[:,0,i,:].clone() for i in range(t)]
+        images_lab = [images_lab[:,0,i,:] for i in range(t)]
+        _, ch = self.dropout2d_lab(images_lab)
+        
+        # forward to get feature
+
+        fs1, fs2 = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        fs1 = fs1.reshape(bsz, t, *fs1.shape[-3:])
+        tar1, refs1 = fs1[:, -1], fs1[:, :-1]
+        fs2 = fs2.reshape(bsz, t, *fs2.shape[-3:])
+        tar2, refs2 = fs2[:, -1], fs2[:, :-1]
+        
+        _, att_g = non_local_attention(tar2, refs2, scaling=True)
+        _, att = non_local_attention(tar1, refs1, scaling=True, mask=self.mask)
+
+
+        with torch.no_grad():
+            fs_t = self.backbone_t(imgs.flatten(0,2))
+            fs_t = fs_t.reshape(bsz, t, *fs_t.shape[-3:])
+            tar_t, refs_t = fs_t[:, -1], fs_t[:, :-1]
+
+            _, target_att = non_local_attention(tar_t, refs_t)
+
+        losses = {}
+        losses['att_loss'] = self.loss(att_g, target_att)
+        
+        
+        # for mast l1_loss
+        if self.l1_loss:
+            ref_gt = [self.prep(gt[:,ch]) for gt in images_lab_gt[:-1]]
+            outputs = frame_transform(att, ref_gt, flatten=False)
+            outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, *fs1.shape[-2:])     
+            losses['l1_loss'], _ = self.compute_lphoto(images_lab_gt, ch, outputs)
+
+        return losses
