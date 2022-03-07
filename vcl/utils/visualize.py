@@ -6,17 +6,21 @@ import torch
 import mmcv
 from PIL import Image
 import matplotlib.pyplot as plt
-from vcl.models.common.correlation import *
 from .util import *
 from .dim_reduction import *
+from matplotlib import cm
+import cvbase
 
 class Correspondence_Visualizer(object):
-    def __init__(self, mode, show_mode='plt', nembed=2048, ):
+    def __init__(self, mode, show_mode='plt', flow_show_mode='rgb', nembed=2048, scale=32):
         
         self.mode = mode
         self.show_mode = show_mode
+        self.flow_show_mode = flow_show_mode
+        self.scale = scale
+        
         if self.show_mode == 'plt':
-            plt.rcParams['figure.dpi'] = 256
+            plt.rcParams['figure.dpi'] = 200
         
         if self.mode == 'vq':
             if nembed >= 256:
@@ -26,7 +30,7 @@ class Correspondence_Visualizer(object):
 
     def vis_pairwise_attention(self, frames, fs, sample_idx):
         
-        _, att = non_local_attention(fs[0], [fs[1]], flatten=False)
+        att = affanity(fs[0], [fs[1]], flatten=False)
         scale = int(att.shape[-1] ** 0.5)
         att = att[0, 0, sample_idx].reshape(scale,scale).detach().cpu().numpy() * 255
         att = self.att_norm(att)
@@ -42,10 +46,10 @@ class Correspondence_Visualizer(object):
         # show
         if self.show_mode == 'plt':
             plt.figure()
-            plt.subplot(2,2,1), plt.imshow(blend_out_query)
-            plt.subplot(2,2,2), plt.imshow(blend_out_result)
-            plt.subplot(2,2,3), plt.imshow(querys_map)
-            plt.subplot(2,2,4), plt.imshow(att)
+            plt.subplot(1,4,1), plt.imshow(blend_out_query)
+            plt.subplot(1,4,2), plt.imshow(blend_out_result)
+            plt.subplot(1,4,3), plt.imshow(querys_map)
+            plt.subplot(1,4,4), plt.imshow(att)
         else:
             pass
         
@@ -94,15 +98,20 @@ class Correspondence_Visualizer(object):
         
         if self.show_mode == 'plt':
             plt.figure()
-            plt.subplot(2,2,1), plt.imshow(frames[0])
-            plt.subplot(2,2,2), plt.imshow(frames[1])
-            plt.subplot(2,2,3), plt.imshow(pca_ff1)
-            plt.subplot(2,2,4), plt.imshow(pca_ff2)
+            plt.subplot(1,4,1), plt.imshow(frames[0])
+            plt.subplot(1,4,2), plt.imshow(frames[1])
+            plt.subplot(1,4,3), plt.imshow(pca_ff1)
+            plt.subplot(1,4,4), plt.imshow(pca_ff2)
         else:
             pass
     
-    def vis_flow(self):
-        pass
+    def vis_flow(self, fs, xs, frames, gt=None):
+        
+        att = affanity(fs[0], [fs[1]], flatten=False)
+        att = att.detach()
+        
+        u, v = compute_flow(att[:,0])
+        flow_visualize(u, v, xs[0][0], xs[1][0], att[0,0], frames, gt=gt, mode=self.flow_show_mode)
 
     def vis_multiple_frrames_attention(self):
         pass
@@ -115,7 +124,10 @@ class Correspondence_Visualizer(object):
             self.vis_vq(*args, **kwargs)
         elif self.mode == 'pca':
             self.vis_pca(*args, **kwargs)
-
+        elif self.mode == 'flow':
+            self.vis_flow(*args, **kwargs)
+            
+            
     @staticmethod
     def att_norm(att, dim=None):
         att = ((att - att.min()) * 255 / (att.max() - att.min())).astype(np.uint8)
@@ -168,5 +180,92 @@ def preprocess_(img, mode='rgb'):
     
     return out
     
-
     
+def compute_flow(corr):
+    # assume batched affinity, shape N x H * W x W x H
+    h = w = int(corr.shape[-1] ** 0.5)
+
+    # x1 -> x2
+    corr = corr.transpose(-1, -2).view(*corr.shape[:-1], h, w)
+    nnf = corr.argmax(dim=1)
+
+    u = nnf % w # nnf.shape[-1]
+    v = nnf / h # nnf.shape[-2] # nnf is an IntTensor so rounds automatically
+
+    rr = torch.arange(u.shape[-1])[None].long().cuda()
+
+    for i in range(u.shape[-1]):
+        u[:, i] -= rr
+
+    for i in range(v.shape[-1]):
+        v[:, :, i] -= rr
+
+    return u, v
+
+
+def flow_visualize(u, v, x1, x2, A, frames=None, gt=None, mode='rgb'):
+    flows = torch.stack([u, v], dim=-1).cpu().numpy()
+        
+    if mode == 'arrow':   
+        plt.figure()
+        plt.subplot(1,3,1), plt.imshow(frames[0])
+        plt.subplot(1,3,2), plt.imshow(frames[1])
+        
+        I, flows = x1.cpu().numpy(), flows[0]
+        H, W = flows.shape[:2]
+        Ih, Iw, = I.shape[-2:]
+        mx, my = np.mgrid[0:Ih:Ih/(H+1), 0:Iw:Iw/(W+1)][:, 1:, 1:]
+        skip = (slice(None, None, 1), slice(None, None, 1))
+
+        ii = 0
+        fig, ax = plt.subplots()
+        # im = ax.imshow((I.transpose(1,2,0)),)
+        C = cm.jet(torch.nn.functional.softmax((A * A.log()).sum(-1).cpu(), dim=-1))
+        # ax.quiver(my[skip], mx[skip], flows[...,0][skip], flows[...,1][skip]*-1, C)#, scale=1, scale_units='dots')
+        ax.quiver(mx[skip], my[skip], flows[...,0][skip], flows[...,1][skip])
+        plt.subplot(1,3,3), plt.imshow()
+        
+    else:
+        flows = flows[0].astype(np.float32)
+        H, W = flows.shape[:2]
+
+        result = mmcv.visualization.flow2rgb(flows)
+        
+        plt.figure()
+        plt.subplot(1,4,1), plt.imshow(frames[0])
+        plt.subplot(1,4,2), plt.imshow(frames[1])
+        plt.subplot(1,4,3), plt.imshow(result)
+        
+        if gt.any() == None:
+            plt.subplot(1,4,4), plt.imshow(result)
+        else:
+            gt = mmcv.visualization.flow2rgb(gt)
+            plt.subplot(1,4,4), plt.imshow(gt)
+
+
+def affanity(tar, refs, per_ref=True, flatten=True, temprature=1.0, mask=None, scaling=False):
+    
+    """ Given refs and tar, return transform tar non-local.
+
+    Returns:
+        att: attention for tar wrt each ref (concat) 
+        out: transform tar for each ref if per_ref else for all refs
+    """
+    
+    if isinstance(refs, list):
+        refs = torch.stack(refs, 1)
+
+    tar = tar.flatten(2).permute(0, 2, 1)
+    
+    _, t, feat_dim, w_, h_ = refs.shape
+    refs = refs.flatten(3).permute(0, 1, 3, 2)
+    att = torch.einsum("bic,btjc -> btij", (tar, refs)) / temprature 
+    if scaling:
+        # scaling
+        att = att / torch.sqrt(torch.tensor(feat_dim).float()) 
+
+    if mask is not None:
+        # att *= mask
+        att.masked_fill_(~mask.bool(), float('-inf'))
+    
+    return att

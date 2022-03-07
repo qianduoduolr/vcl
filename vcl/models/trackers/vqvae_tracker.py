@@ -19,6 +19,8 @@ from vcl.utils.helpers import *
 from vcl.utils import *
 
 
+
+
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
@@ -235,7 +237,7 @@ class Vqvae_Tracker(BaseModel):
         if len(atts) == 0:
             atts.append(att_s)
             
-        visualize_att(imgs, atts, iteration, False, mask_query_idx, tar.shape[-1], self.patch_size, dst_path=save_path, norm_mode='mean-std')
+        # visualize_att(imgs, atts, iteration, False, mask_query_idx, tar.shape[-1], self.patch_size, dst_path=save_path, norm_mode='mean-std')
 
         # vqvae tokenize for query frame
         with torch.no_grad():
@@ -970,8 +972,7 @@ class Vqvae_Tracker_V16(Vqvae_Tracker_V15):
             _, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
         else:
             _, att = non_local_attention(tar, refs, per_ref=self.per_ref, temprature=self.temperature, mask=mask, scaling=self.scaling_att)
-        
-        
+    
         losses = {}
         
         # for mast l1_loss
