@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'moco_d4_eval'
+exp_name = 'detco_d4_eval'
 docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corr'
 
 # model settings
@@ -154,7 +154,7 @@ eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
                 #   checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
                   checkpoint_path=None,
-                  torchvision_pretrained='/gdata/lirui/models/ssl/image_based/moco_v2_800ep_pretrain_revise_key.pth'
+                  torchvision_pretrained='/gdata/lirui/models/ssl/image_based/detco_200ep_AA.pth'
                 )
 
 
