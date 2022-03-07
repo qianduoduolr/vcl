@@ -102,6 +102,7 @@ class Dist_Tracker(BaseModel):
 
 
         with torch.no_grad():
+            self.backbone_t.eval()
             fs_t = self.backbone_t(imgs.flatten(0,2))
             fs_t = fs_t.reshape(bsz, t, *fs_t.shape[-3:])
             tar_t, refs_t = fs_t[:, -1], fs_t[:, :-1]
@@ -205,6 +206,7 @@ class Dist_Tracker_V2(Dist_Tracker):
 
 
         with torch.no_grad():
+            self.backbone_t.eval()
             fs_t = self.backbone_t(imgs.flatten(0,2))
             fs_t = fs_t.reshape(bsz, t, *fs_t.shape[-3:])
             tar_t, refs_t = fs_t[:, -1], fs_t[:, :-1]
