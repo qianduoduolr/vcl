@@ -1,7 +1,7 @@
 #PBS -N train
 #PBS -o /gdata/lirui/pbs/pbs_out/train_dry_run.out
 #PBS -e /gdata/lirui/pbs/pbs_out/train_dry_run.err
-#PBS -l nodes=1:gpus=4:Q,walltime=1000:00:00
+#PBS -l nodes=1:gpus=4:C,walltime=1000:00:00
 #PBS -r y
 
 cd $PBS_O_WORKDIR
