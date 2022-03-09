@@ -11,7 +11,7 @@ model = dict(
     type='Dist_Tracker_V2',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 2), out_indices=(2, 3), pool_type='mean'),
     backbone_t=dict(type='ResNet',depth=50, strides=(1, 2, 1, 2), out_indices=(3, ),pretrained='/gdata/lirui/models/ssl/vcl/vfs_pretrain/r50_nc_sgd_cos_100e_r5_1xNx2_k400-d7ce3ad0.pth'),
-    loss=dict(type='MSELoss',reduction='mean', loss_weight=10000),
+    loss=dict(type='MSELoss',reduction='mean', loss_weight=1000000),
     l1_loss=True,
     temperature=1.0,
     momentum=-1,
