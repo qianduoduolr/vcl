@@ -3,15 +3,15 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'dist_nl_l2_layer4_mast_8'
+exp_name = 'dist_nl_l2_layer4_mast_7_3'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
     type='Dist_Tracker_V2',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 2), out_indices=(2, 3), pool_type='mean'),
-    backbone_t=dict(type='ResNet',depth=50, strides=(1, 2, 1, 2), out_indices=(3, ),pretrained='/gdata/lirui/models/ssl/image_based/detco_200ep_AA.pth'),
-    loss=dict(type='MSELoss',reduction='mean', loss_weight=500),
+    backbone_t=dict(type='ResNet',depth=50, strides=(1, 2, 1, 2), out_indices=(3, ),pretrained='/gdata/lirui/models/ssl/vcl/vfs_pretrain/r50_nc_sgd_cos_100e_r5_1xNx2_k400-d7ce3ad0.pth'),
+    loss=dict(type='MSELoss',reduction='mean', loss_weight=100000),
     l1_loss=True,
     temperature=1.0,
     momentum=-1,
@@ -119,17 +119,17 @@ optimizers = dict(
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=1600
+max_epoch=800
 lr_config = dict(
     policy='CosineAnnealing',
-    min_lr_ratio=0.001,
+    min_lr_ratio=0.0001,
     by_epoch=False,
     warmup_iters=10,
     warmup_ratio=0.1,
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=1600, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=800, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
@@ -148,7 +148,7 @@ log_level = 'INFO'
 work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
 
-evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=3200, by_epoch=True
+evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=1600, by_epoch=True
                   )
 
 eval_config= dict(
@@ -158,7 +158,7 @@ eval_config= dict(
 
 
 load_from = None
-resume_from = '/gdata/lirui/expdir/VCL/group_vqvae_tracker/dist_nl_l2_layer4_mast_8/epoch_800.pth'
+resume_from = None
 workflow = [('train', 1)]
 
 
