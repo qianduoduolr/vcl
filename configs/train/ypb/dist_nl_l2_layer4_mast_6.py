@@ -157,8 +157,8 @@ eval_config= dict(
                 )
 
 
-load_from = '/gdata/lirui/expdir/VCL/group_vqvae_tracker/dist_nl_l2_layer4_mast_6/epoch_800.pth'
-resume_from = None
+load_from = None
+resume_from = '/gdata/lirui/expdir/VCL/group_vqvae_tracker/dist_nl_l2_layer4_mast_6/epoch_800.pth'
 workflow = [('train', 1)]
 
 
