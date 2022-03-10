@@ -1,1 +1,1 @@
-r18_nc_sgd_cos_1600e_r2_1xNx2_ytvos_mast
+train_dry_run

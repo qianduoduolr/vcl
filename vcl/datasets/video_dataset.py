@@ -37,6 +37,7 @@ class Video_dataset_base(BaseDataset):
             
         if mode == 'random':
             offsets = [ random.randint(0, num_frames-clip_length * step) for i in range(num_clips) ]
+            offsets = sorted(offsets)
         elif mode == 'distant':
             length_ext = num_frames / num_clips
             offsets = np.floor(np.arange(num_clips) * length_ext + np.random.uniform(low=0.0, high=length_ext, size=(num_clips))).astype(np.uint8)

@@ -1,3 +1,4 @@
+from builtins import isinstance, list
 import os.path as osp
 from collections import *
 
@@ -188,12 +189,14 @@ class Memory_Tracker(BaseModel):
 class Memory_Tracker_Custom(BaseModel):
     def __init__(self,
                  backbone,
+                 per_ref=True,
                  post_convolution=None,
                  downsample_rate=4,
                  radius=12,
                  feat_size=64,
                  test_cfg=None,
-                 train_cfg=None
+                 train_cfg=None,
+                 pretrained=None,
                  ):
         """ MAST  (CVPR2020)
 
@@ -208,41 +211,63 @@ class Memory_Tracker_Custom(BaseModel):
         self.downsample_rate = downsample_rate
         if post_convolution is not None:
             self.post_convolution =  nn.Conv2d(post_convolution['in_c'], post_convolution['out_c'], post_convolution['ks'], 1, post_convolution['pad'])
-
+        else:
+            self.post_convolution = None
+            
+        self.per_ref = per_ref
         self.test_cfg = test_cfg
         self.train_cfg = train_cfg
         
-        self.mask = make_mask(feat_size, radius)
+        self.pretrained = pretrained
         
-
+        if isinstance(radius, list):
+            masks = []
+            for r in radius:
+                masks.append(make_mask(feat_size, r))
+            self.mask = torch.stack(masks, 0)
+        else:
+            self.mask = make_mask(feat_size, radius)
+        
         self.R = radius # radius
+        
+        self.init_weights()
 
-
+    def init_weights(self):
+        self.backbone.init_weights()
+        if self.pretrained != None:
+            _ = load_checkpoint(self, self.pretrained, strict=False)
+    
     def forward_train(self, imgs, images_lab=None):
             
-        bsz, num_clips, t, c, h, w = imgs.shape
+        bsz, n, c, _, h, w = imgs.shape
         
-        images_lab_gt = [images_lab[:,0,i,:].clone() for i in range(t)]
-        images_lab = [images_lab[:,0,i,:] for i in range(t)]
+        images_lab_gt = [images_lab[:,i,:,0].clone() for i in range(n)]
+        images_lab = [images_lab[:,i,:,0] for i in range(n)]
         _, ch = self.dropout2d_lab(images_lab)
         
         # forward to get feature
         fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
         if self.post_convolution is not None:
             fs = self.post_convolution(fs)
+        
+        fs = fs.reshape(bsz, n, *fs.shape[-3:])
 
         tar, refs = fs[:, -1], fs[:, :-1]
         
         # get correlation attention map            
-        _, att = non_local_attention(tar, refs, mask=self.mask, scaling=True)
+        _, att = non_local_attention(tar, refs, mask=self.mask, scaling=True, per_ref=self.per_ref)
         
         
         losses = {}
         
         # for mast l1_loss
         ref_gt = [self.prep(gt[:,ch]) for gt in images_lab_gt[:-1]]
-        outputs = frame_transform(att, ref_gt, flatten=False)
-        outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, *fs.shape[-2:])     
+        outputs = frame_transform(att, ref_gt, flatten=False, per_ref=self.per_ref)
+        if self.per_ref:
+            outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, *fs.shape[-2:])     
+        else:
+            outputs = outputs.permute(0,2,1).reshape(bsz, -1, *fs.shape[-2:])     
+            
         losses['l1_loss'], _ = self.compute_lphoto(images_lab_gt, ch, outputs)
     
         
