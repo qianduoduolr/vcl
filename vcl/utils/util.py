@@ -14,7 +14,6 @@ from shutil import get_terminal_size
 import mmcv
 from PIL import Image
 import copy
-import matplotlib.pyplot as plt
 from mmcv.runner import load_state_dict
 
 
