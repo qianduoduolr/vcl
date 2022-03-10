@@ -1,6 +1,8 @@
 import mmcv
 from torch import distributed
 
+from vcl.models.losses.losses import Soft_Ce_Loss
+
 from ..components import *
 from vcl.utils.helpers import *
 from vcl.utils import *
@@ -41,13 +43,14 @@ class Quantize(nn.Module):
         self.register_buffer("cluster_size", torch.zeros(n_embed))
         self.register_buffer("embed_avg", embed.clone())
 
-    def forward(self, z, cluster=False):
+    def forward(self, z, cluster=False, soft_align=False):
         """
         :param z: Encoder output
         :return: Quantized tensor
         """
 
         flatten = z.reshape(-1, self.dim)  # Converting the z input to a [N x D] tensor, where D is embedding dimension
+        
         dist = (
                 flatten.pow(2).sum(1, keepdim=True)
                 - 2 * flatten @ self.embed
@@ -86,8 +89,16 @@ class Quantize(nn.Module):
 
         quantize = z + (quantize - z).detach()  # This is added to pass the gradients directly from Z. Basically
         # means that quantization operations have no gradient
+        
+        if soft_align:
+            out = F.normalize(z, dim=-1)
+            vq_emb = F.normalize(self.embed, dim=0)
+            embed_ind_soft = torch.mm(flatten, vq_emb)
+            embed_ind_soft = embed_ind_soft.view(*z.shape[:-1], self.n_embed)  # B x H x W tensor with the indices of their nearest code
+            return quantize, diff, embed_ind, self.embed, embed_ind_soft
+        else:
+            return quantize, diff, embed_ind, self.embed
 
-        return quantize, diff, embed_ind, self.embed
 
 
 class ResBlock(nn.Module):

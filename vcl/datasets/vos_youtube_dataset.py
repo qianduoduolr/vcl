@@ -91,6 +91,35 @@ class VOS_youtube_dataset_rgb(Video_dataset_base):
         } 
 
         return self.pipeline(data)
+    
+    
+@DATASETS.register_module()
+class VOS_youtube_dataset_rgb_V2(VOS_youtube_dataset_rgb):    
+    
+    def prepare_train_data(self, idx):
+
+        sample = self.samples[idx]
+        frames_path = sample['frames_path']
+        num_frames = sample['num_frames']
+
+        offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, self.step, mode=self.temporal_sampling_mode)
+        offsets_ = self.temporal_sampling(num_frames, 1, self.num_clips, self.step, mode=self.temporal_sampling_mode)
+        
+        # load frame
+        frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length, step=self.step)
+        frames_ = self._parser_rgb_rawframe(offsets_, frames_path, self.num_clips, step=self.step)
+        
+
+        data = {
+            'imgs': frames_,
+            'imgs_spa_aug': frames,
+            'modality': 'RGB',
+            'num_clips': self.num_clips,
+            'num_proposals':1,
+            'clip_len': self.clip_length
+        } 
+
+        return self.pipeline(data)
 
 @DATASETS.register_module()
 class VOS_youtube_dataset_rgb_withbbox(VOS_youtube_dataset_rgb):
@@ -136,6 +165,44 @@ class VOS_youtube_dataset_rgb_withbbox(VOS_youtube_dataset_rgb):
 
         data = {
             'imgs': frames,
+            'bboxs': bboxs,
+            'mask_sample_size': (32, 32),
+            'modality': 'RGB',
+            'num_clips': self.num_clips,
+            'num_proposals':1,
+            'clip_len': self.clip_length
+        }
+
+        return self.pipeline(data)
+
+
+@DATASETS.register_module()
+class VOS_youtube_dataset_rgb_withbbox_V2(VOS_youtube_dataset_rgb_withbbox):
+
+    
+    def prepare_train_data(self, idx):
+
+        sample = self.samples[idx]
+
+        frames_path = sample['frames_path']
+        frames_bbox = sample['frames_bbox']
+        num_frames = sample['num_frames']
+
+        offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, self.step)
+        offsets_ = self.temporal_sampling(num_frames, 1, self.num_clips, self.step)
+
+        # load frame
+        frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length)
+        frames_ = self._parser_rgb_rawframe(offsets_, frames_path, self.num_clips)
+        
+        bboxs = []
+        for offset in offsets:
+            for i in range(self.clip_length):
+                bboxs.append(frames_bbox[offset+i])
+
+        data = {
+            'imgs': frames_,
+            'imgs_spa_aug': frames,
             'bboxs': bboxs,
             'mask_sample_size': (32, 32),
             'modality': 'RGB',
@@ -569,3 +636,5 @@ class VOS_youtube_dataset_mlm_withbbox_random_V2(VOS_youtube_dataset_mlm_withbbo
             }
 
             return self.pipeline(data)
+        
+

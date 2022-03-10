@@ -226,7 +226,7 @@ class VQCL_v2(BaseModel):
         return outputs
     
 
-    def encode(self, x):
+    def encode(self, x, soft_align=False):
         """
         Encodes and quantizes an input tensor using VQ-VAE algorithm
         :param x: input tensor
@@ -242,12 +242,18 @@ class VQCL_v2(BaseModel):
         else:
             q_emb = enc.permute(0, 2, 3, 1)
 
-        quant, diff, ind, embed = self.quantize(q_emb.contiguous())
+        if soft_align:
+            quant, diff, ind, embed, ind_soft = self.quantize(q_emb.contiguous(), soft_align=soft_align)
+            # Converting back the quantized map to B x C x H x W
+            quant = quant.permute(0, 3, 1, 2)
+            return q_emb.permute(0,3,1,2), quant, diff, ind, embed, ind_soft
+        else:
+            quant, diff, ind, embed = self.quantize(q_emb.contiguous(), soft_align=soft_align)
+            # Converting back the quantized map to B x C x H x W
+            quant = quant.permute(0, 3, 1, 2)
+            return q_emb.permute(0,3,1,2), quant, diff, ind, embed
 
-        # Converting back the quantized map to B x C x H x W
-        quant = quant.permute(0, 3, 1, 2)
-
-        return enc, quant, diff, ind, embed
+ 
     
 
     def forward_img_head(self, x1, x2):

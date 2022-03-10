@@ -944,6 +944,8 @@ class Vqvae_Tracker_V16(Vqvae_Tracker_V15):
         
     def forward_train(self, imgs, mask_query_idx, frames_mask=None, images_lab=None):
         
+        # self.eval()
+        
         bsz, num_clips, t, c, h, w = imgs.shape
         
         # use pre-difined query
@@ -1035,6 +1037,10 @@ class Vqvae_Tracker_V16(Vqvae_Tracker_V15):
                     # predict = torch.div(predict, 0.1) # temperature is set to 0.1
                     
                 loss = self.ce_loss(predict, out_ind[idx])
+                
+                # c = loss.reshape(bsz, 32, 32)[1].detach().cpu().numpy()
+                # img = tensor2img(imgs[1, 0,0].detach(), norm_mode='mean-std')
+                
                 losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
                     
         return losses
@@ -1183,4 +1189,130 @@ class Vqvae_Tracker_V17(Vqvae_Tracker_V16):
             losses[f'target_ce_loss'] = (loss_tar * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
         
         
+        return losses
+    
+    
+@MODELS.register_module()
+class Vqvae_Tracker_V18(Vqvae_Tracker_V16):
+    '''  Combine with MAST CVPR2020 '''
+    
+    def __init__(self, l1_loss=False, downsample_rate=8, downsample_mode='default', use_quant=True, *args, **kwargs):
+        
+        super().__init__(*args, **kwargs)
+        
+        self.downsample_rate = downsample_rate
+        self.l1_loss = l1_loss
+        self.downsample_mode = downsample_mode
+        self.use_quant = use_quant
+    
+    def prep(self, image, mode='default'):
+        bsz,c,_,_ = image.size()
+        if mode == 'default':
+            x = image.float()[:,:,::self.downsample_rate,::self.downsample_rate]
+        elif mode == 'unfold':
+            x = F.unfold(image, self.downsample_rate+1, padding=self.downsample_rate//2)
+            x = x.reshape(bsz, -1, *image.shape[-2:]).mean(1, keepdim=True)
+            x = x.float()[:,:,::self.downsample_rate,::self.downsample_rate]
+        return x
+        
+    def forward_train(self, imgs, mask_query_idx, frames_mask=None, images_lab=None):
+        
+        # self.eval()
+        
+        bsz, num_clips, t, c, h, w = imgs.shape
+        
+        # use pre-difined query
+        mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1) if self.per_ref else mask_query_idx.bool()
+        
+        images_lab_gt = [images_lab[:,0,i,:].clone() for i in range(t)]
+        images_lab = [images_lab[:,0,i,:] for i in range(t)]
+        _, ch = self.dropout2d_lab(images_lab)
+        
+        # forward to get feature
+        fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        if self.post_convolution is not None:
+            fs = self.post_convolution(fs)
+        if self.norm:
+            fs = F.normalize(fs, dim=1)
+        fs = fs.reshape(bsz, t, *fs.shape[-3:])
+        tar, refs = fs[:, -1], fs[:, :-1]
+        
+        # get correlation attention map
+        if frames_mask is not None:
+            mask = frames_mask[:,:-1,None].flatten(3)
+        else:
+            mask = self.mask if self.temp_window else None
+                        
+        if self.patch_size != -1:
+            _, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
+        else:
+            _, att = non_local_attention(tar, refs, per_ref=self.per_ref, temprature=self.temperature, mask=mask, scaling=self.scaling_att)
+    
+        losses = {}
+        
+        # for mast l1_loss
+        if self.l1_loss:
+            ref_gt = [self.prep(gt[:,ch], mode=self.downsample_mode) for gt in images_lab_gt[:-1]]
+            outputs = frame_transform(att, ref_gt, flatten=False)
+            outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, *fs.shape[-2:])     
+            losses['l1_loss'], _ = self.compute_lphoto(images_lab_gt, ch, outputs)
+        
+        # for ce_loss
+        if self.ce_loss:
+            # vqvae tokenize for query frame
+            with torch.no_grad():
+                out_ind= []
+                outs = []
+                vq_inds = []
+                for i in range(self.num_head):
+                    i = str(i).replace('0', '')
+                    vqvae = getattr(self, f'vqvae{i}')
+                    vq_enc = getattr(self, f'vq_enc{i}')
+                    vqvae.eval()
+                    encs, quants, _, inds, _, inds_soft = vq_enc(imgs.flatten(0,2), soft_align=True)                    
+                    
+                    
+                    if self.use_quant:
+                        quants = quants.reshape(bsz, t, *quants.shape[-3:])
+                        out_quant_refs = quants[:, :-1].flatten(3).permute(0, 1, 3, 2)
+                        outs.append(out_quant_refs)
+                    else:
+                        encs = encs.reshape(bsz, t, *encs.shape[-3:])
+                        out_enc_refs = encs[:, :-1].flatten(3).permute(0, 1, 3, 2)
+                        outs.append(out_enc_refs)
+                    
+                    inds = inds.reshape(bsz, t, *inds.shape[-2:])
+                    vq_inds.append([inds[:, -1], inds[:, -2]])
+                    inds_soft = inds_soft.reshape(bsz, t, *inds.shape[-2:], self.n_embed)
+                    
+                    if self.per_ref:
+                        ind = inds_soft[:, -1].unsqueeze(1).repeat(1, t-1, 1, 1, 1).reshape(-1, self.n_embed).detach()
+                    else:
+                        ind = inds_soft[:, -1].reshape(-1, self.n_embed).detach()
+                        
+                    out_ind.append(ind)
+
+            
+            for idx, i in enumerate(range(self.num_head)):                
+                i = str(i).replace('0', '')
+                
+                # change query if use vq sample
+                if self.vq_sample:
+                    mask_query_idx = self.query_vq_sample(vq_inds[idx][0], vq_inds[idx][1], t, self.mask, self.per_ref)
+                
+                out = frame_transform(att, outs[idx], per_ref=self.per_ref)
+                
+                if self.fc:
+                    predict = getattr(self, f'predictor{i}')(out)
+                else:
+                    vq_emb = getattr(self, f'vq_emb{i}')
+                    out = F.normalize(out, dim=-1)
+                    vq_emb = F.normalize(vq_emb, dim=0)
+                    predict = torch.mm(out, vq_emb)
+                    # predict = torch.div(predict, 0.1) # temperature is set to 0.1
+                    
+                loss = self.ce_loss(predict, out_ind[idx])
+                
+                losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
+                    
         return losses

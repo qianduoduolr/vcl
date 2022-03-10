@@ -201,7 +201,8 @@ class RandomResizedCrop(object):
                  same_frame_indices=None,
                  crop_ratio=0.9,
                  lazy=False,
-                 keys='imgs'):
+                 keys='imgs',
+                 with_bbox=False):
         self.area_range = area_range
         self.aspect_ratio_range = aspect_ratio_range
         self.lazy = lazy
@@ -221,6 +222,7 @@ class RandomResizedCrop(object):
         self.same_frame_indices = same_frame_indices
         self.crop_ratio = crop_ratio
         self.keys = keys
+        self.with_bbox = with_bbox
     
 
     @staticmethod
@@ -321,7 +323,7 @@ class RandomResizedCrop(object):
 
         img_h, img_w = results['img_shape']
         
-        if results.get('bboxs', None):
+        if results.get('bboxs', None) and self.with_bbox:
             bbox = results['bboxs'][0]
             results['crop_bbox_ratio'] = []
         else:
@@ -353,7 +355,7 @@ class RandomResizedCrop(object):
                         'clip_len'] in self.same_frame_indices
                     generate_new = generate_new and not keep_same
                 if generate_new:
-                    if results.get('bboxs', None):
+                    if results.get('bboxs', None) and self.with_bbox:
                         bbox = results['bboxs'][i]
                     else:
                         bbox = None
@@ -366,7 +368,7 @@ class RandomResizedCrop(object):
                 results['img_shape'] = (new_h, new_w)
                 results[self.keys][i] = img[top:bottom, left:right]
 
-                if results.get('bboxs', None):
+                if results.get('bboxs', None) and self.with_bbox:
                     results['crop_bbox_ratio'].append(self.get_ratio(results, left, top, new_w, new_h, i))
                 
                 if 'grids' in results:
@@ -723,7 +725,8 @@ class Flip(object):
                  same_across_clip=False,
                  same_clip_indices=None,
                  same_frame_indices=None,
-                 keys='imgs'):
+                 keys='imgs',
+                 with_bbox=False):
         if direction not in self._directions:
             raise ValueError(f'Direction {direction} is not supported. '
                              f'Currently support ones are {self._directions}')
@@ -739,6 +742,7 @@ class Flip(object):
             assert isinstance(same_frame_indices, Sequence)
         self.same_frame_indices = same_frame_indices
         self.keys = keys
+        self.with_bbox = with_bbox
 
     def __call__(self, results):
         """Performs the Flip augmentation.
@@ -783,13 +787,13 @@ class Flip(object):
                     flip = npr.rand() < self.flip_ratio
                 if flip:
                     mmcv.imflip_(img, self.direction)
-                    if results.get('bbox_mask', None):
+                    if results.get('bbox_mask', None) and self.with_bbox:
                         mmcv.imflip_(results['bbox_mask'][i], self.direction)
                         mmcv.imflip_(results['mask_query_idx'][i], self.direction)
                     if 'grids' in results:
                         mmcv.imflip_(results['grids'][i], self.direction)
 
-                if results.get('bbox_mask', None):
+                if results.get('bbox_mask', None) and self.with_bbox:
                     size = results['mask_sample_size']
                     ratio = results['crop_bbox_ratio'][i]
 
@@ -840,7 +844,7 @@ class Flip(object):
             else:
                 results[self.keys] = list(results[self.keys])
 
-            if results.get('bbox_mask', None):
+            if results.get('bbox_mask', None) and self.with_bbox:
                 results['frames_mask'] = results['mask_query_idx']
                 
                 if results.get('return_first_query', False):
@@ -1256,7 +1260,7 @@ class RGB2LAB(object):
 
     def __call__(self, results):
         if self.keys is not self.output_keys: 
-            results[self.output_keys] = results[self.output_keys] = copy.deepcopy(results[self.keys])
+            results[self.output_keys]  = copy.deepcopy(results[self.keys])
         for i, img in enumerate(results[self.keys]):
             # results[self.output_keys][i] = mmcv.imconvert(img, 'rgb', 'lab')
             img = np.float32(img) / 255.0
