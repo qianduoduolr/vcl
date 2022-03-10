@@ -1,1 +1,1 @@
-mast_d4_l5_finetune
+train_dry_run
