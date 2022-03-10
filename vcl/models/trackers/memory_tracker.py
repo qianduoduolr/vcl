@@ -235,7 +235,7 @@ class Memory_Tracker_Custom(BaseModel):
     def init_weights(self):
         self.backbone.init_weights()
         if self.pretrained != None:
-            _ = load_checkpoint(self, self.pretrained, strict=False)
+            _ = load_checkpoint(self, self.pretrained, strict=False, map_location='cpu')
     
     def forward_train(self, imgs, images_lab=None):
             
