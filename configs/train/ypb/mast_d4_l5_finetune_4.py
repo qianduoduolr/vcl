@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'mast_d4_l5_finetune'
+exp_name = 'mast_d4_l5_finetune_4'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 # model settings
@@ -15,7 +15,12 @@ model = dict(
     radius=[9,8,7,6],
     feat_size=32,
     per_ref=False,
-    pretrained='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_mast_12_2/epoch_1600.pth'
+    pretrained='/gdata/lirui/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_mast_12_2/epoch_1600.pth'
+)
+
+model_test = dict(
+    type='VanillaTracker',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(2, )),
 )
 
 # model training and testing settings
@@ -35,7 +40,8 @@ test_cfg = dict(
 # dataset settings
 train_dataset_type = 'VOS_youtube_dataset_rgb'
 
-val_dataset_type = None
+val_dataset_type = 'VOS_davis_dataset_test'
+
 test_dataset_type = 'VOS_davis_dataset_test'
 
 
@@ -73,7 +79,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=8, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -81,8 +87,8 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            root='/home/lr/dataset/YouTube-VOS',
-            list_path='/home/lr/dataset/YouTube-VOS/2018/train',
+            root='/dev/shm',
+            list_path='/dev/shm/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
             num_clips=5,
             clip_length=1,
@@ -92,8 +98,17 @@ data = dict(
 
     test =  dict(
             type=test_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
+            data_prefix='2017',
+            pipeline=val_pipeline,
+            test_mode=True
+            ),
+    
+    val =  dict(
+            type=val_dataset_type,
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -133,13 +148,14 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}'
+work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth',
+                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth',
                 )
-
+evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=400, by_epoch=True
+                  )
 
 load_from = None
 resume_from = None
