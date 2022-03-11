@@ -239,10 +239,10 @@ class Memory_Tracker_Custom(BaseModel):
     
     def forward_train(self, imgs, images_lab=None):
             
-        bsz, n, c, _, h, w = imgs.shape
+        bsz, _, n, c, h, w = imgs.shape
         
-        images_lab_gt = [images_lab[:,i,:,0].clone() for i in range(n)]
-        images_lab = [images_lab[:,i,:,0] for i in range(n)]
+        images_lab_gt = [images_lab[:,0,i].clone() for i in range(n)]
+        images_lab = [images_lab[:,0,i] for i in range(n)]
         _, ch = self.dropout2d_lab(images_lab)
         
         # forward to get feature

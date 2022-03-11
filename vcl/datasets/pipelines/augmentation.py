@@ -811,7 +811,7 @@ class Flip(object):
                     if flip:
                         mmcv.imflip_(results['masks'][i])
                 
-            #     imgs.append(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+                imgs.append(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
             
             # if results.get('bbox_mask', None):
             #     if results.get('return_first_query', False):
@@ -830,9 +830,9 @@ class Flip(object):
             #     imgs.append(mask1)
             #     imgs.append(mask2)
                 
-            #     out = np.concatenate(imgs, 1)
-            #     num = random.randint(0,1000)
-            #     cv2.imwrite(f'/home/lr/project/vcl_output/output/aug_vis/same2/{num}.jpg', out)
+            out = np.concatenate(imgs, 1)
+            num = random.randint(0,1000)
+            cv2.imwrite(f'/home/lr/project/vcl_output/output/aug_vis/same5_/{num}.jpg', out)
                
             if flip:
                 lt = len(results[self.keys])

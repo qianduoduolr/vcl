@@ -47,7 +47,10 @@ class Video_dataset_base(BaseDataset):
             short_term_start = random.randint(2, num_frames-clip_length * step - (num_clips-2) * short_term_interval )
             offsets_short_term = list([ short_term_start+i*short_term_interval for i in range(num_clips-2)])
             offsets = offsets_long_term + offsets_short_term
-        
+        elif mode == 'mast_v2':
+            length_ext = (num_frames - 1) / (num_clips - 1)
+            offsets = np.floor(np.arange(num_clips-1) * length_ext + np.random.uniform(low=0.0, high=length_ext, size=(num_clips-1))).astype(np.uint8).tolist()
+            offsets.append(offsets[-1]+1)
         return offsets
 
     def _parser_rgb_rawframe(self, offsets, frames_path, clip_length, step=1, flag='color', backend='cv2'):
