@@ -20,7 +20,7 @@ class Video_dataset_base(BaseDataset):
                        step=1,
                        pipeline=None, 
                        test_mode=False,
-                       filename_tmpl='image_{:05d}.jpg',
+                       filename_tmpl='{:05d}.jpg',
                        temporal_sampling_mode='random',
                        data_backend='raw',
                        split='train'

@@ -20,11 +20,6 @@ model = dict(
     pretrained=None
 )
 
-model_test = dict(
-    type='VanillaTracker',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(2, ), pool_type='mean'),
-)
-
 # model training and testing settings
 train_cfg = dict(syncbn=True)
 
@@ -149,8 +144,8 @@ log_level = 'INFO'
 work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
 
-evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True
-                  )
+# evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True
+#                   )
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
@@ -159,7 +154,7 @@ eval_config= dict(
 
 
 load_from = None
-resume_from = None
+resume_from = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_800.pth'
 workflow = [('train', 1)]
 
 
