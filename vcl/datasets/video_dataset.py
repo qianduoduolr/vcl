@@ -74,7 +74,7 @@ class Video_dataset_base(BaseDataset):
         with lmdb_env.begin() as lmdb_txn:
             for offset in offsets:
                 for idx in range(clip_length):
-                    frame_path = self.filename_tmpl.format(offset+idx+1)
+                    frame_path = os.path.basename(frames_path[ offset + idx * step])
                     bio = lmdb_txn.get(frame_path.encode())
                     frame = mmcv.imfrombytes(bio, backend=backend, flag=flag, channel_order='rgb')
                     frame_list_all.append(frame)

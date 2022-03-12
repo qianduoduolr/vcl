@@ -11,7 +11,7 @@ from joblib import delayed, Parallel
 
 target = 256
 
-def create_lmdb_video_dataset_rgb(root_path, dst_path, workers=-1, quality=100, resize=True, save_jpg=False, save_lmdb=False):
+def create_lmdb_video_dataset_rgb(root_path, dst_path, workers=-1, quality=100, resize=True, save_jpg=False, save_lmdb=True):
 
     videos = glob(os.path.join(root_path,'*'))
     print('begin')
@@ -58,7 +58,7 @@ def create_lmdb_video_dataset_rgb(root_path, dst_path, workers=-1, quality=100, 
             frames_num = len(frames)
             for i in range(frames_num):
                 txn = env.begin(write=True)
-                key = 'image_{:05d}.jpg'.format(i+1)
+                key = os.path.basename(frame_names[i])
                 frame = frames[i]
                 _, frame_byte = cv2.imencode('.jpg', frame,  [int(cv2.IMWRITE_JPEG_QUALITY), quality])
                 txn.put(key.encode(), frame_byte)
@@ -116,11 +116,11 @@ def parse_option():
     parser = argparse.ArgumentParser('training')
 
     # dataset
-    parser.add_argument('--root-path', type=str, default='/home/lr/dataset/YouTube-VOS/2018/train_all_frames/JPEGImages', help='path of original data')
+    parser.add_argument('--root-path', type=str, default='/home/lr/dataset/YouTube-VOS/2018/train/JPEGImages', help='path of original data')
     parser.add_argument('--dst-path', type=str, default='JPEGImages_s256', help='path to store generated data')
     parser.add_argument('--num-workers', type=int, default=-1, help='num of workers to use')
     parser.add_argument('--resize', type=str, default='r', help='path to store generated data')
-    parser.add_argument('--save-jpg', type=str, default='yes', help='path to store generated data')
+    parser.add_argument('--save-jpg', type=str, default=None, help='path to store generated data')
 
     
 

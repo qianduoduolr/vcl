@@ -34,6 +34,7 @@ class Dist_Tracker(BaseModel):
                  feat_size=32,
                  mask_radius=-1,
                  loss=None,
+                 loss_feat=None,
                  l1_loss=None,
                  train_cfg=None,
                  test_cfg=None,
@@ -67,6 +68,8 @@ class Dist_Tracker(BaseModel):
 
         # loss
         self.loss = build_loss(loss)
+        self.loss_feat = build_loss(loss)
+        
         
         if mask_radius != -1:
             self.mask = make_mask(feat_size, mask_radius)
@@ -241,27 +244,29 @@ class Dist_Tracker_V3(Dist_Tracker_V2):
         
         # forward to get feature
 
-        fs1, fs2 = self.backbone(torch.stack(images_lab,1).flatten(0,1))
-        fs1 = fs1.reshape(bsz, t, *fs1.shape[-3:])
+        fs1_, fs2_ = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        fs1 = fs1_.reshape(bsz, t, *fs1_.shape[-3:])
         tar1, refs1 = fs1[:, -1], fs1[:, :-1]
-        fs2 = fs2.reshape(bsz, t, *fs2.shape[-3:])
+        fs2 = fs2_.reshape(bsz, t, *fs2_.shape[-3:])
         tar2, refs2 = fs2[:, -1], fs2[:, :-1]
         
         _, att_g = non_local_attention(tar2, refs2, scaling=True)
         _, att = non_local_attention(tar1, refs1, scaling=True, mask=self.mask)
+        sf = fs2_.mean(1)
 
 
         with torch.no_grad():
             self.backbone_t.eval()
-            fs_t = self.backbone_t(imgs.flatten(0,2))
-            fs_t = fs_t.reshape(bsz, t, *fs_t.shape[-3:])
+            fs_t_ = self.backbone_t(imgs.flatten(0,2))
+            fs_t = fs_t_.reshape(bsz, t, *fs_t_.shape[-3:])
             tar_t, refs_t = fs_t[:, -1], fs_t[:, :-1]
-
             _, target_att = non_local_attention(tar_t, refs_t)
+            tf = fs_t_.mean(1)
+            
 
         losses = {}
         losses['att_loss'] = self.loss(att_g, target_att)
-        losses['feat_att_loss'] = self.loss(att_g, target_att)
+        losses['feat_att_loss'] = self.loss_feat(sf, tf)
         
         
         # for mast l1_loss
