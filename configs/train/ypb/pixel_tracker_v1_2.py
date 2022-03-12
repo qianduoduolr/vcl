@@ -77,7 +77,7 @@ data = dict(
             dict(
             type=train_dataset_type,
             root='/dev/shm',
-            list_path='/dev/shm/2018/train',
+            list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
             data_prefix=dict(RGB='train_all_frames/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train_all_frames/Annotations'),
             clip_length=5,
             step=8,

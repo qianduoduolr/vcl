@@ -102,7 +102,7 @@ data = dict(
             size=256,
             p=0.8,
             root='/dev/shm',
-            list_path='/dev/shm/2018/train',
+            list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train/Flows_s256', ANNO='train/Annotations_s256'),
             mask_ratio=0.15,
             clip_length=2,

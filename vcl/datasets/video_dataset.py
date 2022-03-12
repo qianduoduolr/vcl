@@ -8,7 +8,9 @@ from .base_dataset import BaseDataset
 import random
 import mmcv
 import numpy as np
-
+import lmdb
+import os
+import io
 
 class Video_dataset_base(BaseDataset):
     def __init__(self, root,  
@@ -18,8 +20,9 @@ class Video_dataset_base(BaseDataset):
                        step=1,
                        pipeline=None, 
                        test_mode=False,
-                       filename_tmpl='{:05d}.jpg',
+                       filename_tmpl='image_{:05d}.jpg',
                        temporal_sampling_mode='random',
+                       data_backend='raw',
                        split='train'
                        ):
         super().__init__(pipeline, test_mode)
@@ -32,6 +35,7 @@ class Video_dataset_base(BaseDataset):
         self.filename_tmpl = filename_tmpl
         self.temporal_sampling_mode = temporal_sampling_mode
         self.split = split
+        self.data_backend = data_backend
 
     def temporal_sampling(self, num_frames, num_clips, clip_length, step, mode='random'):
             
@@ -65,12 +69,13 @@ class Video_dataset_base(BaseDataset):
 
     def _parser_rgb_lmdb(self, offsets, frames_path, clip_length, step=1, flag='color', backend='cv2'):
         """read frame"""
+        lmdb_env = lmdb.open(os.path.dirname(frames_path[0]), readonly=True, lock=False)
         frame_list_all = []
-        for offset in offsets:
-            frame_list = []
-            for idx in range(clip_length):
-                frame_path = frames_path[offset + idx * step]
-                frame = mmcv.imread(frame_path, backend=backend, flag=flag, channel_order='rgb')
-                frame_list.append(frame)
-            frame_list_all.append(frame_list)
-        return frame_list_all if len(frame_list_all) >= 2 else frame_list_all[0]
+        with lmdb_env.begin() as lmdb_txn:
+            for offset in offsets:
+                for idx in range(clip_length):
+                    frame_path = self.filename_tmpl.format(offset+idx+1)
+                    bio = lmdb_txn.get(frame_path.encode())
+                    frame = mmcv.imfrombytes(bio, backend=backend, flag=flag, channel_order='rgb')
+                    frame_list_all.append(frame)
+        return frame_list_all 

@@ -100,7 +100,7 @@ data = dict(
             dict(
             type=train_dataset_type,
             root='/dev/shm',
-            list_path='/dev/shm/2018/train',
+            list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
             data_prefix='2018',
             mask_ratio=0.15,
             clip_length=2,

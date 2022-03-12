@@ -92,6 +92,7 @@ def make_local_config(exp_name):
         for line in f:
             line = line.replace('/home/lr','/gdata/lirui')
             line = line.replace('/gdata/lirui/dataset/YouTube-VOS','/dev/shm')
+            line = line.replace('/dev/shm/', '/gdata/lirui/dataset/YouTube-VOS/')
             # line = line.replace('/home/lr/dataset','/home/lr/dataset')
             config_data += line
 

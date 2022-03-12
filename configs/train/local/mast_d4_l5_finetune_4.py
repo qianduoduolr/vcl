@@ -89,11 +89,12 @@ data = dict(
             type=train_dataset_type,
             root='/home/lr/dataset/YouTube-VOS',
             list_path='/home/lr/dataset/YouTube-VOS/2018/train',
-            data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
+            data_prefix=dict(RGB='train/LMDBImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
             num_clips=5,
             clip_length=1,
             pipeline=train_pipeline,
             temporal_sampling_mode='mast_v2',
+            data_backend='lmdb',
             test_mode=False),
 
     test =  dict(
@@ -143,7 +144,6 @@ log_config = dict(
     ])
 
 visual_config = None
-
 
 # runtime settings
 dist_params = dict(backend='nccl')
