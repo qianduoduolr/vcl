@@ -356,6 +356,10 @@ def tensor_slice(x, begin, size):
     return x[slices]
 
 def make_mask(size, t_size, eq=True):
+    
+    size = int(size)
+    t_size = int(t_size)
+        
     masks = []
     for i in range(size):
         for j in range(size):

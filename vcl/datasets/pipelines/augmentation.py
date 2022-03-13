@@ -5,6 +5,7 @@ import torch
 import numbers
 from typing import Tuple, List, Optional
 from torch import Tensor
+import math
 
 import cv2
 import mmcv
@@ -17,6 +18,8 @@ from torchvision.transforms import ColorJitter as _ColorJitter
 from torchvision.transforms import RandomAffine as _RandomAffine
 from torchvision.transforms import RandomResizedCrop as _RandomResizedCrop
 from torchvision.transforms import functional as F
+
+from vcl.utils.visualize import affanity
 
 from ..registry import PIPELINES
 
@@ -557,6 +560,104 @@ class MultiScaleCrop(object):
                     f'num_fixed_crops={self.num_fixed_crops}, '
                     f'lazy={self.lazy})')
         return repr_str
+
+@PIPELINES.register_module()
+class RandomScaleCrop(object):
+
+    def __init__(self,
+                 scale_range=(0.5, 1.0),
+                 identity=False,
+                 same_on_clip=True,
+                 same_across_clip=False,
+                 same_clip_indices=None,
+                 same_frame_indices=None,
+                 keys='imgs',
+                 ):
+        self.scale_range = scale_range
+
+        self.same_on_clip = same_on_clip
+        self.same_across_clip = same_across_clip
+        if same_clip_indices is not None:
+            assert isinstance(same_clip_indices, Sequence)
+        self.same_clip_indices = same_clip_indices
+        if same_frame_indices is not None:
+            assert isinstance(same_frame_indices, Sequence)
+        self.same_frame_indices = same_frame_indices
+        self.keys = keys
+        self.identity = identity
+    
+    @staticmethod
+    def get_params(h, w, new_scale):
+        # generating random crop
+        # preserves aspect ratio
+        new_h = int(new_scale * h)
+        new_w = int(new_scale * w)
+
+        # generating 
+        if new_scale <= 1.:
+            assert w >= new_w and h >= new_h, "{} vs. {} | {} / {}".format(w, new_w, h, new_h)
+            i = random.randint(0, h - new_h)
+            j = random.randint(0, w - new_w)
+        else:
+            assert w <= new_w and h <= new_h, "{} vs. {} | {} / {}".format(w, new_w, h, new_h)
+            i = random.randint(h - new_h, 0)
+            j = random.randint(w - new_w, 0)
+
+        return i, j, new_h, new_w
+    
+    def get_scale(self):
+        return random.uniform(self.scale_range[0], self.scale_range[1])
+    
+    def __call__(self, results):
+    
+        if results.get('affine', True):
+            results[f'affine_params_{self.keys}'] = [[0.,0.,0.,1.,1.] for _ in  results[self.keys]]
+
+        if self.identity:
+            return results
+        
+        H, W, _ =  results[self.keys][0].shape
+
+        i2 = H / 2
+        j2 = W / 2
+
+        masks_new = []
+        
+        # one crop for all
+        s = self.get_scale()
+
+        ii, jj, h, w = self.get_params(H, W, s)
+
+        # displacement of the centre
+        dy = ii + h / 2 - i2
+        dx = jj + w / 2 - j2
+
+        
+        for k, image in enumerate(results[self.keys]):
+
+            results[f'affine_params_{self.keys}'][k][0] = dy
+            results[f'affine_params_{self.keys}'][k][1] = dx
+            results[f'affine_params_{self.keys}'][k][3] = 1 / s # scale
+
+            if s <= 1.:
+                assert ii >= 0 and jj >= 0
+                # zooming in
+                image_crop = results[self.keys][k][ii:ii+h, jj:jj+w]
+                results[self.keys][k] = mmcv.imresize(image_crop, (W,H))
+            else:
+                assert ii <= 0 and jj <= 0
+                # zooming out
+                pad_l = abs(jj)
+                pad_r = w - W - pad_l
+                pad_t = abs(ii)
+                pad_b = h - H - pad_t
+
+                image_pad = mmcv.impad(image, (pad_l, pad_t, pad_r, pad_b))
+                # image_pad = F.pad(image, (pad_l, pad_t, pad_r, pad_b))
+                results[self.keys][k] = mmcv.imresize(image_pad, (W,H))
+
+        return results
+    
 
 
 @PIPELINES.register_module()
@@ -1911,3 +2012,92 @@ class ColorDropout(object):
     
         else:
             return results
+        
+@PIPELINES.register_module()
+class FrameDup(object):
+    
+    def __init__(self, 
+                 keys_list=['imgs'],
+                 out_keys_list=['imgs']
+                 
+                 ):
+        self.keys_list = keys_list
+        self.out_keys_list = out_keys_list
+    
+    def __call__(self, results):
+        for source, target in zip(self.keys_list, self.out_keys_list):
+            if source == target:
+                pass
+            else:
+                results[target] = copy.deepcopy(results[source])
+        return results
+                
+@PIPELINES.register_module()
+class GetAffanity(object):
+    
+    def __init__(
+        self,
+        keys='imgs',
+        size=(256, 256),
+        get_inverse=True
+    ):
+        self.keys = keys
+        self.size = size
+        self.get_inverse= get_inverse
+        
+    def _get_affine(self, params):
+    
+        N = len(params)
+
+        # construct affine operator
+        affine = torch.zeros(N, 2, 3)
+
+        aspect_ratio = float(self.size[0]) / \
+                            float(self.size[1])
+
+        for i, (dy,dx,alpha,scale,flip) in enumerate(params):
+
+            # R inverse
+            sin = math.sin(alpha * math.pi / 180.)
+            cos = math.cos(alpha * math.pi / 180.)
+
+            # inverse, note how flipping is incorporated
+            affine[i,0,0], affine[i,0,1] = flip * cos, sin * aspect_ratio
+            affine[i,1,0], affine[i,1,1] = -sin / aspect_ratio, cos
+
+            # T inverse Rinv * t == R^T * t
+            affine[i,0,2] = -1. * (cos * dx + sin * dy)
+            affine[i,1,2] = -1. * (-sin * dx + cos * dy)
+
+            # T
+            affine[i,0,2] /= float(self.size[1] // 2)
+            affine[i,1,2] /= float(self.size[0] // 2)
+
+            # scaling
+            affine[i] *= scale
+
+        return affine
+
+    def _get_affine_inv(self, affine, params):
+
+        aspect_ratio = float(self.size[0]) / \
+                            float(self.size[1])
+
+        affine_inv = affine.clone()
+        affine_inv[:,0,1] = affine[:,1,0] * aspect_ratio**2
+        affine_inv[:,1,0] = affine[:,0,1] / aspect_ratio**2
+        affine_inv[:,0,2] = -1 * (affine_inv[:,0,0] * affine[:,0,2] + affine_inv[:,0,1] * affine[:,1,2])
+        affine_inv[:,1,2] = -1 * (affine_inv[:,1,0] * affine[:,0,2] + affine_inv[:,1,1] * affine[:,1,2])
+
+        # scaling
+        affine_inv /= torch.Tensor(params)[:,3].view(-1,1,1)**2
+
+        return affine_inv
+    
+    def __call__(self, results):
+        
+        results[f'affine_{self.keys}'] = self._get_affine(results[f'affine_params_{self.keys}'])
+        if self.get_inverse:
+            results[f'affine_{self.keys}'] = self._get_affine_inv(results[f'affine_{self.keys}'], results[f'affine_params_{self.keys}'])
+        
+        return results

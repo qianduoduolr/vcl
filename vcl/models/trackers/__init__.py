@@ -7,3 +7,4 @@ from .memory_tracker import *
 from .rw_tracker import RW_Tracker
 from .modules import *
 from .sim_siam_base_tracker import *
+from .warp_tracker import *

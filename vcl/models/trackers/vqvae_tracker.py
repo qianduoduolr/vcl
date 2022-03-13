@@ -69,6 +69,7 @@ class Vqvae_Tracker(BaseModel):
         self.temp_window = temp_window
         self.norm = norm
         self.scaling_att = scaling_att
+        self.vq_size = vq_size
         
         self.logger = get_root_logger()
 
@@ -1046,11 +1047,11 @@ class Vqvae_Tracker_V16(Vqvae_Tracker_V15):
         return losses
     
     @staticmethod
-    def query_vq_sample(ind_tar, ind_ref, t, mask, per_ref):
+    def query_vq_sample(ind_tar, ind_ref, t, mask=None, per_ref=True):
         # determined query
         ind_tar = ind_tar.flatten(1).unsqueeze(-1).repeat(1,1,ind_tar.shape[-1] * ind_tar.shape[-2])
         ind_ref = ind_ref.flatten(1).unsqueeze(1).repeat(1,ind_ref.shape[-1] * ind_ref.shape[-2],1)
-        mask_query_idx = ((ind_tar == ind_ref) * mask.unsqueeze(0)).sum(-1)
+        mask_query_idx = ((ind_tar == ind_ref) * mask.unsqueeze(0)).sum(-1) if mask != None else ((ind_tar == ind_ref)).sum(-1)
         mask_query_idx = (mask_query_idx > 0)
         if per_ref:
             mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
@@ -1090,12 +1091,15 @@ class Vqvae_Tracker_V16(Vqvae_Tracker_V15):
 
 @MODELS.register_module()
 class Vqvae_Tracker_V17(Vqvae_Tracker_V16):
-    '''  Combine with MAST CVPR2020 '''
-    
-    def __init__(self, target_ce_loss=False,  *args, **kwargs):
+    '''  Combine with MAST CVPR2020 '''    
+    def __init__(self,  radius_list=-1, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.target_ce_loss = target_ce_loss
-        
+        # if radius_list is not -1:
+        #     self.mask = []
+        #     for idx, r in enumerate(radius_list):
+        #         self.mask.append(make_mask(self.vq_size / (2 ** idx), r))
+
+    
     
     def forward_train(self, imgs, mask_query_idx, images_lab=None):
         
@@ -1171,8 +1175,8 @@ class Vqvae_Tracker_V17(Vqvae_Tracker_V16):
                 
                 # change query if use vq sample
                 if self.vq_sample:
-                    mask_query_idx = self.query_vq_sample(vq_inds[idx][0], vq_inds[idx][1], t, self.mask, self.per_ref)
-                
+                    mask_query_idx = self.query_vq_sample(vq_inds[idx][0], vq_inds[idx][1], t, None, self.per_ref)
+                                    
                 out = frame_transform(att2, out_quants[idx], per_ref=self.per_ref)
                 vq_emb = getattr(self, f'vq_emb{i}')
                 out = F.normalize(out, dim=-1)
@@ -1182,11 +1186,7 @@ class Vqvae_Tracker_V17(Vqvae_Tracker_V16):
                     
                 loss = self.ce_loss(predict, out_ind[idx])
                 losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
-        
-        if self.target_ce_loss:
-            predict_tar = self.predictor(tar2.permute(0,2,3,1).flatten(0,2))
-            loss_tar = self.ce_loss(predict_tar, out_ind[0])
-            losses[f'target_ce_loss'] = (loss_tar * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
+    
         
         
         return losses
