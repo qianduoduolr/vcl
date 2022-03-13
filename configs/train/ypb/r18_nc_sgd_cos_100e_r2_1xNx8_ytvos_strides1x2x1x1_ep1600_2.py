@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'r18_nc_sgd_cos_100e_r2_1xNx8_ytvos_strides1x2x1x1_ep1600'
+exp_name = 'r18_nc_sgd_cos_100e_r2_1xNx8_ytvos_strides1x2x1x1_ep1600_2'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 model = dict(
