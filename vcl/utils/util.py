@@ -46,7 +46,7 @@ def tensor2img(tensor, out_type=np.uint8, min_max=(0, 1), norm_mode='0-1'):
     n_dim = tensor.dim()
     if n_dim == 4:
         n_img = len(tensor)
-        img_np = make_grid(tensor, nrow=int(math.sqrt(n_img)), normalize=False).numpy()
+        img_np = make_grid(tensor, nrow=int(n_img), normalize=False).numpy()
         img_np = np.transpose(img_np[[2, 1, 0], :, :], (1, 2, 0))  # HWC, BGR
     elif n_dim == 3:
         img_np = tensor.numpy()

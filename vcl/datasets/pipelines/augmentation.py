@@ -304,7 +304,7 @@ class RandomResizedCrop(object):
                 left, top, right, bottom = random.randint(0, bbox[0] - 1), random.randint(0, bbox[1] - 1), random.randint(bbox[2], img_w - 1),\
                     random.randint(bbox[3], img_h - 1)
                 return  left, top, right, bottom
-                
+        
         # Fallback
         crop_size = min(img_h, img_w)
         x_offset = (img_w - crop_size) // 2
