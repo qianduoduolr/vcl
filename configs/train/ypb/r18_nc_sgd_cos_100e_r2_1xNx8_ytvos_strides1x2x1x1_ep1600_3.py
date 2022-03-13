@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'r18_nc_sgd_cos_100e_r2_1xNx8_ytvos_strides1x2x1x1_ep1600_2'
+exp_name = 'r18_nc_sgd_cos_100e_r2_1xNx8_ytvos_strides1x2x1x1_ep1600_3'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 model = dict(
@@ -65,7 +65,7 @@ img_norm_cfg_lab = dict(mean=[50, 0, 0], std=[50, 127, 127], to_bgr=False)
 train_pipeline = [
     dict(type='RandomResizedCrop', area_range=(0.2,1.0), aspect_ratio_range=(1.5, 2.0),same_across_clip=False,
         same_on_clip=False),
-    dict(type='Resize', scale=(256, 256), keep_ratio=False),
+    dict(type='Resize', scale=(224, 224), keep_ratio=False),
     dict(type='Flip', flip_ratio=0.5,same_across_clip=False,
         same_on_clip=False),
     dict(type='Normalize', **img_norm_cfg),
