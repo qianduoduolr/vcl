@@ -1,1 +1,1 @@
-r18_nc_sgd_cos_100e_r2_1xNx8_ytvos_strides1x2x1x1_ep1600_2
+r18_nc_sgd_cos_100e_r2_1xNx8_ytvos_strides1x2x1x1_ep1600_3
