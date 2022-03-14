@@ -7,7 +7,8 @@ docker_name = 'bit:5000/lirui_torch1.5_cuda10.1_corr'
 # model settings
 model = dict(
     type='Warp_Tracker',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(2, 3, )),
+    head=dict(type='MlpHead', n_in=512, n_out=128),
     l1_loss=False,
 )
 
@@ -47,8 +48,8 @@ train_pipeline = [
     dict(type='Normalize', **img_norm_cfg, keys='imgs_reg'),
     dict(type='GetAffanity', keys='imgs_reg', size=(256, 256)),
     dict(type='GetAffanity', keys='imgs', size=(256, 256), get_inverse=False),
-    dict(type='FormatShape', input_format='NCTHW'),
-    dict(type='FormatShape', input_format='NCTHW', keys='imgs_reg'),
+    dict(type='FormatShape', input_format='NPTCHW'),
+    dict(type='FormatShape', input_format='NPTCHW', keys='imgs_reg'),
     dict(type='Collect', keys=['imgs', 'imgs_reg', 'affine_imgs', 'affine_imgs_reg'], meta_keys=[]),
     dict(type='ToTensor', keys=['imgs', 'imgs_reg', 'affine_imgs', 'affine_imgs_reg'])
 ]
@@ -68,7 +69,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=16, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=4, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -79,7 +80,7 @@ data = dict(
             root='/home/lr/dataset/YouTube-VOS',
             list_path='/home/lr/dataset/YouTube-VOS/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
-            clip_length=4,
+            clip_length=5,
             pipeline=train_pipeline,
             test_mode=False),
 
@@ -95,7 +96,7 @@ data = dict(
 
 # optimizer
 optimizers = dict(
-    backbone=dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001),
+    type='Adam', lr=0.0001, betas=(0.9, 0.999), weight_decay=0.0005
     )
 
 # learning policy
@@ -104,11 +105,8 @@ runner_type='epoch'
 max_epoch=800
 lr_config = dict(
     policy='CosineAnnealing',
-    min_lr_ratio=0.001,
-    by_epoch=False,
-    warmup_iters=10,
-    warmup_ratio=0.1,
-    warmup_by_epoch=True
+    min_lr_ratio=0,
+    by_epoch=False
     )
 
 checkpoint_config = dict(interval=200, save_optimizer=True, by_epoch=True)

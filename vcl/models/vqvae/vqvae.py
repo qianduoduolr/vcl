@@ -253,7 +253,6 @@ class VQCL_v2(BaseModel):
             quant = quant.permute(0, 3, 1, 2)
             return q_emb.permute(0,3,1,2), quant, diff, ind, embed
 
- 
     
 
     def forward_img_head(self, x1, x2):
