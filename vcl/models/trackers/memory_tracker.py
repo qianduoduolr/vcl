@@ -475,3 +475,81 @@ class Memory_Tracker_Custom_Hog(Memory_Tracker_Custom):
         )
 
         return outputs
+    
+
+
+@MODELS.register_module()
+class Memory_Tracker_Custom_Inter(Memory_Tracker_Custom):
+    
+    def __init__(self,
+                inter_w=5.0,
+                *args,
+                **kwargs
+                 ):
+       
+        super().__init__(*args, **kwargs)
+        
+        self.inter_w = inter_w
+    
+    def forward_train(self, imgs, images_lab=None):
+            
+        bsz, _, n, c, h, w = imgs.shape
+        
+        images_lab_gt = [images_lab[:,0,i].clone() for i in range(n)]
+        images_lab = [images_lab[:,0,i] for i in range(n)]
+        _, ch = self.dropout2d_lab(images_lab)
+        
+        # forward to get feature
+        fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        if self.post_convolution is not None:
+            fs = self.post_convolution(fs)
+        
+        fs = fs.reshape(bsz, n, *fs.shape[-3:])
+
+        tar, refs = fs[:, -1], fs[:, :-1]
+        refs_fold = (refs[:, -1])[None].repeat(bsz, 1, 1, 1, 1)
+        
+        # get correlation attention map            
+        _, att = non_local_attention(tar, refs, mask=self.mask, scaling=True, per_ref=self.per_ref)
+        _, att_inter = non_local_attention(tar, refs_fold, mask=self.mask, scaling=True, per_ref=False)
+        
+        losses = {}
+        
+        # for mast l1_loss
+        ref_gt = [self.prep(gt[:,ch]) for gt in images_lab_gt[:-1]]
+        outputs = frame_transform(att, ref_gt, flatten=False, per_ref=self.per_ref)        
+        if self.per_ref:
+            outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, *fs.shape[-2:])     
+        else:
+            outputs = outputs.permute(0,2,1).reshape(bsz, -1, *fs.shape[-2:])     
+        
+        refs_gt_fold = torch.stack(ref_gt, 1)
+        refs_gt_fold = refs_gt_fold.flatten(3).permute(0, 1, 3, 2)
+        refs_gt_fold = refs_gt_fold[:, 0].repeat(bsz, 1, 1, 1)
+        outputs_inter = frame_transform(att_inter, refs_gt_fold, flatten=False, per_ref=False)
+        outputs_inter = outputs_inter[:,:,0].reshape(bsz, -1, *fs.shape[-2:])     
+                   
+        losses['l1_loss'], outputs = self.compute_lphoto(images_lab_gt, ch, outputs)
+        losses['inter_loss'] = self.inter_w * self.compute_inter_intra_consistency(outputs, outputs_inter, images_lab_gt)
+    
+        return losses
+    
+    def compute_lphoto(self, images_lab_gt, ch, outputs):
+        b, c, h, w = images_lab_gt[0].size()
+
+        tar_y = images_lab_gt[-1][:,ch]  # y4
+
+        outputs = F.interpolate(outputs, (h, w), mode='bilinear')
+        loss = F.smooth_l1_loss(outputs*20, tar_y*20, reduction='mean')
+
+        err_maps = torch.abs(outputs - tar_y).sum(1).detach()
+
+        return loss, outputs
+    
+    def compute_inter_intra_consistency(self, outputs, outputs_inter, images_lab_gt):
+        b, c, h, w = images_lab_gt[0].size()
+        
+        outputs_inter = F.interpolate(outputs_inter, (h,w), mode='bilinear')
+        loss = F.smooth_l1_loss(outputs_inter*20, outputs*20, reduction='mean')
+        
+        return loss

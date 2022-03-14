@@ -1,1 +1,1 @@
-mast_d4_l2_hog
+train_dry_run

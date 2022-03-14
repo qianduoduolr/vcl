@@ -1094,11 +1094,6 @@ class Vqvae_Tracker_V17(Vqvae_Tracker_V16):
     '''  Combine with MAST CVPR2020 '''    
     def __init__(self,  radius_list=-1, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # if radius_list is not -1:
-        #     self.mask = []
-        #     for idx, r in enumerate(radius_list):
-        #         self.mask.append(make_mask(self.vq_size / (2 ** idx), r))
-
     
     
     def forward_train(self, imgs, mask_query_idx, images_lab=None):
@@ -1175,9 +1170,11 @@ class Vqvae_Tracker_V17(Vqvae_Tracker_V16):
                 
                 # change query if use vq sample
                 if self.vq_sample:
-                    mask_query_idx = self.query_vq_sample(vq_inds[idx][0], vq_inds[idx][1], t, None, self.per_ref)
-                                    
-                out = frame_transform(att2, out_quants[idx], per_ref=self.per_ref)
+                    mask_query_idx = self.query_vq_sample(vq_inds[idx][0], vq_inds[idx][1], t, self.mask, self.per_ref) if idx == 0 else \
+                        self.query_vq_sample(vq_inds[idx][0], vq_inds[idx][1], t, None, self.per_ref)
+                
+                att_ = att1 if idx == 0 else att2         
+                out = frame_transform(att_, out_quants[idx], per_ref=self.per_ref)
                 vq_emb = getattr(self, f'vq_emb{i}')
                 out = F.normalize(out, dim=-1)
                 vq_emb = F.normalize(vq_emb, dim=0)
@@ -1185,7 +1182,7 @@ class Vqvae_Tracker_V17(Vqvae_Tracker_V16):
                 # predict = torch.div(predict, 0.1) # temperature is set to 0.1
                     
                 loss = self.ce_loss(predict, out_ind[idx])
-                losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
+                losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
     
         
         
