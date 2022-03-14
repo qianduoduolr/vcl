@@ -8,9 +8,10 @@ from mmcv.runner import auto_fp16, load_checkpoint
 from dall_e  import map_pixels, unmap_pixels, load_model
 
 from vcl.models.common.correlation import *
+from vcl.models.common.hoglayer import *
 
 from ..base import BaseModel
-from ..builder import build_backbone
+from ..builder import build_backbone, build_loss
 from ..registry import MODELS
 from vcl.utils import *
 
@@ -369,3 +370,108 @@ class Memory_Tracker_Custom_Pyramid(Memory_Tracker_Custom):
         return x
 
 
+@MODELS.register_module()
+class Memory_Tracker_Custom_Hog(Memory_Tracker_Custom):
+    def __init__(self,
+                kernel=8,
+                l2_loss=None,
+                *args,
+                **kwargs
+                 ):
+        """ MAST  (CVPR2020)
+
+        Args:
+            backbone ([type]): [description]
+            test_cfg ([type], optional): [description]. Defaults to None.
+            train_cfg ([type], optional): [description]. Defaults to None.
+        """
+        super().__init__(*args, **kwargs)
+        
+        self.hog_layer = HOGLayer(kernel=kernel, pool=self.downsample_rate)
+        self.l2_loss = build_loss(l2_loss)
+    
+    def forward_train(self, images_gray, images_lab=None):
+        bsz, _, n, c, h, w = images_lab.shape
+        
+        images_gray_gt = [images_gray[:,i].clone() for i in range(n)]
+        
+        images_lab = [images_lab[:,0,i] for i in range(n)]
+        _, ch = self.dropout2d_lab(images_lab)
+        
+        # forward to get feature
+        fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        if self.post_convolution is not None:
+            fs = self.post_convolution(fs)
+        
+        fs = fs.reshape(bsz, n, *fs.shape[-3:])
+
+        tar, refs = fs[:, -1], fs[:, :-1]
+        
+        # get correlation attention map            
+        _, att = non_local_attention(tar, refs, mask=self.mask, scaling=True, per_ref=self.per_ref)
+        
+        
+        losses = {}
+        
+        # for mast l1_loss
+        ref_gt = [self.prep(gt).float() for gt in images_gray_gt[:-1]]
+        outputs = frame_transform(att, ref_gt, flatten=False, per_ref=self.per_ref)
+        if self.per_ref:
+            outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, *fs.shape[-2:])     
+        else:
+            outputs = outputs.permute(0,2,1).reshape(bsz, -1, *fs.shape[-2:])     
+            
+        losses['l2_loss'] = self.compute_l2_distance(images_gray_gt, outputs)
+    
+        
+        return losses
+
+    
+    def prep(self, image):
+        _,c,_,_ = image.size()
+        x = self.hog_layer(image)
+
+        return x
+
+    def compute_l2_distance(self, images_gray_gt, outputs):
+        b, c, h, w = images_gray_gt[0].size()
+
+        tar = self.prep(images_gray_gt[-1])
+
+        outputs = outputs.permute(0, 2, 3, 1).flatten(0,2)
+        tar = tar.permute(0, 2, 3, 1).flatten(0,2)
+        
+        loss = self.l2_loss(outputs, tar)
+
+        return loss
+    
+    def train_step(self, data_batch, optimizer, progress_ratio):
+        """Abstract method for one training step.
+
+        All subclass should overwrite it.
+        """
+        # parser loss
+        losses = self(**data_batch, test_mode=False)
+        loss, log_vars = self.parse_losses(losses)
+
+        # optimizer
+        if isinstance(optimizer, dict):
+            for k,opz in optimizer.items():
+                opz.zero_grad()
+
+            loss.backward()
+            for k,opz in optimizer.items():
+                opz.step()
+        else:
+            optimizer.zero_grad()
+
+            loss.backward()
+            optimizer.step()
+
+        log_vars.pop('loss')
+        outputs = dict(
+            log_vars=log_vars,
+            num_samples=len(data_batch['images_gray'])
+        )
+
+        return outputs

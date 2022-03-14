@@ -1368,6 +1368,24 @@ class RGB2LAB(object):
             results[self.output_keys][i] = cv2.cvtColor(img, cv2.COLOR_RGB2Lab)
         return results
 
+@PIPELINES.register_module()
+class RGB2GRAY(object):
+
+    def __init__(self, 
+                 keys='imgs',
+                 output_keys='imgs'):
+        self.keys = keys
+        self.output_keys = output_keys
+
+    def __call__(self, results):
+        if self.keys is not self.output_keys: 
+            results[self.output_keys]  = copy.deepcopy(results[self.keys])
+        for i, img in enumerate(results[self.keys]):
+            # results[self.output_keys][i] = mmcv.imconvert(img, 'rgb', 'lab')
+            results[self.output_keys][i] = (cv2.cvtColor(img, cv2.COLOR_RGB2GRAY) / 255.0)[None]
+            
+        return results
+
 
 @PIPELINES.register_module()
 class PhotoMetricDistortion(object):

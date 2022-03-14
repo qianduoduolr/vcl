@@ -244,6 +244,8 @@ class FormatShape(object):
                 to the next transform in pipeline.
         """
         imgs = results[self.keys]
+        if isinstance(imgs, list): imgs = np.array(imgs)
+        
         # [M x H x W x C]
         # M = 1 * N_crops * N_clips * L
         if self.input_format == 'NCTHW':
