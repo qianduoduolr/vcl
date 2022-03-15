@@ -1182,7 +1182,7 @@ class Vqvae_Tracker_V17(Vqvae_Tracker_V16):
                 # predict = torch.div(predict, 0.1) # temperature is set to 0.1
                     
                 loss = self.ce_loss(predict, out_ind[idx])
-                losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
+                losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
     
         
         

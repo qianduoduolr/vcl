@@ -1,1 +1,1 @@
-mast_d4_l2_base_area0.2
+train_dry_run
