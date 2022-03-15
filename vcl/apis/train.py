@@ -192,7 +192,7 @@ def _dist_train(model,
         runner.register_hook(mmcv.build_from_cfg(cfg.visual_config, HOOKS))
 
     # evaluation hook
-    if validate and cfg.get('evaluation', None) is not None and cfg.get('model_test', False):
+    if validate and cfg.get('evaluation', None) is not None:
         dataset = build_dataset(cfg.data.val)
 
         if ('val_samples_per_gpu' in cfg.data
@@ -335,7 +335,7 @@ def _non_dist_train(model,
         runner.register_hook(mmcv.build_from_cfg(cfg.visual_config, HOOKS))
 
     # evaluation hook
-    if validate and cfg.get('evaluation', None) is not None and cfg.get('model_test', False):
+    if validate and cfg.get('evaluation', None) is not None:
         dataset = build_dataset(cfg.data.val)
 
         if ('val_samples_per_gpu' in cfg.data

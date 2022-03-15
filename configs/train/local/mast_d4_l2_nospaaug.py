@@ -48,7 +48,7 @@ img_norm_cfg = dict(mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375],
 img_norm_cfg_lab = dict(mean=[50, 0, 0], std=[50, 127, 127], to_bgr=False)
 
 train_pipeline = [
-    # dict(type='RandomResizedCrop', area_range=(1.0,1.0), aspect_ratio_range=(1.5, 2.0),),
+    dict(type='RandomResizedCrop', area_range=(0.6,1.0), aspect_ratio_range=(1.5, 2.0),),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
     dict(type='Flip', flip_ratio=0.5),
     dict(type='RGB2LAB', output_keys='images_lab'),
