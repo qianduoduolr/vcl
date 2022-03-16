@@ -17,7 +17,7 @@ model = dict(
 
 model_test = dict(
     type='VanillaTracker',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 2), out_indices=(2, ), pool_type='mean'),
+    backbone=dict(type='ResNet',depth=50, strides=(1, 2, 1, 2), out_indices=(2, ), pool_type='mean'),
 )
 
 

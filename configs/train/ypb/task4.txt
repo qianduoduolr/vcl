@@ -1,1 +1,1 @@
-train_dry_run
+mast_d4_l2_base_res50

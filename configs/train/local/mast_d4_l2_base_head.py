@@ -19,6 +19,7 @@ model = dict(
 model_test = dict(
     type='VanillaTracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(2, ), pool_type='mean'),
+    head=dict(type='MlpHead', n_in=256, n_out=128),
 )
 
 
@@ -114,7 +115,7 @@ data = dict(
 
 # optimizer
 optimizers = dict(
-    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
+    type='Adam', lr=0.001, betas=(0.9, 0.999)
     )
 # learning policy
 # total_iters = 200000
