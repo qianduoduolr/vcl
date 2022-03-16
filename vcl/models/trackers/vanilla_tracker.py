@@ -33,14 +33,15 @@ class BaseTracker(BaseModel):
         test_cfg (dict): Config for testing. Default: None.
     """
 
-    def __init__(self, backbone, post_convolution=None, train_cfg=None, test_cfg=None):
+    def __init__(self, backbone, head=None, train_cfg=None, test_cfg=None):
         super().__init__()
         self.backbone = build_backbone(backbone)
-        if post_convolution is not None:
-            self.post_convolution = nn.Conv2d(post_convolution['in_c'], post_convolution['out_c'], post_convolution['ks'], 1, post_convolution['pad'])
-            self.post_in = post_convolution['in_c']
+        if head is not None:
+            self.head = build_components(head)
+            self.head_in = self.head.head_in
+            # self.post_in = post_convolution['in_c']
         else:
-            self.post_convolution = None
+            self.head = None
 
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
@@ -65,9 +66,9 @@ class BaseTracker(BaseModel):
         """
         x = self.backbone(imgs)
         
-        if self.post_convolution is not None:
-            if x.shape[1] == self.post_in:
-                x = self.post_convolution(x)
+        if self.head is not None:
+            if x.shape[1] == self.head_in:
+                x = self.head(x)
         
         return x
 

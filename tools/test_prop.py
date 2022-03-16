@@ -129,8 +129,8 @@ def main():
 
     # build the model and load checkpoint
     if not eval_config.get('mast_prop', False):
-        post_convolution = cfg.model.get('post_convolution', None)
-        model = mmcv.ConfigDict(type='VanillaTracker', backbone=cfg.model.backbone, post_convolution=post_convolution)
+        head = cfg.model.get('head', None)
+        model = mmcv.ConfigDict(type='VanillaTracker', backbone=cfg.model.backbone, head=head)
         model.backbone.out_indices = args.out_indices
         model.backbone.strides = cfg.test_cfg.strides
         if cfg.test_cfg.get('dilations', False):

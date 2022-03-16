@@ -11,7 +11,7 @@ from vcl.models.common.correlation import *
 from vcl.models.common.hoglayer import *
 
 from ..base import BaseModel
-from ..builder import build_backbone, build_loss
+from ..builder import build_backbone, build_components, build_loss
 from ..registry import MODELS
 from vcl.utils import *
 
@@ -191,7 +191,7 @@ class Memory_Tracker_Custom(BaseModel):
     def __init__(self,
                  backbone,
                  per_ref=True,
-                 post_convolution=None,
+                 head=None,
                  downsample_rate=4,
                  radius=12,
                  feat_size=64,
@@ -210,10 +210,10 @@ class Memory_Tracker_Custom(BaseModel):
 
         self.backbone = build_backbone(backbone)
         self.downsample_rate = downsample_rate
-        if post_convolution is not None:
-            self.post_convolution =  nn.Conv2d(post_convolution['in_c'], post_convolution['out_c'], post_convolution['ks'], 1, post_convolution['pad'])
+        if head is not None:
+            self.head =  build_components(head)
         else:
-            self.post_convolution = None
+            self.head = None
             
         self.per_ref = per_ref
         self.test_cfg = test_cfg
@@ -248,8 +248,8 @@ class Memory_Tracker_Custom(BaseModel):
         
         # forward to get feature
         fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
-        if self.post_convolution is not None:
-            fs = self.post_convolution(fs)
+        if self.head is not None:
+            fs = self.head(fs)
         
         fs = fs.reshape(bsz, n, *fs.shape[-3:])
 
@@ -503,8 +503,8 @@ class Memory_Tracker_Custom_Inter(Memory_Tracker_Custom):
         
         # forward to get feature
         fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
-        if self.post_convolution is not None:
-            fs = self.post_convolution(fs)
+        if self.head is not None:
+            fs = self.head(fs)
         
         fs = fs.reshape(bsz, n, *fs.shape[-3:])
 
