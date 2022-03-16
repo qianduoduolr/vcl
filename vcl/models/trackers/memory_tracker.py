@@ -194,7 +194,9 @@ class Memory_Tracker_Custom(BaseModel):
                  head=None,
                  downsample_rate=4,
                  radius=12,
+                 temperature=1,
                  feat_size=64,
+                 scaling=True,
                  test_cfg=None,
                  train_cfg=None,
                  pretrained=None,
@@ -220,6 +222,8 @@ class Memory_Tracker_Custom(BaseModel):
         self.train_cfg = train_cfg
         
         self.pretrained = pretrained
+        self.scaling = scaling
+        self.temperature = temperature
         
         if isinstance(radius, list):
             masks = []
@@ -256,7 +260,7 @@ class Memory_Tracker_Custom(BaseModel):
         tar, refs = fs[:, -1], fs[:, :-1]
         
         # get correlation attention map            
-        _, att = non_local_attention(tar, refs, mask=self.mask, scaling=True, per_ref=self.per_ref)
+        _, att = non_local_attention(tar, refs, mask=self.mask, scaling=self.scaling, per_ref=self.per_ref, temprature=self.temperature)
         
         
         losses = {}

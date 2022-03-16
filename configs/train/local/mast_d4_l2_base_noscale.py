@@ -3,14 +3,14 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'mast_d4_l2_base_head'
+exp_name = 'mast_d4_l2_base_noscale'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 # model settings
 model = dict(
     type='Memory_Tracker_Custom',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(2, ), pool_type='mean'),
-    head=dict(type='MlpHead', n_in=256, n_out=128),
+    scaling=False,
     downsample_rate=8,
     radius=6,
     feat_size=32,
@@ -19,7 +19,6 @@ model = dict(
 model_test = dict(
     type='VanillaTracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(2, ), pool_type='mean'),
-    head=dict(type='MlpHead', n_in=256, n_out=128),
 )
 
 
@@ -115,7 +114,7 @@ data = dict(
 
 # optimizer
 optimizers = dict(
-    type='Adam', lr=0.001, betas=(0.9, 0.999)
+    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
     )
 # learning policy
 # total_iters = 200000
