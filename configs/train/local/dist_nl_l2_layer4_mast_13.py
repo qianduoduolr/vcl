@@ -3,29 +3,25 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_42'
-docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
+exp_name = 'dist_nl_l2_layer4_mast_13'
+docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='Vqvae_Tracker_V18',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
-    vqvae=dict(type='VQCL_v2', backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
-               sim_siam_head=dict(type='SimSiamHead', in_channels=128, num_projection_fcs=3, projection_mid_channels=128,
-               projection_out_channels=128, num_predictor_fcs=2, predictor_mid_channels=128, predictor_out_channels=128,
-               with_norm=True, spatial_type='avg'),loss=dict(type='CosineSimLoss', negative=False), embed_dim=128,
-               n_embed=2048, commitment_cost=1.0,),
-    ce_loss=dict(type='Soft_Ce_Loss',reduction='none'),
-    l1_loss=False,
-    patch_size=-1,
-    fc=False,
-    temperature=0.07,
+    type='Dist_Tracker_V4',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 2), out_indices=(2, 3), pool_type='mean'),
+    backbone_t=dict(type='ResNet',depth=50, strides=(1, 2, 1, 2), out_indices=(3, ),pretrained='/home/lr/models/ssl/image_based/detco_200ep_AA.pth'),
+    loss=dict(type='MSELoss',reduction='mean', loss_weight=500),
+    l1_loss=True,
+    temperature=1.0,
+    momentum=-1,
     mask_radius=6,
-    scaling_att=False,
-    temp_window=True,
-    use_quant=False,
-    # pretrained='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_mast/epoch_3200.pth',
-    pretrained_vq='/home/lr/expdir/VCL/group_vqvae_tracker/train_vqvae_video_d4_nemd2048_contrastive_byol_commit1.0_v2/epoch_3200.pth',
+    pretrained=None
+)
+
+model_test = dict(
+    type='VanillaTracker',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(2, ), pool_type='mean'),
 )
 
 # model training and testing settings
@@ -43,9 +39,9 @@ test_cfg = dict(
     output_dir='eval_results')
 
 # dataset settings
-train_dataset_type = 'VOS_youtube_dataset_mlm'
+train_dataset_type = 'VOS_youtube_dataset_rgb'
 
-val_dataset_type = None
+val_dataset_type = 'VOS_davis_dataset_test'
 test_dataset_type = 'VOS_davis_dataset_test'
 
 
@@ -63,8 +59,8 @@ train_pipeline = [
     # dict(type='ColorDropout', keys='jitter_imgs', drop_rate=0.8),
     dict(type='FormatShape', input_format='NPTCHW'),
     dict(type='FormatShape', input_format='NPTCHW', keys='images_lab'),
-    dict(type='Collect', keys=['imgs', 'images_lab', 'mask_query_idx'], meta_keys=[]),
-    dict(type='ToTensor', keys=['imgs', 'images_lab', 'mask_query_idx'])
+    dict(type='Collect', keys=['imgs', 'images_lab'], meta_keys=[]),
+    dict(type='ToTensor', keys=['imgs', 'images_lab'])
 ]
 
 val_pipeline = [
@@ -83,7 +79,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=8, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=16, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -94,9 +90,7 @@ data = dict(
             root='/home/lr/dataset/YouTube-VOS',
             list_path='/home/lr/dataset/YouTube-VOS/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
-            mask_ratio=0.15,
             clip_length=2,
-            vq_size=32,
             pipeline=train_pipeline,
             test_mode=False),
 
@@ -108,17 +102,24 @@ data = dict(
             pipeline=val_pipeline,
             test_mode=True
             ),
+    
+    val =  dict(
+            type=val_dataset_type,
+            root='/home/lr/dataset/DAVIS',
+            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            data_prefix='2017',
+            pipeline=val_pipeline,
+            test_mode=True
+            ),
 )
-
 # optimizer
 optimizers = dict(
-    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-    # predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
     )
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=3200
+max_epoch=1600
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,
@@ -128,7 +129,7 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=1600, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=800, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
@@ -146,6 +147,10 @@ dist_params = dict(backend='nccl')
 log_level = 'INFO'
 work_dir = f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
+
+evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True
+                  )
+
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
                   checkpoint_path=f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
@@ -155,6 +160,7 @@ eval_config= dict(
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
+
 
 
 if __name__ == '__main__':

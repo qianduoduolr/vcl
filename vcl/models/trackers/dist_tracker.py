@@ -262,11 +262,58 @@ class Dist_Tracker_V3(Dist_Tracker_V2):
             tar_t, refs_t = fs_t[:, -1], fs_t[:, :-1]
             _, target_att = non_local_attention(tar_t, refs_t)
             tf = fs_t_.mean(1)
+            # x = tf[0].detach().cpu().numpy()
+            # i = tensor2img(imgs[0,0,0], norm_mode='mean-std')
             
 
         losses = {}
         losses['att_loss'] = self.loss(att_g, target_att)
         losses['feat_att_loss'] = self.loss_feat(sf, tf)
+        
+        
+        # for mast l1_loss
+        if self.l1_loss:
+            ref_gt = [self.prep(gt[:,ch]) for gt in images_lab_gt[:-1]]
+            outputs = frame_transform(att, ref_gt, flatten=False)
+            outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, *fs1.shape[-2:])     
+            losses['l1_loss'], _ = self.compute_lphoto(images_lab_gt, ch, outputs)
+
+        return losses
+    
+    
+@MODELS.register_module()
+class Dist_Tracker_V4(Dist_Tracker_V2):
+    
+    def forward_train(self, imgs, images_lab=None):
+        bsz, num_clips, t, c, h, w = imgs.shape
+
+        images_lab_gt = [images_lab[:,0,i,:].clone() for i in range(t)]
+        images_lab = [images_lab[:,0,i,:] for i in range(t)]
+        _, ch = self.dropout2d_lab(images_lab)
+        
+        # forward to get feature
+
+        fs1_, fs2_ = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        fs1 = fs1_.reshape(bsz, t, *fs1_.shape[-3:])
+        tar1, refs1 = fs1[:, -1], fs1[:, :-1]
+        fs2 = fs2_.reshape(bsz, t, *fs2_.shape[-3:])
+        tar2, refs2 = fs2[:, -1], fs2[:, :-1]
+        
+        _, att_g = non_local_attention(tar2, refs2, scaling=True)
+        _, att = non_local_attention(tar1, refs1, scaling=True, mask=self.mask)
+
+
+        with torch.no_grad():
+            self.backbone_t.eval()
+            fs_t_ = self.backbone_t(imgs.flatten(0,2))
+            fs_t = fs_t_.reshape(bsz, t, *fs_t_.shape[-3:])
+            tar_t, refs_t = fs_t[:, -1], fs_t[:, :-1]
+            _, target_att = non_local_attention(tar_t, refs_t)
+            tf = tar_t.mean(1).flatten(-2).softmax(-1)
+            weight = tf.unsqueeze(-1).repeat(1, 1, target_att.shape[-1])
+            
+        losses = {}
+        losses['att_loss'] = self.loss(att_g[:,0], target_att[:,0], weight=weight)
         
         
         # for mast l1_loss
