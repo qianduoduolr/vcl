@@ -11,7 +11,7 @@ model = dict(
     type='Dist_Tracker_V2',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 2), out_indices=(2, 3), pool_type='mean'),
     backbone_t=dict(type='ResNet',depth=50, strides=(1, 2, 1, 2), out_indices=(3, ),pretrained='/home/lr/models/ssl/image_based/detco_200ep_AA.pth'),
-    loss=dict(type='MSELoss',reduction='mean', loss_weight=500),
+    loss=dict(type='MSELoss',reduction='mean', loss_weight=200),
     l1_loss=True,
     temperature=1.0,
     momentum=-1,

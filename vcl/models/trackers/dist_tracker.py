@@ -204,7 +204,8 @@ class Dist_Tracker_V2(Dist_Tracker):
         fs2 = fs2.reshape(bsz, t, *fs2.shape[-3:])
         tar2, refs2 = fs2[:, -1], fs2[:, :-1]
         
-        _, att_g = non_local_attention(tar2, refs2, scaling=True)
+        # _, att_g = non_local_attention(tar2, refs2, scaling=True)
+        _, att_g = non_local_attention(tar2, refs2)
         _, att = non_local_attention(tar1, refs1, scaling=True, mask=self.mask)
 
 
@@ -314,6 +315,57 @@ class Dist_Tracker_V4(Dist_Tracker_V2):
             
         losses = {}
         losses['att_loss'] = self.loss(att_g[:,0], target_att[:,0], weight=weight)
+        
+        
+        # for mast l1_loss
+        if self.l1_loss:
+            ref_gt = [self.prep(gt[:,ch]) for gt in images_lab_gt[:-1]]
+            outputs = frame_transform(att, ref_gt, flatten=False)
+            outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, *fs1.shape[-2:])     
+            losses['l1_loss'], _ = self.compute_lphoto(images_lab_gt, ch, outputs)
+
+        return losses
+    
+
+@MODELS.register_module()
+class Dist_Tracker_V5(Dist_Tracker):
+    
+    def forward_train(self, imgs, images_lab=None):
+        bsz, num_clips, t, c, h, w = imgs.shape
+
+        images_lab_raw = copy.deepcopy(images_lab)
+        images_lab_gt = [images_lab[:,0,i,:].clone() for i in range(t)]
+        images_lab = [images_lab[:,0,i,:] for i in range(t)]
+        _, ch = self.dropout2d_lab(images_lab)
+        
+        # forward to get feature
+        fs1, fs2 = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        fs1 = fs1.reshape(bsz, t, *fs1.shape[-3:])
+        tar1, refs1 = fs1[:, -1], fs1[:, :-1]
+        fs2 = fs2.reshape(bsz, t, *fs2.shape[-3:])
+        tar2, refs2 = fs2[:, -1], fs2[:, :-1]
+        
+        _, att = non_local_attention(tar1, refs1, scaling=True, mask=self.mask)
+        _, att_l = non_local_attention(tar1, refs1)
+        _, att_g = non_local_attention(tar2, refs2)
+
+
+        with torch.no_grad():
+            # self.backbone_t.eval()
+            fs_t1, fs_t2 = self.backbone_t(images_lab_raw.flatten(0,2))
+            fs_t1 = fs_t1.reshape(bsz, t, *fs_t1.shape[-3:])
+            tar_t1, refs_t1 = fs_t1[:, -1], fs_t1[:, :-1]
+            
+            fs_t2 = fs_t2.reshape(bsz, t, *fs_t2.shape[-3:])
+            tar_t2, refs_t2 = fs_t2[:, -1], fs_t2[:, :-1]
+
+            _, target_att1 = non_local_attention(tar_t1, refs_t1)
+            _, target_att2 = non_local_attention(tar_t2, refs_t2)
+            
+
+        losses = {}
+        losses['att1_loss'] = self.loss(att_l, target_att1)
+        losses['att2_loss'] = self.loss(att_g, target_att2)
         
         
         # for mast l1_loss

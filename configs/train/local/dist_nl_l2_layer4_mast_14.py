@@ -3,15 +3,15 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'dist_nl_l2_layer4_mast_12'
+exp_name = 'dist_nl_l2_layer4_mast_14'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='Dist_Tracker_V2',
+    type='Dist_Tracker_V5',
     backbone=dict(type='ResNet',depth=50, strides=(1, 2, 1, 2), out_indices=(2, 3), pool_type='mean', pretrained='/home/lr/models/ssl/image_based/detco_200ep_AA.pth'),
-    backbone_t=dict(type='ResNet',depth=50, strides=(1, 2, 1, 2), out_indices=(3, ), pool_type='mean'),
-    loss=dict(type='MSELoss',reduction='mean', loss_weight=100000),
+    backbone_t=dict(type='ResNet',depth=50, strides=(1, 2, 1, 2), out_indices=(2, 3, ), pool_type='mean'),
+    loss=dict(type='MSELoss',reduction='mean', loss_weight=200),
     l1_loss=True,
     temperature=1.0,
     momentum=0.99,
