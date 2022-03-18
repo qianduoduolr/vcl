@@ -3,6 +3,7 @@ key="exp_name"
 mkdir -p /dev/shm/2018/train
 mkdir -p  /dev/shm/2018/train_all_frames
 # cd 2018/train
+
 cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/zip_data/JPEGImages_s256.zip /dev/shm/2018/train/
 unzip -d /dev/shm/2018/train/ /dev/shm/2018/train/JPEGImages_s256.zip
 cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/zip_data/LMDBImages_s256.zip /dev/shm/2018/train/
@@ -70,7 +71,7 @@ do
             fi
         fi
         COUNT=`expr $COUNT + 1`
-    done < /gdata/lirui/project/vcl/configs/train/ypb/task4.txt
+    done < /gdata/lirui/project/vcl/configs/train/ypb/task5.txt
 
     echo "end cycle"
 done
