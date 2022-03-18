@@ -165,7 +165,7 @@ class VOS_davis_dataset_test(Video_dataset_base):
                     # blend
                     img_ = copy.deepcopy(img).convert('RGBA')
                     raw_img = raw_img.convert('RGBA')
-                    blend_image = Image.blend(raw_img, img_, 0.3)
+                    blend_image = Image.blend(raw_img, img_, 0.7)
 
                     save_path = osp.join(
                     output_dir, osp.relpath(video_path, self.video_dir), 'blend',
@@ -180,7 +180,7 @@ class VOS_davis_dataset_test(Video_dataset_base):
                     mmcv.mkdir_or_exist(osp.dirname(save_path_mask))
 
                     blend_image.save(save_path)
-                    img.save(save_path_mask)
+                    # img.save(save_path_mask)
 
                 if terminal_is_available():
                     prog_bar.update()

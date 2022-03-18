@@ -275,9 +275,6 @@ class Memory_Tracker_Custom(BaseModel):
             
         losses['l1_loss'], err_map = self.compute_lphoto(images_lab_gt, ch, outputs)
 
-        # img = tensor2img(imgs[1,0,-1], norm_mode='mean-std')
-        # err_map = err_map[1].detach().cpu().numpy()
-        # print('haha')
         return losses
         
     
