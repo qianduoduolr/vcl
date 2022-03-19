@@ -35,7 +35,7 @@ train_cfg = dict(syncbn=True)
 test_cfg = dict(
     precede_frames=20,
     topk=10,
-    temperature=0.07,
+    temperature=0.05,
     strides=(1, 2, 1, 1),
     out_indices=(3, ),
     neighbor_range=24,
