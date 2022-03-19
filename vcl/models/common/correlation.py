@@ -28,7 +28,7 @@ def local_attention(correlation_sampler, tar, refs, patch_size):
     return out, att
 
 
-def non_local_attention(tar, refs, per_ref=True, flatten=True, temprature=1.0, mask=None, scaling=False):
+def non_local_attention(tar, refs, per_ref=True, flatten=True, temprature=1.0, mask=None, scaling=False, norm=False):
     
     """ Given refs and tar, return transform tar non-local.
 
@@ -41,10 +41,15 @@ def non_local_attention(tar, refs, per_ref=True, flatten=True, temprature=1.0, m
         refs = torch.stack(refs, 1)
 
     tar = tar.flatten(2).permute(0, 2, 1)
-    
     _, t, feat_dim, w_, h_ = refs.shape
     refs = refs.flatten(3).permute(0, 1, 3, 2)
+    if norm:
+        tar = F.normalize(tar, dim=-1)
+        refs = F.normalize(refs, dim=-1)
+        
+    # calc correlation
     att = torch.einsum("bic,btjc -> btij", (tar, refs)) / temprature 
+    
     if scaling:
         # scaling
         att = att / torch.sqrt(torch.tensor(feat_dim).float()) 

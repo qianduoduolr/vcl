@@ -179,8 +179,8 @@ class VOS_davis_dataset_test(Video_dataset_base):
                     mmcv.mkdir_or_exist(osp.dirname(save_path))
                     mmcv.mkdir_or_exist(osp.dirname(save_path_mask))
 
-                    blend_image.save(save_path)
-                    # img.save(save_path_mask)
+                    # blend_image.save(save_path)
+                    img.save(save_path_mask)
 
                 if terminal_is_available():
                     prog_bar.update()

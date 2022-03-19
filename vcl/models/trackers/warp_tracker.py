@@ -24,7 +24,6 @@ import math
 
 @MODELS.register_module()
 class Warp_Tracker(BaseModel):
-
     def __init__(self,
                  backbone,
                  head,
@@ -35,14 +34,18 @@ class Warp_Tracker(BaseModel):
                  test_cfg=None,
                  pretrained=None,
                  ):
-        """ Distilation tracker
+        """
+        NIPS2021 WARP CONSISTENCY
 
         Args:
-            depth ([type]): ResNet depth for encoder
-            pixel_loss ([type]): loss option
-            train_cfg ([type], optional): [description]. Defaults to None.
-            test_cfg ([type], optional): [description]. Defaults to None.
-            pretrained ([type], optional): [description]. Defaults to None.
+            backbone (_type_): _description_
+            head (_type_): _description_
+            temperature (float, optional): _description_. Defaults to 0.05.
+            grid_size (int, optional): _description_. Defaults to 8.
+            l1_loss (_type_, optional): _description_. Defaults to None.
+            train_cfg (_type_, optional): _description_. Defaults to None.
+            test_cfg (_type_, optional): _description_. Defaults to None.
+            pretrained (_type_, optional): _description_. Defaults to None.
         """
 
         super(Warp_Tracker, self).__init__()
@@ -253,7 +256,6 @@ class Warp_Tracker(BaseModel):
                 # [B,T,K,HW] x [B,1,K,HW] -> [B,T,HW]
                 aff = (k * query_[:,None,:,:]).sum(2)
                 return (aff + 1) / 2
-
 
             aff1 = aff(k1)
             aff2 = aff(k2)

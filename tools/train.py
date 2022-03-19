@@ -19,7 +19,7 @@ from vcl.utils import collect_env, get_root_logger
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train an editor')
-    parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/local/dist_nl_l2_layer4_mast_14.py')
+    parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/local/duv.py')
     parser.add_argument('--work-dir', help='the dir to save logs and models')
     parser.add_argument(
         '--resume-from', help='the checkpoint file to resume from')

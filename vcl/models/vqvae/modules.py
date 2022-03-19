@@ -91,9 +91,9 @@ class Quantize(nn.Module):
         # means that quantization operations have no gradient
         
         if soft_align:
-            out = F.normalize(z, dim=-1)
+            out = F.normalize(flatten, dim=-1)
             vq_emb = F.normalize(self.embed, dim=0)
-            embed_ind_soft = torch.mm(flatten, vq_emb)
+            embed_ind_soft = torch.mm(out, vq_emb)
             embed_ind_soft = embed_ind_soft.view(*z.shape[:-1], self.n_embed)  # B x H x W tensor with the indices of their nearest code
             return quantize, diff, embed_ind, self.embed, embed_ind_soft
         else:

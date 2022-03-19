@@ -974,7 +974,7 @@ class Vqvae_Tracker_V16(Vqvae_Tracker_V15):
         if self.patch_size != -1:
             _, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
         else:
-            _, att = non_local_attention(tar, refs, per_ref=self.per_ref, temprature=self.temperature, mask=mask, scaling=self.scaling_att)
+            _, att = non_local_attention(tar, refs, per_ref=self.per_ref, temprature=self.temperature, mask=mask, scaling=self.scaling_att, norm=self.norm)
     
         losses = {}
         
@@ -1289,7 +1289,6 @@ class Vqvae_Tracker_V18(Vqvae_Tracker_V16):
                         
                     out_ind.append(ind)
 
-            
             for idx, i in enumerate(range(self.num_head)):                
                 i = str(i).replace('0', '')
                 
