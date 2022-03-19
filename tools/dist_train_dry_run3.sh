@@ -2,13 +2,19 @@
 key="exp_name"
 mkdir -p /dev/shm/2018/train
 mkdir -p  /dev/shm/2018/train_all_frames
-# cd 2018/train
+
 cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/zip_data/JPEGImages_s256.zip /dev/shm/2018/train/
 unzip -d /dev/shm/2018/train/ /dev/shm/2018/train/JPEGImages_s256.zip
+rm -rf /dev/shm/2018/train/JPEGImages_s256.zip
+
 cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/zip_data/Annotations_s256.zip /dev/shm/2018/train/
 unzip -d /dev/shm/2018/train/ /dev/shm/2018/train/Annotations_s256.zip
+rm -rf /dev/shm/2018/train/Annotations_s256.zip
+
 cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train_all_frames/zip_data/JPEGImages_s256.zip /dev/shm/2018/train_all_frames/
 unzip -d /dev/shm/2018/train_all_frames/ /dev/shm/2018/train_all_frames/JPEGImages_s256.zip
+rm -rf /dev/shm/2018/train_all_frames/JPEGImages_s256.zip
+
 cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/*.txt /dev/shm/2018/train/
 cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/*.json /dev/shm/2018/train/
 cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train_all_frames/*.txt /dev/shm/2018/train_all_frames/
