@@ -204,7 +204,7 @@ class Dist_Tracker_V2(Dist_Tracker):
         fs2 = fs2.reshape(bsz, t, *fs2.shape[-3:])
         tar2, refs2 = fs2[:, -1], fs2[:, :-1]
         
-        _, att_g = non_local_attention(tar2, refs2, scaling=True)
+        _, att_g = non_local_attention(tar2, refs2, temprature=self.temperature)
         # _, att_g = non_local_attention(tar2, refs2)
         _, att = non_local_attention(tar1, refs1, scaling=True, mask=self.mask)
 
@@ -215,7 +215,7 @@ class Dist_Tracker_V2(Dist_Tracker):
             fs_t = fs_t.reshape(bsz, t, *fs_t.shape[-3:])
             tar_t, refs_t = fs_t[:, -1], fs_t[:, :-1]
 
-            _, target_att = non_local_attention(tar_t, refs_t)
+            _, target_att = non_local_attention(tar_t, refs_t, temprature=self.temperature)
 
         losses = {}
         losses['att_loss'] = self.loss(att_g, target_att)
