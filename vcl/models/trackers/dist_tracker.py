@@ -36,6 +36,7 @@ class Dist_Tracker(BaseModel):
                  loss=None,
                  loss_feat=None,
                  l1_loss=None,
+                 scaling=True,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
@@ -60,6 +61,7 @@ class Dist_Tracker(BaseModel):
         self.momentum = momentum
         self.pretrained = pretrained
         self.temperature = temperature
+        self.scaling = scaling
 
         logger = get_root_logger()
 
@@ -85,7 +87,7 @@ class Dist_Tracker(BaseModel):
         self.backbone_t.init_weights()
         
         if self.pretrained is not None:
-            _ = load_checkpoint(self, self.pretrained, map_location='cpu', revise_keys=[(r'^backbone', 'backbone_t')])
+            _ = load_checkpoint(self, self.pretrained, map_location='cpu')
 
 
     def forward_train(self, imgs, images_lab=None):
@@ -204,7 +206,7 @@ class Dist_Tracker_V2(Dist_Tracker):
         fs2 = fs2.reshape(bsz, t, *fs2.shape[-3:])
         tar2, refs2 = fs2[:, -1], fs2[:, :-1]
         
-        _, att_g = non_local_attention(tar2, refs2, temprature=self.temperature)
+        _, att_g = non_local_attention(tar2, refs2, temprature=self.temperature, scaling=self.scaling)
         # _, att_g = non_local_attention(tar2, refs2)
         _, att = non_local_attention(tar1, refs1, scaling=True, mask=self.mask)
 

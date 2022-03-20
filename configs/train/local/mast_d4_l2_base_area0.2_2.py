@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'mast_d4_l2_base_area0.2'
+exp_name = 'mast_d4_l2_base_area0.2_2'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 # model settings
@@ -87,7 +87,7 @@ data = dict(
             type=train_dataset_type,
             root='/home/lr/dataset/YouTube-VOS',
             list_path='/home/lr/dataset/YouTube-VOS/2018/train',
-            data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
+            data_prefix=dict(RGB='train/JPEGImages', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
             clip_length=2,
             pipeline=train_pipeline,
             test_mode=False),
