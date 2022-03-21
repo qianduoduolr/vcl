@@ -440,8 +440,10 @@ class VanillaTracker_V2(VanillaTracker):
             image = pad(img)
             final_h = cur_h + pad_h 
             final_w = cur_w + pad_w
-        return image, final_h, final_w
-    
+            return image, final_h, final_w
+        else:
+            return img, cur_h, cur_w
+        
     def prep(self, image, mode='default'):
         _,c,_,_ = image.size()
 
