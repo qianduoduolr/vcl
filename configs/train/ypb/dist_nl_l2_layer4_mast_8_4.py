@@ -160,6 +160,8 @@ eval_config= dict(
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
+test_mode = True
+eval_arc = 'VanillaTracker_V2'
 
 
 

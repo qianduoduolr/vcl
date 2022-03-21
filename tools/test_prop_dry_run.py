@@ -131,7 +131,8 @@ def main():
     # build the model and load checkpoint
     if not eval_config.get('mast_prop', False):
         head = cfg.model.get('head', None)
-        model = mmcv.ConfigDict(type='VanillaTracker', backbone=cfg.model.backbone, head=head)
+        eval_arc = cfg.get('eval_arc', 'VanillaTracker')
+        model = mmcv.ConfigDict(type=eval_arc, backbone=cfg.model.backbone, head=head)
         model.backbone.out_indices = args.out_indices
         model.backbone.strides = cfg.test_cfg.strides
         
