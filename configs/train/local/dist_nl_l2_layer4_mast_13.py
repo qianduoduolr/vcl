@@ -8,13 +8,14 @@ docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='Dist_Tracker_V4',
+    type='Dist_Tracker_Weighted',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 2), out_indices=(2, 3), pool_type='mean'),
     backbone_t=dict(type='ResNet',depth=50, strides=(1, 2, 1, 2), out_indices=(3, ),pretrained='/home/lr/models/ssl/image_based/detco_200ep_AA.pth'),
     loss=dict(type='MSELoss',reduction='mean', loss_weight=500),
     l1_loss=True,
-    temperature=1.0,
-    momentum=-1,
+    temperature=0.05,
+    momentum=-1, 
+    thres=-1,
     mask_radius=6,
     pretrained=None
 )

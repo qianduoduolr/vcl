@@ -38,6 +38,7 @@ class Vqvae_Tracker(BaseModel):
                  post_convolution=None,
                  vq_size=32,
                  temperature=1.0,
+                 temperature_ce=1.0,
                  sim_siam_head=None,
                  multi_head_weight=[1.0],
                  ce_loss=None,
@@ -52,7 +53,34 @@ class Vqvae_Tracker(BaseModel):
                  norm=False,
                  pretrained=None
                  ):
-        """ original vqvae tracker
+        """
+        Origin implementation. In this version, the model are required to learn to track 
+        and segment at the same time. 
+
+        Args:
+            backbone (_type_): _description_
+            vqvae (_type_): _description_
+            patch_size (_type_): _description_
+            pretrained_vq (_type_): _description_
+            post_convolution (_type_, optional): _description_. Defaults to None.
+            vq_size (int, optional): _description_. Defaults to 32.
+            temperature (float, optional): _description_. Defaults to 1.0.
+            sim_siam_head (_type_, optional): _description_. Defaults to None.
+            multi_head_weight (list, optional): _description_. Defaults to [1.0].
+            ce_loss (_type_, optional): _description_. Defaults to None.
+            mse_loss (_type_, optional): _description_. Defaults to None.
+            fc (bool, optional): _description_. Defaults to True.
+            train_cfg (_type_, optional): _description_. Defaults to None.
+            test_cfg (_type_, optional): _description_. Defaults to None.
+            per_ref (bool, optional): _description_. Defaults to True.
+            mask_radius (int, optional): _description_. Defaults to -1.
+            temp_window (bool, optional): _description_. Defaults to False.
+            scaling_att (bool, optional): _description_. Defaults to False.
+            norm (bool, optional): _description_. Defaults to False.
+            pretrained (_type_, optional): _description_. Defaults to None.
+
+        Raises:
+            NotImplementedError: _description_
         """
         super(Vqvae_Tracker, self).__init__()
         if not isinstance(vqvae, list):
@@ -66,6 +94,7 @@ class Vqvae_Tracker(BaseModel):
         self.multi_head_weight = multi_head_weight
         self.per_ref = per_ref
         self.temperature = temperature
+        self.temperature_ce = temperature_ce
         self.temp_window = temp_window
         self.norm = norm
         self.scaling_att = scaling_att
@@ -265,556 +294,12 @@ class Vqvae_Tracker(BaseModel):
         else:
             return None
         
-    
-    
-
-@MODELS.register_module()
-class Vqvae_Tracker_V5(Vqvae_Tracker):
-
-    def __init__(self,
-                 l1_loss=None,
-                 **kwargs
-                 ):
-        """ ce_loss with cross video/sparstity constrant
-        """
-        super(Vqvae_Tracker_V5, self).__init__(**kwargs)
-        
-        self.l1_loss = build_loss(l1_loss)
-
-    def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
-        bsz, num_clips, t, c, h, w = imgs.shape
-
-        # vqvae tokenize for query frame
-        with torch.no_grad():
-            out_ind= []
-            for i in range(self.num_head):
-                i = str(i).replace('0', '')
-                vqvae = getattr(self, f'vqvae{i}')
-                vq_enc = getattr(self, f'vq_enc{i}')
-                vqvae.eval()
-                _, _, _, ind, _ = vq_enc(imgs[:, 0, -1])
-                ind = ind.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
-                out_ind.append(ind)
-
-        if jitter_imgs is not None:
-            imgs = jitter_imgs
-
-        mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
-
-        fs = self.backbone(imgs.flatten(0,2))
-        fs = fs.reshape(bsz, t, *fs.shape[-3:])
-        tar, refs = fs[:, -1], fs[:, :-1]
-        
-        out, att = non_local_attention(tar, refs, per_ref=True)
-        out_cross_video, att_cross_video = inter_intra_attention(tar, refs[:,0], per_ref=False)
-
-        losses = {}
-
-        if self.ce_loss:
-            for idx, i in enumerate(range(self.num_head)):
-                i = str(i).replace('0', '')
-                predict = getattr(self, f'predictor{i}')(out)
-                predict_cross_video = getattr(self, f'predictor{i}')(out_cross_video)
-                loss = self.ce_loss(predict, out_ind[idx])
-                loss_cross_video = self.ce_loss(predict_cross_video, out_ind[idx])
-                losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
-                losses[f'ce{i}_cross_loss'] = (loss_cross_video * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
-
-        if self.l1_loss:
-            num_feat = att_cross_video.shape[1]
-            att_cross_video = att_cross_video.reshape(bsz, num_feat, -1, num_feat).permute(0, 2, 1, 3)
-            label = torch.zeros(*att_cross_video.shape).cuda()
-            m = torch.eye(bsz).cuda()
-            m = (1 - m)[:,:,None,None].repeat(1,1,*att_cross_video.shape[-2:])
-            losses['l1_loss'] = self.l1_loss(att_cross_video, label, weight=m)
-
-        return losses
-    
-    
-    
-
-@MODELS.register_module()
-class Vqvae_Tracker_V9(Vqvae_Tracker):
-    """
-    Args:
-        Vqvae_Tracker ([type]): add a ce_loss on target frame
-    """        
-    
-    def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
-        
-        bsz, num_clips, t, c, h, w = imgs.shape
-
-        # vqvae tokenize for query frame
-        with torch.no_grad():
-            out_ind= []
-            out_quant = []
-            for i in range(self.num_head):
-                i = str(i).replace('0', '')
-                vqvae = getattr(self, f'vqvae{i}')
-                vq_enc = getattr(self, f'vq_enc{i}')
-                vqvae.eval()
-                emb, quant, _, ind, _ = vq_enc(imgs[:, 0, -1])
-                
-                if self.per_ref:
-                    ind = ind.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
-                    quant = quant.unsqueeze(1).repeat(1, t-1, 1, 1, 1).permute(0,1,3,4,2).flatten(0,3).detach()
-                    mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
-                else:
-                    ind = ind.reshape(-1, 1).long().detach()
-                    quant = quant.permute(0,2,3,1).flatten(0,2).detach()
-                    mask_query_idx = mask_query_idx.bool()
-                    
-                out_ind.append(ind)
-                out_quant.append(quant)
-
-        if jitter_imgs is not None:
-            imgs = jitter_imgs
-
-        tar = self.backbone(imgs[:,0,-1])
-        refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
-
-        if self.patch_size != -1:
-            out, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
-        else:
-            out, att = non_local_attention(tar, refs, per_ref=self.per_ref, temprature=self.temperature)
-
-        losses = {}
-
-        # if self.ce_loss:
-        #     for idx, i in enumerate(range(self.num_head)):
-        #         i = str(i).replace('0', '')
-        #         if self.fc:
-        #             predict = getattr(self, f'predictor{i}')(out)
-        #         else:
-        #             predict = self.embedding_layer(out)
-        #             predict = nn.functional.normalize(predict, dim=-1)
-        #             vq_emb = getattr(self, f'vq_emb{i}')
-        #             predict = torch.mm(predict, nn.functional.normalize(vq_emb, dim=0))
-        #             predict = torch.div(predict, 0.1) # temperature is set to 0.1
-                    
-        #         loss = self.ce_loss(predict, out_ind[idx])
-        #         losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
-
-        predict_tar = self.predictor(tar.permute(0,2,3,1).flatten(0,2))
-        loss_tar = self.ce_loss(predict_tar, out_ind[0])
-        losses[f'target_ce_loss'] = (loss_tar * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
-        
-        return losses
-        
-
-@MODELS.register_module()
-class Vqvae_Tracker_V10(Vqvae_Tracker):
-    """
-    Args:
-        Vqvae_Tracker ([type]): [induse long-term relationship]
-    """        
-    def __init__(self, soft_ce_loss, **kwargs):
-        super().__init__(**kwargs)
-        self.soft_ce_loss = build_loss(soft_ce_loss)
-        self.fc = nn.Sequential(
-            nn.Conv2d(512,2048,1),
-            nn.ReLU(),
-            nn.Conv2d(2048,512,1)
-        )
-    
-    def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
-
-        bsz, num_clips, t, c, h, w = imgs.shape
-
-        # vqvae tokenize for query frame
-        with torch.no_grad():
-            out_ind= []
-            for i in range(self.num_head):
-                i = str(i).replace('0', '')
-                vqvae = getattr(self, f'vqvae{i}')
-                vq_enc = getattr(self, f'vq_enc{i}')
-                vqvae.eval()
-                emb, quant, _, ind, _ = vq_enc(imgs[:, 0, -1])
-                
-                if self.per_ref:
-                    ind = ind.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
-                    mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
-                else:
-                    ind = ind.reshape(-1, 1).long().detach()
-                    mask_query_idx = mask_query_idx.bool()
-                
-                out_ind.append(ind)
-
-        if jitter_imgs is not None:
-            imgs = jitter_imgs
-
-        tar = self.backbone(imgs[:,0, 0])
-        refs = list([self.backbone(imgs[:,0,i]) for i in range(1,t)])
-        
-        # for short term
-        out_s, att_s = non_local_attention(tar, [refs[0]], per_ref=self.per_ref)
-        
-        # for long term
-        att_l = torch.eye(att_s.shape[-1]).repeat(bsz, 1, 1).cuda()
-        refs.insert(0, tar)
-
-        fs = torch.stack(refs, 1).flatten(0,1)
-        fs = nn.functional.normalize(self.fc(fs), dim=1).permute(0, 2, 3, 1).reshape(bsz, t, att_s.shape[-1], -1)
-
-        atts = torch.einsum('btic,btjc->btij',[fs[:,:-1], fs[:,1:]]) / 0.05
-        atts_reverse = torch.flip(atts, [1]).permute(0,1,3,2)
-        atts_cycle = torch.cat([atts, atts_reverse], 1)
-        for i in range(atts_cycle.shape[1]):
-            att = atts_cycle[:, i].softmax(dim=-1)
-            att_l = torch.einsum('bij,bjk->bik', [att_l, att])
-            
-        del fs, refs, atts, atts_cycle, atts_reverse
-        
-        label = torch.arange(att_s.shape[-1]).repeat(bsz, 1).cuda().reshape(-1, 1)
-            
-        losses = {}
-        if self.ce_loss:
-            for idx, i in enumerate(range(self.num_head)):
-                i = str(i).replace('0', '')
-                predict_s = getattr(self, f'predictor{i}')(out_s)
-                # loss_s = self.ce_loss(predict_s, out_ind[idx])
-                # loss_l = self.soft_ce_loss(att_l.flatten(0,1), att_s.flatten(0,1).detach())
-                loss_l = self.ce_loss(att_l.flatten(0,1), label)
-                # losses[f'ce{i}_short_loss'] = (loss_s * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
-                losses[f'ce{i}_long_loss'] = (loss_l * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
-
-        
-        return losses
-    
-
-
-
-@MODELS.register_module()
-class Vqvae_Tracker_V11(Vqvae_Tracker):
-    """
-    Args:
-        Vqvae_Tracker ([type]): [induse long-term relationship  cycle-consistency]
-    """        
-    def __init__(self, soft_ce_loss, **kwargs):
-        super().__init__(**kwargs)
-        self.soft_ce_loss = build_loss(soft_ce_loss)
-        self.fc = nn.Sequential(
-            nn.Conv2d(512,2048,1),
-            nn.ReLU(),
-            nn.Conv2d(2048,512,1)
-        )
-        self._xent_targets = dict()
-        self.edgedrop_rate = 0.1
-        self.dropout = nn.Dropout(p=self.edgedrop_rate, inplace=False)
-        
-        # self.featdrop_rate = getattr(args, 'featdrop', 0)
-        self.temperature = 0.07
-        
-    
-    def infer_dims(self):
-        in_sz = 256
-        dummy = torch.zeros(1, 3, 1, in_sz, in_sz).to(next(self.encoder.parameters()).device)
-        dummy_out = self.encoder(dummy)
-        self.enc_hid_dim = dummy_out.shape[1]
-        self.map_scale = in_sz // dummy_out.shape[-1]
-
-    def make_head(self, depth=1):
-        head = []
-        if depth >= 0:
-            dims = [self.enc_hid_dim] + [self.enc_hid_dim] * depth + [128]
-            for d1, d2 in zip(dims, dims[1:]):
-                h = nn.Linear(d1, d2)
-                head += [h, nn.ReLU()]
-            head = head[:-1]
-
-        return nn.Sequential(*head)
-
-    def zeroout_diag(self, A, zero=0):
-        mask = (torch.eye(A.shape[-1]).unsqueeze(0).repeat(A.shape[0], 1, 1).bool() < 1).float().cuda()
-        return A * mask
-
-    def affinity(self, x1, x2):
-        in_t_dim = x1.ndim
-        if in_t_dim < 4:  # add in time dimension if not there
-            x1, x2 = x1.unsqueeze(-2), x2.unsqueeze(-2)
-
-        A = torch.einsum('bctn,bctm->btnm', x1, x2)
-        # if self.restrict is not None:
-        #     A = self.restrict(A)
-
-        return A.squeeze(1) if in_t_dim < 4 else A
-    
-    def stoch_mat(self, A, zero_diagonal=False, do_dropout=True, do_sinkhorn=False):
-        ''' Affinity -> Stochastic Matrix '''
-
-        if zero_diagonal:
-            A = self.zeroout_diag(A)
-
-        if do_dropout and self.edgedrop_rate > 0:
-            A[torch.rand_like(A) < self.edgedrop_rate] = -1e20
-
-        return F.softmax(A/self.temperature, dim=-1)
-    
-    
-    def xent_targets(self, A):
-        B, N = A.shape[:2]
-        key = '%s:%sx%s' % (str(A.device), B,N)
-
-        if key not in self._xent_targets:
-            I = torch.arange(A.shape[-1])[None].repeat(B, 1)
-            self._xent_targets[key] = I.view(-1).to(A.device)
-
-        return self._xent_targets[key]
-
-    def forward_train_cycle(self, q, mask_query_idx=None):
-        '''
-        Input is B x T x N*C x H x W, where either
-           N>1 -> list of patches of images
-           N=1 -> list of images
-        '''
-        bsz, T, C, H, W = q.shape
-        
-        q = q.flatten(0,1)
-        q = nn.functional.normalize(self.fc(q), dim=1).reshape(bsz, T, q.shape[1], -1).permute(0,2,1,3)
-        # q = q.reshape(bsz, T, q.shape[1], -1).permute(0,2,1,3)
-        
-        #################################################################
-        # Compute walks 
-        #################################################################
-        walks = dict()
-        As = self.affinity(q[:, :, :-1], q[:, :, 1:])
-        A12s = [self.stoch_mat(As[:, i], do_dropout=True) for i in range(T-1)]
-
-        #################################################### Palindromes
-        A21s = [self.stoch_mat(As[:, i].transpose(-1, -2), do_dropout=True) for i in range(T-1)]
-        AAs = []
-        for i in list(range(1, len(A12s))):
-            g = A12s[:i+1] + A21s[:i+1][::-1]
-            aar = aal = g[0]
-            for _a in g[1:]:
-                aar, aal = aar @ _a, _a @ aal
-
-            AAs.append((f"r{i}", aar))
-
-        for i, aa in AAs:
-            walks[f"cyc {i}"] = [aa, self.xent_targets(aa)]
-
-
-        #################################################################
-        # Compute loss 
-        #################################################################
-        xents = [torch.tensor([0.]).cuda()]
-        losses = dict()
-
-        for name, (A, target) in walks.items():
-            logits = torch.log(A+1e-20).flatten(0, -2)
-            if mask_query_idx == None:
-                loss = self.ce_loss(logits, target.unsqueeze(1)).mean()
-            else:
-                loss = self.ce_loss(logits, target.unsqueeze(1))
-                loss = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
-            acc = (torch.argmax(logits, dim=-1) == target).float().mean()
-            # diags.update({f"{H} xent {name}": loss.detach(),
-            #               f"{H} acc {name}": acc})
-            xents += [loss]
-
-
-        loss = sum(xents)/max(1, len(xents)-1)
-        
-        return loss
-
-
-    def forward_train(self, imgs, mask_query_idx, jitter_imgs=None):
-    
-        bsz, num_clips, t, c, h, w = imgs.shape
-
-        # self.eval()
-        
-        # vqvae tokenize for query frame
-        with torch.no_grad():
-            out_ind= []
-            for i in range(self.num_head):
-                i = str(i).replace('0', '')
-                vqvae = getattr(self, f'vqvae{i}')
-                vq_enc = getattr(self, f'vq_enc{i}')
-                vqvae.eval()
-                emb, quant, _, ind, _ = vq_enc(imgs[:, 0, -1])
-                
-                if self.per_ref:
-                    ind = ind.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
-                    mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
-                else:
-                    ind = ind.reshape(-1, 1).long().detach()
-                    mask_query_idx = mask_query_idx.bool()
-                
-                out_ind.append(ind)
-
-        if jitter_imgs is not None:
-            imgs = jitter_imgs
-
-        tar = self.backbone(imgs[:,0, 0])
-        refs = list([self.backbone(imgs[:,0,i]) for i in range(1,t)])
-
-        
-        # for short term
-        out_s, att_s = non_local_attention(tar, [refs[0]], per_ref=self.per_ref)
-     
-        losses = {}
-        if self.ce_loss:
-            for idx, i in enumerate(range(self.num_head)):
-                i = str(i).replace('0', '')
-                predict_s = getattr(self, f'predictor{i}')(out_s)
-                loss = self.ce_loss(predict_s, out_ind[idx])
-                losses['ce_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum()
-
-        # for long term
-        refs.insert(0, tar)
-        all_feats = torch.stack(refs,1)
-        losses['cycle_loss'] = self.forward_train_cycle(all_feats, mask_query_idx)
-        
-        # self.train()
-        
-        return losses
-    
-    
-
-@MODELS.register_module()
-class Vqvae_Tracker_V12(Vqvae_Tracker):
-    
-    def forward_train(self, imgs, mask_query_idx, frames_mask, jitter_imgs=None):
-        
-        bsz, num_clips, t, c, h, w = imgs.shape
-    
-        # vqvae tokenize for query frame
-        with torch.no_grad():
-            out_ind= []
-            out_quant = []
-            for i in range(self.num_head):
-                i = str(i).replace('0', '')
-                vqvae = getattr(self, f'vqvae{i}')
-                vq_enc = getattr(self, f'vq_enc{i}')
-                vqvae.eval()
-                emb, quant, _, ind, _ = vq_enc(imgs[:, 0, -1])
-                
-                if self.per_ref:
-                    ind = ind.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
-                    quant = quant.unsqueeze(1).repeat(1, t-1, 1, 1, 1).permute(0,1,3,4,2).flatten(0,3).detach()
-                    mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
-                else:
-                    ind = ind.reshape(-1, 1).long().detach()
-                    quant = quant.permute(0,2,3,1).flatten(0,2).detach()
-                    mask_query_idx = mask_query_idx.bool()
-                    
-                out_ind.append(ind)
-                out_quant.append(quant)
-
-        if jitter_imgs is not None:
-            imgs = jitter_imgs
-
-        tar = self.backbone(imgs[:,0,-1])
-        refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
-
-        if self.patch_size != -1:
-            out, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
-        else:
-            out, att = non_local_attention(tar, refs, per_ref=self.per_ref, temprature=self.temperature)
-
-        losses = {}
-
-        if self.ce_loss:
-            for idx, i in enumerate(range(self.num_head)):
-                i = str(i).replace('0', '')
-                if self.fc:
-                    predict = getattr(self, f'predictor{i}')(out)
-                else:
-                    predict = self.embedding_layer(out)
-                    predict = nn.functional.normalize(predict, dim=-1)
-                    vq_emb = getattr(self, f'vq_emb{i}')
-                    predict = torch.mm(predict, nn.functional.normalize(vq_emb, dim=0))
-                    predict = torch.div(predict, 0.1) # temperature is set to 0.1
-                    
-                loss = self.ce_loss(predict, out_ind[idx])
-                losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
-                
-        if self.mse_loss:
-            for idx, i in enumerate(range(self.num_head)):
-                i = str(i).replace('0', '')
-                predict = self.embedding_layer(out)
-                loss = self.mse_loss(predict, out_quant[idx]).mean(-1)
-                losses[f'mse{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
-        
-        mask = torch.ones(*att.shape).cuda() - frames_mask[:,:-1,None].flatten(3)
-        target = torch.zeros(*att.shape).cuda()
-        loss_reg = F.l1_loss(mask*att, target, reduction='none')
-        losses['att_sparse_flow_loss'] = 10 * (loss_reg * mask_query_idx.unsqueeze(-1)).sum() / mask_query_idx.sum()
-                    
-        return losses
-    
-    
-@MODELS.register_module()
-class Vqvae_Tracker_V13(Vqvae_Tracker):
-    
-    def forward_train(self, imgs, mask_query_idx, frames_mask, jitter_imgs=None):
-        
-        bsz, num_clips, t, c, h, w = imgs.shape
-    
-        # vqvae tokenize for query frame
-        with torch.no_grad():
-            out_ind= []
-            out_quant = []
-            for i in range(self.num_head):
-                i = str(i).replace('0', '')
-                vqvae = getattr(self, f'vqvae{i}')
-                vq_enc = getattr(self, f'vq_enc{i}')
-                vqvae.eval()
-                emb, quant, _, ind, _ = vq_enc(imgs[:, 0, -1])
-                
-                if self.per_ref:
-                    ind = ind.unsqueeze(1).repeat(1, t-1, 1, 1).reshape(-1, 1).long().detach()
-                    quant = quant.unsqueeze(1).repeat(1, t-1, 1, 1, 1).permute(0,1,3,4,2).flatten(0,3).detach()
-                    mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
-                else:
-                    ind = ind.reshape(-1, 1).long().detach()
-                    quant = quant.permute(0,2,3,1).flatten(0,2).detach()
-                    mask_query_idx = mask_query_idx.bool()
-                    
-                out_ind.append(ind)
-                out_quant.append(quant)
-
-        if jitter_imgs is not None:
-            imgs = jitter_imgs
-
-        tar = self.backbone(imgs[:,0,-1])
-        refs = list([self.backbone(imgs[:,0,i]) for i in range(t-1)])
-        mask = frames_mask[:,:-1,None].flatten(3)
-
-        if self.patch_size != -1:
-            out, att = local_attention(self.correlation_sampler, tar, refs, self.patch_size)
-        else:
-            out, att = non_local_attention(tar, refs, per_ref=self.per_ref, temprature=self.temperature, mask=mask)
-        
-        losses = {}
-        
-        # a = att[0,0,0].detach().cpu().reshape(32,32).numpy()
-        # b = mask[0,0,0].detach().cpu().reshape(32,32).numpy()
-
-        if self.ce_loss:
-            for idx, i in enumerate(range(self.num_head)):
-                i = str(i).replace('0', '')
-                if self.fc:
-                    predict = getattr(self, f'predictor{i}')(out)
-                else:
-                    predict = self.embedding_layer(out)
-                    predict = nn.functional.normalize(predict, dim=-1)
-                    vq_emb = getattr(self, f'vq_emb{i}')
-                    predict = torch.mm(predict, nn.functional.normalize(vq_emb, dim=0))
-                    predict = torch.div(predict, 0.1) # temperature is set to 0.1
-                    
-                loss = self.ce_loss(predict, out_ind[idx])
-                losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
-                    
-        return losses
-    
-    
 @MODELS.register_module()
 class Vqvae_Tracker_V15(Vqvae_Tracker):
     def __init__(self, vq_sample=True, *args, **kwargs):
-        """ A video colorization-like vqvae_tracker. Refers to Video Colorization (ECCV 2017)
+        """ 
+        A video colorization-like vqvae_tracker. Refers to Video Colorization (ECCV 2017).
+        In this version, model are only required to learn to track.
 
         Args:
             vq_sample (bool, optional): [description]. Defaults to True.
@@ -898,7 +383,7 @@ class Vqvae_Tracker_V15(Vqvae_Tracker):
                     out = F.normalize(out, dim=-1)
                     vq_emb = F.normalize(vq_emb, dim=0)
                     predict = torch.mm(out, vq_emb)
-                    # predict = torch.div(predict, 0.1) # temperature is set to 0.1
+                    predict = torch.div(predict, self.temperature_ce) # temperature is set to 0.1
                     
                 loss = self.ce_loss(predict, out_ind[idx])
                 losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
@@ -922,9 +407,18 @@ class Vqvae_Tracker_V15(Vqvae_Tracker):
 
 @MODELS.register_module()
 class Vqvae_Tracker_V16(Vqvae_Tracker_V15):
-    '''  Combine with MAST CVPR2020 '''
-    
+
     def __init__(self, l1_loss=False, downsample_rate=8, downsample_mode='default', use_quant=True, *args, **kwargs):
+        """
+        Combine with MAST CVPR2020.
+        In this version, MAST is involved.
+
+        Args:
+            l1_loss (bool, optional): _description_. Defaults to False.
+            downsample_rate (int, optional): _description_. Defaults to 8.
+            downsample_mode (str, optional): _description_. Defaults to 'default'.
+            use_quant (bool, optional): _description_. Defaults to True.
+        """
         
         super().__init__(*args, **kwargs)
         
@@ -1035,15 +529,11 @@ class Vqvae_Tracker_V16(Vqvae_Tracker_V15):
                     out = F.normalize(out, dim=-1)
                     vq_emb = F.normalize(vq_emb, dim=0)
                     predict = torch.mm(out, vq_emb)
-                    # predict = torch.div(predict, 0.1) # temperature is set to 0.1
+                    predict = torch.div(predict, self.temperature_ce) # temperature is set to 0.1
                     
                 loss = self.ce_loss(predict, out_ind[idx])
-                
-                # c = loss.reshape(bsz, 32, 32)[1].detach().cpu().numpy()
-                # img = tensor2img(imgs[1, 0,0].detach(), norm_mode='mean-std')
-                
                 losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
-                    
+                              
         return losses
     
     @staticmethod
@@ -1091,10 +581,10 @@ class Vqvae_Tracker_V16(Vqvae_Tracker_V15):
 
 @MODELS.register_module()
 class Vqvae_Tracker_V17(Vqvae_Tracker_V16):
-    '''  Combine with MAST CVPR2020 '''    
-    def __init__(self,  radius_list=-1, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    '''  Combine with MAST CVPR2020 
     
+        In this version, pyramiad training is induced
+    '''    
     
     def forward_train(self, imgs, mask_query_idx, images_lab=None):
         
@@ -1179,13 +669,11 @@ class Vqvae_Tracker_V17(Vqvae_Tracker_V16):
                 out = F.normalize(out, dim=-1)
                 vq_emb = F.normalize(vq_emb, dim=0)
                 predict = torch.mm(out, vq_emb)
-                # predict = torch.div(predict, 0.1) # temperature is set to 0.1
-                    
+                predict = torch.div(predict, self.temperature_ce) # temperature is set to 0.1
+
                 loss = self.ce_loss(predict, out_ind[idx])
                 losses[f'ce{i}_loss'] = (loss * mask_query_idx.reshape(-1)).sum() / mask_query_idx.sum() * self.multi_head_weight[idx]
     
-        
-        
         return losses
     
     
@@ -1305,7 +793,7 @@ class Vqvae_Tracker_V18(Vqvae_Tracker_V16):
                     out = F.normalize(out, dim=-1)
                     vq_emb = F.normalize(vq_emb, dim=0)
                     predict = torch.mm(out, vq_emb)
-                    # predict = torch.div(predict, 0.1) # temperature is set to 0.1
+                    predict = torch.div(predict, self.temperature_ce) # temperature is set to 0.1
                     
                 loss = self.ce_loss(predict, out_ind[idx])
                 

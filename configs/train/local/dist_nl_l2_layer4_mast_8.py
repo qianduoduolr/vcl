@@ -14,6 +14,7 @@ model = dict(
     loss=dict(type='MSELoss',reduction='mean', loss_weight=200),
     l1_loss=True,
     temperature=1.0,
+    temperature_t=0.07,
     momentum=-1,
     mask_radius=6,
     pretrained=None

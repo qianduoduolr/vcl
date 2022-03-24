@@ -3,20 +3,40 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'dist_nl_l2_layer4_mast_19'
+exp_name = 'final_framework'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='Dist_Tracker_V2',
+    type='Framework',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 2), out_indices=(2, 3), pool_type='mean'),
-    backbone_t=dict(type='ResNet',depth=50, strides=(1, 2, 1, 2), out_indices=(3, ),pretrained='/home/lr/models/ssl/image_based/detco_200ep_AA.pth'),
-    loss=dict(type='MSELoss',reduction='mean', loss_weight=1000),
-    l1_loss=True,
+    backbone_t=dict(type='ResNet',depth=50, strides=(1, 2, 1, 2), out_indices=(2, 3),pretrained='/home/lr/models/ssl/image_based/detco_200ep_AA.pth'),
+    loss=dict(type='MSELoss',reduction='mean'),
+    ce_loss=dict(type='Ce_Loss',reduction='none'),
     temperature=1.0,
+    temperature_t=0.07,
     momentum=-1,
     mask_radius=6,
-    pretrained='/home/lr/expdir/VCL/group_vqvae_tracker/mast_d4_l2_base_area0.2/epoch_1600.pth'
+    loss_weight = dict(att1_loss=0, att2_loss=200, l1_loss=1, ce_loss=1),
+    vq=dict(type='VQCL_v2', 
+            backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
+            sim_siam_head=dict(type='SimSiamHead', 
+                                in_channels=128, 
+                                num_projection_fcs=3, 
+                                projection_mid_channels=128,
+                                projection_out_channels=128, 
+                                num_predictor_fcs=2, 
+                                predictor_mid_channels=128, 
+                                predictor_out_channels=128,
+                                with_norm=True, 
+                                spatial_type='avg'),
+            loss=dict(type='CosineSimLoss', negative=False), 
+            embed_dim=128,
+            n_embed=2048, 
+            commitment_cost=1.0
+            ),
+    pretrained_vq='/home/lr/expdir/VCL/group_vqvae_tracker/train_vqvae_video_d4_nemd2048_contrastive_byol_commit1.0_v2/epoch_3200.pth',
+    pretrained=None
 )
 
 model_test = dict(
