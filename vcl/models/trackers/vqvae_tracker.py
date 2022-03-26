@@ -775,7 +775,7 @@ class Vqvae_Tracker_V18(Vqvae_Tracker_V16):
                     else:
                         ind = inds_soft[:, -1].reshape(-1, self.n_embed).detach()
                         
-                    out_ind.append(ind)
+                    out_ind.append(ind / 0.1)
 
             for idx, i in enumerate(range(self.num_head)):                
                 i = str(i).replace('0', '')

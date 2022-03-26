@@ -197,6 +197,7 @@ class Memory_Tracker_Custom(BaseModel):
                  temperature=1,
                  feat_size=64,
                  scaling=True,
+                 upsample=True,
                  test_cfg=None,
                  train_cfg=None,
                  pretrained=None,
@@ -223,6 +224,7 @@ class Memory_Tracker_Custom(BaseModel):
         
         self.pretrained = pretrained
         self.scaling = scaling
+        self.upsample = upsample
         self.temperature = temperature
         
         if isinstance(radius, list):
@@ -273,7 +275,7 @@ class Memory_Tracker_Custom(BaseModel):
         else:
             outputs = outputs.permute(0,2,1).reshape(bsz, -1, *fs.shape[-2:])     
             
-        losses['l1_loss'], err_map = self.compute_lphoto(images_lab_gt, ch, outputs)
+        losses['l1_loss'], err_map = self.compute_lphoto(images_lab_gt, ch, outputs, upsample=self.upsample)
 
         return losses
         
@@ -292,13 +294,17 @@ class Memory_Tracker_Custom(BaseModel):
 
         return arr, drop_ch_ind # return channels not masked
     
-    def compute_lphoto(self, images_lab_gt, ch, outputs):
+    def compute_lphoto(self, images_lab_gt, ch, outputs, upsample=True):
         b, c, h, w = images_lab_gt[0].size()
 
         tar_y = images_lab_gt[-1][:,ch]  # y4
 
-        outputs = F.interpolate(outputs, (h, w), mode='bilinear')
-        loss = F.smooth_l1_loss(outputs*20, tar_y*20, reduction='mean')
+        if upsample:
+            outputs = F.interpolate(outputs, (h, w), mode='bilinear')
+            loss = F.smooth_l1_loss(outputs*20, tar_y*20, reduction='mean')
+        else:
+            tar_y = self.prep(images_lab_gt[-1])[:,ch]
+            loss = F.smooth_l1_loss(outputs*20, tar_y*20, reduction='mean')
 
         err_maps = torch.abs(outputs - tar_y).sum(1).detach()
 
