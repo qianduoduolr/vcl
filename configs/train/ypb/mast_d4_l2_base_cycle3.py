@@ -3,26 +3,25 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'mast_d4_l5_finetune_4'
+exp_name = 'mast_d4_l2_base_cycle3'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
-
 
 # model settings
 model = dict(
-    type='Memory_Tracker_Custom',
+    type='Memory_Tracker_Cycle',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(2, ), pool_type='mean'),
-    post_convolution=None,
     downsample_rate=8,
-    radius=[9,8,7,6],
+    T=0.25,
+    upsample=False,
+    radius=6,
     feat_size=32,
-    per_ref=False,
-    pretrained='/gdata/lirui/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_mast_12_2/epoch_1600.pth'
 )
 
 model_test = dict(
     type='VanillaTracker',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(2, )),
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(2, ), pool_type='mean'),
 )
+
 
 # model training and testing settings
 train_cfg = dict(syncbn=True)
@@ -51,9 +50,9 @@ img_norm_cfg = dict(mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375],
 img_norm_cfg_lab = dict(mean=[50, 0, 0], std=[50, 127, 127], to_bgr=False)
 
 train_pipeline = [
-    dict(type='RandomResizedCrop', area_range=(0.6,1.0), aspect_ratio_range=(1.5, 2.0),same_across_clip=True,same_on_clip=True),
+    dict(type='RandomResizedCrop', area_range=(0.6,1.0), aspect_ratio_range=(1.5, 2.0),),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
-    dict(type='Flip', flip_ratio=0.5, same_across_clip=True,same_on_clip=True),
+    dict(type='Flip', flip_ratio=0.5),
     dict(type='RGB2LAB', output_keys='images_lab'),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Normalize', **img_norm_cfg_lab, keys='images_lab'),
@@ -80,7 +79,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=8, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -91,11 +90,8 @@ data = dict(
             root='/dev/shm',
             list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
-            num_clips=5,
-            clip_length=1,
+            clip_length=2,
             pipeline=train_pipeline,
-            temporal_sampling_mode='mast_v2',
-            # data_backend='lmdb',
             test_mode=False),
 
     test =  dict(
@@ -119,12 +115,12 @@ data = dict(
 
 # optimizer
 optimizers = dict(
-    backbone=dict(type='Adam', lr=0.0001, betas=(0.9, 0.999)),
+    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
     )
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=800
+max_epoch=1600
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,
@@ -134,7 +130,7 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=800, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=1600, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
@@ -156,13 +152,14 @@ eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
                   checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth',
                 )
-evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=400, by_epoch=True
+evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True
                   )
 
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
-find_unused_parameters=True
+find_unused_parameters = True
+
 
 if __name__ == '__main__':
     make_pbs(exp_name, docker_name)

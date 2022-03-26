@@ -1,11 +1,13 @@
 from builtins import isinstance, list
 import os.path as osp
 from collections import *
+from pickle import NONE
 
 import mmcv
 import tempfile
 from mmcv.runner import auto_fp16, load_checkpoint
 from dall_e  import map_pixels, unmap_pixels, load_model
+from torch import unsqueeze
 
 from vcl.models.common.correlation import *
 from vcl.models.common.hoglayer import *
@@ -198,6 +200,7 @@ class Memory_Tracker_Custom(BaseModel):
                  feat_size=64,
                  scaling=True,
                  upsample=True,
+                 weight=20,
                  test_cfg=None,
                  train_cfg=None,
                  pretrained=None,
@@ -225,6 +228,7 @@ class Memory_Tracker_Custom(BaseModel):
         self.pretrained = pretrained
         self.scaling = scaling
         self.upsample = upsample
+        self.weight = weight
         self.temperature = temperature
         
         if isinstance(radius, list):
@@ -244,9 +248,9 @@ class Memory_Tracker_Custom(BaseModel):
         if self.pretrained != None:
             _ = load_checkpoint(self, self.pretrained, strict=False, map_location='cpu')
     
-    def forward_train(self, imgs, images_lab=None):
+    def forward_train(self, images_lab, imgs=None):
             
-        bsz, _, n, c, h, w = imgs.shape
+        bsz, _, n, c, h, w = images_lab.shape
         
         images_lab_gt = [images_lab[:,0,i].clone() for i in range(n)]
         images_lab = [images_lab[:,0,i] for i in range(n)]
@@ -301,10 +305,10 @@ class Memory_Tracker_Custom(BaseModel):
 
         if upsample:
             outputs = F.interpolate(outputs, (h, w), mode='bilinear')
-            loss = F.smooth_l1_loss(outputs*20, tar_y*20, reduction='mean')
+            loss = F.smooth_l1_loss(outputs * self.weight, tar_y * self.weight, reduction='mean')
         else:
             tar_y = self.prep(images_lab_gt[-1])[:,ch]
-            loss = F.smooth_l1_loss(outputs*20, tar_y*20, reduction='mean')
+            loss = F.smooth_l1_loss(outputs * self.weight, tar_y * self.weight, reduction='mean')
 
         err_maps = torch.abs(outputs - tar_y).sum(1).detach()
 
@@ -562,3 +566,74 @@ class Memory_Tracker_Custom_Inter(Memory_Tracker_Custom):
         loss = F.smooth_l1_loss(outputs_inter*20, outputs*20, reduction='mean')
         
         return loss
+    
+
+
+@MODELS.register_module()
+class Memory_Tracker_Cycle(Memory_Tracker_Custom):
+    
+    def __init__(self, T, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.T = T
+    
+    def forward_train(self, images_lab, imgs=None):
+            
+        bsz, _, n, c, h, w = images_lab.shape
+        
+        images_lab_gt = [images_lab[:,0,i].clone() for i in range(n)]
+        images_lab = [images_lab[:,0,i] for i in range(n)]
+        _, ch = self.dropout2d_lab(images_lab)
+        
+        # forward to get feature
+        fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        if self.head is not None:
+            fs = self.head(fs)
+        
+        fs = fs.reshape(bsz, n, *fs.shape[-3:])
+
+        tar, refs = fs[:, -1], fs[:, :-1]
+        
+        # get correlation attention map            
+        _, att = non_local_attention(tar, refs, mask=self.mask, scaling=self.scaling, per_ref=self.per_ref, temprature=self.temperature)
+        
+        # forward backward consistency
+        aff_i = torch.max(att, dim=-1, keepdim=True)[0]
+        aff_j = torch.max(att, dim=-2, keepdim=True)[0]
+        Q = (att * att) / (torch.matmul(aff_i, aff_j))
+        Q = Q[:,0].max(dim=-1)[0]
+        Q_sorted, _ = torch.sort(Q, dim=-1, descending=True)
+        idx = int(Q.shape[-1] * self.T) - 1
+        T = Q_sorted[:, idx:idx+1]
+        M = (Q >= T).reshape(bsz, 1, *tar.shape[-2:])
+        
+        losses = {}
+                
+        # for mast l1_loss
+        ref_gt = [self.prep(gt[:,ch]) for gt in images_lab_gt[:-1]]
+        outputs = frame_transform(att, ref_gt, flatten=False, per_ref=self.per_ref)
+        if self.per_ref:
+            outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, *fs.shape[-2:])     
+        else:
+            outputs = outputs.permute(0,2,1).reshape(bsz, -1, *fs.shape[-2:])     
+            
+        losses['l1_loss'], err_map = self.compute_lphoto(images_lab_gt, ch, outputs, M, upsample=self.upsample)
+
+        return losses
+    
+    def compute_lphoto(self, images_lab_gt, ch, outputs, mask, upsample=True):
+        b, c, h, w = images_lab_gt[0].size()
+
+        tar_y = images_lab_gt[-1][:,ch]  # y4
+
+        if upsample:
+            outputs = F.interpolate(outputs, (h, w), mode='bilinear')
+            loss = F.smooth_l1_loss(outputs * self.weight, tar_y * self.weight, reduction='none')
+        else:
+            tar_y = self.prep(images_lab_gt[-1])[:,ch]
+            loss = F.smooth_l1_loss(outputs * self.weight, tar_y * self.weight, reduction='none')
+
+        err_maps = torch.abs(outputs - tar_y).sum(1).detach()
+        
+        loss = (loss * mask).sum() / (mask.sum() + 1e-12)
+
+        return loss, err_maps

@@ -378,8 +378,8 @@ class Dist_Tracker_Pyramiad(Dist_Tracker):
             fs_t2 = fs_t2.reshape(bsz, t, *fs_t2.shape[-3:])
             tar_t2, refs_t2 = fs_t2[:, -1], fs_t2[:, :-1]
 
-            _, target_att1 = non_local_attention(tar_t1, refs_t1)
-            _, target_att2 = non_local_attention(tar_t2, refs_t2)
+            _, target_att1 = non_local_attention(tar_t1, refs_t1, temprature=self.temperature_t)
+            _, target_att2 = non_local_attention(tar_t2, refs_t2, temprature=self.temperature_t)
             
 
         losses = {}
