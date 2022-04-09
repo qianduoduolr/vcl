@@ -1,5 +1,6 @@
 import os
 import sys
+from tkinter import TRUE
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
@@ -36,7 +37,7 @@ test_cfg = dict(
     output_dir='eval_results')
 
 # dataset settings
-train_dataset_type = 'VOS_youtube_dataset_rgb'
+train_dataset_type = 'VOS_youtube_dataset_mlm_withbbox_random'
 
 val_dataset_type = 'VOS_davis_dataset_test'
 
@@ -48,7 +49,7 @@ img_norm_cfg = dict(mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375],
 img_norm_cfg_lab = dict(mean=[50, 0, 0], std=[50, 127, 127], to_bgr=False)
 
 train_pipeline = [
-    dict(type='RandomResizedCrop', area_range=(0.2,1.0), aspect_ratio_range=(1.5, 2.0),),
+    dict(type='RandomResizedCrop', area_range=(0.2,1.0), aspect_ratio_range=(1.5, 2.0), with_bbox=True),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
     dict(type='Flip', flip_ratio=0.5),
     dict(type='RGB2LAB', output_keys='images_lab'),
@@ -85,9 +86,9 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            root='/gdata/lirui/dataset/YouTube-VOS',
+            root='/dev/shm',
             list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
-            data_prefix=dict(RGB='train/JPEGImages', FLOW='train/Flows_s256', ANNO='train/Annotations'),
+            data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
             clip_length=2,
             pipeline=train_pipeline,
             test_mode=False),
@@ -138,7 +139,10 @@ log_config = dict(
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
     ])
 
-visual_config = None
+# visual_config = None
+visual_config = dict(
+    type='VisualizationHook_Custom', interval=100, res_name_list=['imgs', 'err'], output_dir='vis'
+)
 
 
 # runtime settings

@@ -3,17 +3,15 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'mast_d4_l2_base_rgb'
+exp_name = 'mast_d4_l2_pyramid_dis_3'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 # model settings
 model = dict(
-    type='Memory_Tracker_Custom',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(2, ), pool_type='mean'),
-    downsample_rate=8,
-    radius=6,
-    weight=1.5,
-    feat_size=32,
+    type='Memory_Tracker_Custom_Pyramid',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(0, 2), pool_type='mean'),
+    loss=dict(type='MSELoss',reduction='mean', loss_weight=1000),
+    reverse=False,
 )
 
 model_test = dict(
@@ -52,19 +50,21 @@ train_pipeline = [
     dict(type='RandomResizedCrop', area_range=(0.6,1.0), aspect_ratio_range=(1.5, 2.0),),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
     dict(type='Flip', flip_ratio=0.5),
-    dict(type='FrameDup', keys_list=['imgs'], out_keys_list=['images_lab']),
-    dict(type='Normalize', **img_norm_cfg, keys='images_lab'),
+    dict(type='RGB2LAB', output_keys='images_lab'),
+    dict(type='Normalize', **img_norm_cfg),
+    dict(type='Normalize', **img_norm_cfg_lab, keys='images_lab'),
     # dict(type='ColorDropout', keys='jitter_imgs', drop_rate=0.8),
-    dict(type='FormatShape', input_format='NPTCHW', keys='imgs'),
+    dict(type='FormatShape', input_format='NPTCHW'),
     dict(type='FormatShape', input_format='NPTCHW', keys='images_lab'),
-    dict(type='Collect', keys=['images_lab', 'imgs'], meta_keys=[]),
-    dict(type='ToTensor', keys=['images_lab', 'imgs'])
+    dict(type='Collect', keys=['imgs', 'images_lab'], meta_keys=[]),
+    dict(type='ToTensor', keys=['imgs', 'images_lab'])
 ]
 
 val_pipeline = [
     dict(type='Resize', scale=(-1, 480), keep_ratio=True),
     dict(type='Flip', flip_ratio=0),
-    dict(type='Normalize', **img_norm_cfg),
+    dict(type='RGB2LAB'),
+    dict(type='Normalize', **img_norm_cfg_lab),
     dict(type='FormatShape', input_format='NCTHW'),
     dict(
         type='Collect',
@@ -76,7 +76,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=8, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -84,8 +84,8 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            root='/home/lr/dataset/YouTube-VOS',
-            list_path='/home/lr/dataset/YouTube-VOS/2018/train',
+            root='/dev/shm',
+            list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
             clip_length=2,
             pipeline=train_pipeline,
@@ -93,8 +93,8 @@ data = dict(
 
     test =  dict(
             type=test_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -102,8 +102,8 @@ data = dict(
     
     val =  dict(
             type=val_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -143,11 +143,11 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}'
+work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth',
+                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth',
                 )
 evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True
                   )

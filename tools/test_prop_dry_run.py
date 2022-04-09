@@ -85,6 +85,10 @@ def main():
     # Overwrite eval_config from args.eval
     eval_config = merge_configs(eval_config, dict(metrics=args.eval))
 
+    if 'out_indices' in eval_config:
+        args.out_indices = eval_config['out_indices']
+        eval_config.pop('out_indices')
+    
     if 'output_dir' in eval_config and not args.out:
         args.tmpdir = eval_config['output_dir']
         eval_config['output_dir'] = eval_config['output_dir'] + f'indices{args.out_indices[0]}'
@@ -97,6 +101,7 @@ def main():
         eval_config.pop('checkpoint_path')
     else:
         eval_config.pop('checkpoint_path')
+        
 
     # init distributed env first, since logger depends on the dist info.
     if args.launcher == 'none':

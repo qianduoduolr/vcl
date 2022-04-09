@@ -1,0 +1,34 @@
+# paramters
+exp_name = 'moco_v2_lab_2'
+
+data = '/gdata2/lirui/dataset/ImageNet/lmdb/train'
+# data = '/gpub/imagenet_raw'
+arch = 'resnet18'
+work_dir = f'/gdata/lirui/expdir/VCL/group_contrastive_model/{exp_name}'
+workers = 12
+epochs = 200
+start_epoch = 0
+batch_size = 256
+lr = 0.03
+schedule = [120, 160]
+momentum = 0.9
+weight_decay = 1e-4
+print_freq = 100
+save_freq = 10
+resume = ''
+world_size = 1
+rank = 0
+dist_url = 'tcp://localhost:10001'
+dist_backend = 'nccl'
+seed = None
+gpu = None
+multiprocessing_distributed = True
+lab = True
+moco_dim = 128
+moco_k = 65536
+moco_m = 0.999
+moco_t = 0.07
+mlp = True
+aug_plus = True
+cos = True
+lmdb = True

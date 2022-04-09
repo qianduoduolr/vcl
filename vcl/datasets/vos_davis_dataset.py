@@ -323,6 +323,26 @@ class VOS_davis_dataset_rgb(Video_dataset_base):
 
         return self.pipeline(data)
     
+    def prepare_test_data(self, idx):
+        sample = self.samples[idx]
+        frames_path = sample['frames_path']
+        num_frames = sample['num_frames']
+
+        offsets = [num_frames // 2]
+        
+        # load frame
+        frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length, step=self.step)
+
+        data = {
+            'imgs': frames,
+            'modality': 'RGB',
+            'num_clips': self.num_clips,
+            'num_proposals':1,
+            'clip_len': self.clip_length
+        } 
+        
+        return self.pipeline(data)
+    
     
 @DATASETS.register_module()
 class VOS_davis_dataset_mlm(Video_dataset_base):

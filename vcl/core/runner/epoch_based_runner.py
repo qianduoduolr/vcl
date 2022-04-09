@@ -125,6 +125,9 @@ class EpochBasedRunner_Custom(BaseRunner):
                 for _ in range(epochs):
                     if mode == 'train' and self.epoch >= self._max_epochs:
                         break
+                    # if torch.distributed.is_initialized():
+                    #     data_loaders[i].sampler.set_epoch(self.epoch)
+                    # self.logger.info(f'{self.epoch} epoch start')
                     epoch_runner(data_loaders[i], **kwargs)
 
         time.sleep(1)  # wait for some hooks like loggers to finish

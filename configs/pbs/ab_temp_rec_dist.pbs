@@ -1,0 +1,18 @@
+#PBS -N ab_temp_rec_dist
+#PBS -o /gdata/lirui/pbs/pbs_out/ab_temp_rec_dist.out
+#PBS -e /gdata/lirui/pbs/pbs_out/ab_temp_rec_dist.err
+#PBS -l nodes=1:gpus=4:C
+#PBS -r y
+
+cd $PBS_O_WORKDIR
+echo Time is 'date'
+echo Directory is $PWD
+
+echo This job runs on following nodes:
+cat $PBS_NODEFILE
+echo $PBS_NODEFILE
+
+echo $PBS_GPUFILE
+cat $PBS_GPUFILE
+
+startdocker -P /gdata/lirui -D /gdata/lirui -u "--shm-size 64G" -c "bash /gdata/lirui/project/vcl/tools/dist_train.sh /gdata/lirui/project/vcl/configs/train/ypb/ab_temp_rec_dist.py 4" bit:5000/lirui_torch1.8_cuda11.1_corr

@@ -8,7 +8,7 @@ import mmcv
 import numpy as np
 import torch
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
-from mmcv.runner import HOOKS, IterBasedRunner
+from mmcv.runner import HOOKS, IterBasedRunner, DistSamplerSeedHook
 from mmcv.utils import build_from_cfg
 
 from vcl.core import DistEvalIterHook, EvalIterHook, build_optimizers, IterBasedRunner_Custom, EpochBasedRunner_Custom, DistEvalHook_Custom, \
@@ -145,7 +145,7 @@ def _dist_train(model,
                     device_ids=[torch.cuda.current_device()],
                     broadcast_buffers=False,
                     find_unused_parameters=find_unused_parameters)
-        
+
     # model = MMDistributedDataParallel(
     #                 model.cuda(),
     #                 device_ids=[torch.cuda.current_device()],
@@ -184,6 +184,9 @@ def _dist_train(model,
         cfg.lr_config,
         checkpoint_config=cfg.checkpoint_config,
         log_config=cfg.log_config)
+    
+    if cfg.get('ddp_shuffle', False):
+        runner.register_hook(DistSamplerSeedHook())
 
     # visual hook
     if cfg.get('visual_config', None) is not None:

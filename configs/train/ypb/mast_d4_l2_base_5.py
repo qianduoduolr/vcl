@@ -3,34 +3,21 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_mast_12_2'
+exp_name = 'mast_d4_l2_base_5'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 # model settings
 model = dict(
-    type='Vqvae_Tracker_V16',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(2, ), pool_type='mean'),
-    vqvae=dict(type='VQCL_v2', backbone=dict(type='ResNet', depth=18, strides=(1, 2, 1, 1), out_indices=(3, )),
-               sim_siam_head=dict(type='SimSiamHead', in_channels=128, num_projection_fcs=3, projection_mid_channels=128,
-               projection_out_channels=128, num_predictor_fcs=2, predictor_mid_channels=128, predictor_out_channels=128,
-               with_norm=True, spatial_type='avg'),loss=dict(type='CosineSimLoss', negative=False), embed_dim=128,
-               n_embed=2048, commitment_cost=1.0,),
-    # ce_loss=dict(type='Ce_Loss',reduction='none'),
-    ce_loss=None,
-    l1_loss=True,
-    patch_size=-1,
-    fc=False,
-    temperature=1.0,
-    mask_radius=6,
-    scaling_att=True,
-    temp_window=True,
-    # pretrained='/gdata/lirui/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_2/epoch_3200.pth',
-    pretrained_vq='/gdata/lirui/expdir/VCL/group_vqvae_tracker/train_vqvae_video_d4_nemd2048_contrastive_byol_commit1.0_v2/epoch_3200.pth',
+    type='Memory_Tracker_Custom',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
+    downsample_rate=8,
+    radius=6,
+    feat_size=32,
 )
 
 model_test = dict(
     type='VanillaTracker',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(2, ), pool_type='mean'),
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
 )
 
 
@@ -41,7 +28,7 @@ test_cfg = dict(
     precede_frames=20,
     topk=10,
     temperature=0.07,
-    strides=(1, 2, 1, 1),
+    strides=(1, 2, 2, 1),
     out_indices=(3, ),
     neighbor_range=24,
     with_first=True,
@@ -49,9 +36,10 @@ test_cfg = dict(
     output_dir='eval_results')
 
 # dataset settings
-train_dataset_type = 'VOS_youtube_dataset_mlm'
+train_dataset_type = 'VOS_youtube_dataset_rgb'
 
 val_dataset_type = 'VOS_davis_dataset_test'
+
 test_dataset_type = 'VOS_davis_dataset_test'
 
 
@@ -69,8 +57,8 @@ train_pipeline = [
     # dict(type='ColorDropout', keys='jitter_imgs', drop_rate=0.8),
     dict(type='FormatShape', input_format='NPTCHW'),
     dict(type='FormatShape', input_format='NPTCHW', keys='images_lab'),
-    dict(type='Collect', keys=['imgs', 'images_lab', 'mask_query_idx'], meta_keys=[]),
-    dict(type='ToTensor', keys=['imgs', 'images_lab', 'mask_query_idx'])
+    dict(type='Collect', keys=['imgs', 'images_lab'], meta_keys=[]),
+    dict(type='ToTensor', keys=['imgs', 'images_lab'])
 ]
 
 val_pipeline = [
@@ -99,10 +87,8 @@ data = dict(
             type=train_dataset_type,
             root='/dev/shm',
             list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
-            data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
-            mask_ratio=0.15,
+            data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train/Flows_s256', ANNO='train/Annotations'),
             clip_length=2,
-            vq_size=32,
             pipeline=train_pipeline,
             test_mode=False),
 
@@ -116,7 +102,7 @@ data = dict(
             ),
     
     val =  dict(
-            type=test_dataset_type,
+            type=val_dataset_type,
             root='/gdata/lirui/dataset/DAVIS',
             list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
             data_prefix='2017',
@@ -128,7 +114,6 @@ data = dict(
 # optimizer
 optimizers = dict(
     backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
-    # predictor=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
     )
 # learning policy
 # total_iters = 200000
@@ -145,6 +130,7 @@ lr_config = dict(
 
 checkpoint_config = dict(interval=1600, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
+# evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
     interval=100,
     hooks=[
@@ -152,7 +138,11 @@ log_config = dict(
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
     ])
 
-visual_config = None
+# visual_config = None
+visual_config = dict(
+    type='VisualizationHook_Custom', interval=100, res_name_list=['imgs', 'err'], output_dir='vis'
+)
+
 
 
 # runtime settings
@@ -162,12 +152,10 @@ work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
+                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth',
                 )
-
 evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True
                   )
-
 
 load_from = None
 resume_from = None

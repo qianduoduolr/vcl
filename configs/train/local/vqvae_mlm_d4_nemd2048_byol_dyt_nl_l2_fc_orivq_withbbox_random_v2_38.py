@@ -20,7 +20,7 @@ model = dict(
     patch_size=-1,
     fc=False,
     temperature=1.0,
-    temperature_ce=0.1,
+    # temperature_ce=0.1,
     mask_radius=6,
     scaling_att=True,
     temp_window=True,
@@ -148,14 +148,15 @@ work_dir = f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
+                  checkpoint_path=f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth',
+                  out_indices=(0,)
                 )
 
 
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
-eval_arc = 'VanillaTracker_V2'
+
 
 
 if __name__ == '__main__':

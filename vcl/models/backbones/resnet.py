@@ -438,11 +438,13 @@ class ResNet(nn.Module):
             conv_cfg=self.conv_cfg,
             norm_cfg=self.norm_cfg,
             act_cfg=self.act_cfg)
+        
         if self.pool_type == 'max':
             self.pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        else:
+        elif self.pool_type == 'mean':
             self.pool = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
-
+        else:
+            self.pool = None
     def _load_conv_params(self, conv, state_dict_tv, module_name_tv,
                           loaded_param_names):
         """Load the conv parameters of resnet from torchvision.
@@ -572,7 +574,8 @@ class ResNet(nn.Module):
             by the backbone.
         """
         x = self.conv1(x)
-        x = self.pool(x)
+        if self.pool is not None:
+            x = self.pool(x)
         outs = []
         for i, layer_name in enumerate(self.res_layers):
             res_layer = getattr(self, layer_name)

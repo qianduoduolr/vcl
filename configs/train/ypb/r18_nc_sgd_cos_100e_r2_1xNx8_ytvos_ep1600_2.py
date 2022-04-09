@@ -162,6 +162,7 @@ eval_config= dict(
 
 load_from = None
 resume_from = None
+ddp_shuffle = True
 workflow = [('train', 1)]
 find_unused_parameters = False
 

@@ -912,7 +912,7 @@ class Flip(object):
                     if flip:
                         mmcv.imflip_(results['masks'][i])
                 
-                imgs.append(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+                # imgs.append(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
             
             # if results.get('bbox_mask', None):
             #     if results.get('return_first_query', False):
@@ -931,9 +931,9 @@ class Flip(object):
             #     imgs.append(mask1)
             #     imgs.append(mask2)
                 
-            out = np.concatenate(imgs, 1)
-            num = random.randint(0,1000)
-            cv2.imwrite(f'/home/lr/project/vcl_output/output/aug_vis/same5_/{num}.jpg', out)
+            # out = np.concatenate(imgs, 1)
+            # num = random.randint(0,1000)
+            # cv2.imwrite(f'/home/lr/project/vcl_output/output/aug_vis/same5_/{num}.jpg', out)
                
             if flip:
                 lt = len(results[self.keys])
@@ -961,15 +961,6 @@ class Flip(object):
                 raise NotImplementedError('Use one Flip please')
             lazyop['flip'] = flip
             lazyop['flip_direction'] = self.direction
-        
-        # with open('result3.txt', 'a') as f:
-        #     if results['masks'][-1].sum() != 0:
-        #         c = results['masks'][-1]
-        #         d = results['mask_query_idx'].reshape((32,32))
-        #         img = results['imgs'][-1]
-        #         gt = (results['masks'][-1] != 0).reshape(-1)
-        #         a = (results['mask_query_idx'] * gt).sum() / (results['mask_query_idx'].sum()+1e-12)
-        #         f.write(str(a) + '\n')
         
         return results
 
@@ -1898,7 +1889,8 @@ class ColorJitter(torch.nn.Module):
                  saturation=0,
                  hue=0,
                  keys='imgs',
-                 output_keys='imgs'):
+                 output_keys='imgs',
+                 keep_c=None):
         super().__init__()
         self.brightness = self._check_input(brightness, 'brightness')
         self.contrast = self._check_input(contrast, 'contrast')
@@ -1910,6 +1902,7 @@ class ColorJitter(torch.nn.Module):
         self.same_across_clip = same_across_clip
         self.keys = keys
         self.output_keys = output_keys
+        self.keep_c = keep_c
 
     @torch.jit.unused
     def _check_input(self, value, name, center=1, bound=(0, float('inf')), clip_first_on_zero=True):
@@ -1991,6 +1984,11 @@ class ColorJitter(torch.nn.Module):
         if self.keys is not self.output_keys: 
             results[self.output_keys] = results[self.output_keys] = copy.deepcopy(results[self.keys])
 
+        if self.keep_c is not None:
+            results['ori_imgs'] = copy.deepcopy(results['imgs'])
+            keep_ch = random.randint(0,2)
+            results['keep_ch'] = keep_ch
+        
         for i, img in enumerate(results[self.keys]):
             is_new_clip = not self.same_across_clip and i % results[
                 'clip_len'] == 0 and i > 0
@@ -2001,7 +1999,11 @@ class ColorJitter(torch.nn.Module):
             if apply:
                 img = np.array(self.convert(Image.fromarray(img), *trans))
                 results[self.output_keys][i] = img
-
+        
+        if self.keep_c:
+            for i, img in enumerate(results[self.output_keys]):
+                results[self.output_keys][i][keep_ch] = results['ori_imgs'][i][keep_ch]
+                
         return results
     
 @PIPELINES.register_module()

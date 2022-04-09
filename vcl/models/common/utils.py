@@ -357,17 +357,23 @@ def tensor_slice(x, begin, size):
 
 def make_mask(size, t_size, eq=True):
     
+    if isinstance(size, tuple):
+        size_ = size[1]
+        size = size[0]
+    else:
+        size_ = size
+    
     size = int(size)
     t_size = int(t_size)
         
     masks = []
     for i in range(size):
         for j in range(size):
-            mask = torch.zeros((size, size)).cuda()
+            mask = torch.zeros((size_, size_)).cuda()
             if eq:
-                mask[max(0, i-t_size):min(size, i+t_size+1), max(0, j-t_size):min(size, j+t_size+1)] = 1
+                mask[max(0, i-t_size):min(size_, i+t_size+1), max(0, j-t_size):min(size_, j+t_size+1)] = 1
             else:
-                mask[max(0, i-t_size):min(size, i+t_size+1), max(0, j-t_size):min(size, j+t_size+1)] = 0.7
+                mask[max(0, i-t_size):min(size_, i+t_size+1), max(0, j-t_size):min(size_, j+t_size+1)] = 0.7
                 mask[i,j] = 1
                 
             masks.append(mask.reshape(-1))

@@ -6,10 +6,11 @@ import json
 import os
 
 year = '2018'
-imset = ['train_all_frames']
+imset = ['valid_all_frames']
 
 resolution = '480p'
 root = '/home/lr/dataset/YouTube-VOS/2018'
+dst_path = f'/home/lr/dataset/YouTube-VOS/2018/{imset[0]}'
 
 
 
@@ -30,8 +31,8 @@ def to_list():
 
 def to_json():
     
-    data = dict()
     for mode in imset:
+        data = dict()
         anno_path = osp.join(root, mode, 'Annotations')
         frame_path = osp.join(root, mode, 'JPEGImages_s256')   
         videos_subset = glob.glob(osp.join(frame_path, '*'))
@@ -44,7 +45,7 @@ def to_json():
                 data[video_name].append(x)
         
         
-        with open(f'youtube{year}_{mode}.json','w') as f:
+        with open(f'{dst_path}/youtube{year}_{mode}.json','w') as f:
             _ = mmcv.dump(data, f, file_format='json')
 
 def check():
@@ -55,5 +56,5 @@ def check():
         a2 = len(glob.glob(os.path.join(x, '*.jpg')))
         if a1 != a2: print(v)
 
-# to_json()
-check()
+to_json()
+# check()

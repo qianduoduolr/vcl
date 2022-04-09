@@ -2,6 +2,7 @@ import os
 import numpy as np
 import cv2
 import torch
+import torch.nn.functional as F
 
 import mmcv
 from PIL import Image
@@ -9,10 +10,10 @@ import matplotlib.pyplot as plt
 from .util import *
 from .dim_reduction import *
 from matplotlib import cm
-
+plt.axis('off')
 
 class Correspondence_Visualizer(object):
-    def __init__(self, mode, show_mode='plt', flow_show_mode='rgb', nembed=2048, scale=32):
+    def __init__(self, mode, show_mode='plt', flow_show_mode='rgb', nembed=2048, scale=32, radius=-1):
         
         self.mode = mode
         self.show_mode = show_mode
@@ -26,11 +27,16 @@ class Correspondence_Visualizer(object):
             if nembed >= 256:
                 self.rescale = True
             self.nembed = nembed
+        
+        if radius is not -1:
+            self.mask = make_mask(scale, radius)
+        else:
+            self.mask = None
 
 
     def vis_pairwise_attention(self, frames, fs, sample_idx):
         
-        att = affanity(fs[0], [fs[1]], flatten=False)
+        att = affanity(fs[0], [fs[1]], flatten=False, softmax=True, mask=self.mask)
         scale = int(att.shape[-1] ** 0.5)
         att = att[0, 0, sample_idx].reshape(scale,scale).detach().cpu().numpy() * 255
         att = self.att_norm(att)
@@ -46,12 +52,13 @@ class Correspondence_Visualizer(object):
         # show
         if self.show_mode == 'plt':
             plt.figure()
-            plt.subplot(1,4,1), plt.imshow(blend_out_query)
-            plt.subplot(1,4,2), plt.imshow(blend_out_result)
-            plt.subplot(1,4,3), plt.imshow(querys_map)
-            plt.subplot(1,4,4), plt.imshow(att)
+            plt.subplot(1,4,1), plt.axis('off'), plt.imshow(blend_out_query)
+            plt.subplot(1,4,2), plt.axis('off'), plt.imshow(blend_out_result)
+            plt.subplot(1,4,3), plt.axis('off'), plt.imshow(querys_map)
+            plt.subplot(1,4,4), plt.axis('off'), plt.imshow(att)
         else:
             pass
+        return plt
         
     def vis_vq(self, z1_q, z2_q, frame1, frame2, x_rec1=None, x_rec2=None):
             
@@ -71,20 +78,21 @@ class Correspondence_Visualizer(object):
             plt.figure()
 
             if x_rec1 is not None:
-                plt.subplot(3,2,1), plt.imshow(frame_vq_1, cmap=plt.get_cmap('jet'))
-                plt.subplot(3,2,2), plt.imshow(frame_vq_2, cmap=plt.get_cmap('jet'))
-                plt.subplot(3,2,3), plt.imshow(np.array(frame1))
-                plt.subplot(3,2,4), plt.imshow(np.array(frame2))
-                plt.subplot(3,2,5), plt.imshow(np.array(x_rec1))
-                plt.subplot(3,2,6), plt.imshow(np.array(x_rec2))
+                plt.subplot(3,2,1), plt.axis('off'), plt.imshow(frame_vq_1, cmap=plt.get_cmap('jet'))
+                plt.subplot(3,2,2), plt.axis('off'), plt.imshow(frame_vq_2, cmap=plt.get_cmap('jet'))
+                plt.subplot(3,2,3), plt.axis('off'), plt.imshow(np.array(frame1))
+                plt.subplot(3,2,4), plt.axis('off'), plt.imshow(np.array(frame2))
+                plt.subplot(3,2,5), plt.axis('off'), plt.imshow(np.array(x_rec1))
+                plt.subplot(3,2,6), plt.axis('off'), plt.imshow(np.array(x_rec2))
                 plt.show()
             else:
-                plt.subplot(2,2,1), plt.imshow(frame_vq_1, cmap=plt.get_cmap('jet'))
-                plt.subplot(2,2,2), plt.imshow(frame_vq_2, cmap=plt.get_cmap('jet'))
-                plt.subplot(2,2,3), plt.imshow(np.array(frame1))
-                plt.subplot(2,2,4), plt.imshow(np.array(frame2))
+                plt.subplot(2,2,1), plt.axis('off'), plt.imshow(frame_vq_1, cmap=plt.get_cmap('jet'))
+                plt.subplot(2,2,2), plt.axis('off'), plt.imshow(frame_vq_2, cmap=plt.get_cmap('jet'))
+                plt.subplot(2,2,3), plt.axis('off'), plt.imshow(np.array(frame1))
+                plt.subplot(2,2,4), plt.axis('off'), plt.imshow(np.array(frame2))
         else:
             pass
+        return plt
 
     def vis_pca(self, fs, frames):
         
@@ -98,20 +106,22 @@ class Correspondence_Visualizer(object):
         
         if self.show_mode == 'plt':
             plt.figure()
-            plt.subplot(1,4,1), plt.imshow(frames[0])
-            plt.subplot(1,4,2), plt.imshow(frames[1])
-            plt.subplot(1,4,3), plt.imshow(pca_ff1)
-            plt.subplot(1,4,4), plt.imshow(pca_ff2)
+            plt.subplot(1,4,1), plt.axis('off'), plt.imshow(frames[0])
+            plt.subplot(1,4,2), plt.axis('off'), plt.imshow(frames[1])
+            plt.subplot(1,4,3), plt.axis('off'), plt.imshow(pca_ff1)
+            plt.subplot(1,4,4), plt.axis('off'), plt.imshow(pca_ff2)
         else:
             pass
+        return plt
     
     def vis_flow(self, fs, xs, frames, gt=None):
         
-        att = affanity(fs[0], [fs[1]], flatten=False)
+        att = affanity(fs[0], [fs[1]], flatten=False, mask=self.mask, softmax=True)
         att = att.detach()
         
         u, v = compute_flow(att[:,0])
-        flow_visualize(u, v, xs[0][0], xs[1][0], att[0,0], frames, gt=gt, mode=self.flow_show_mode)
+        plt = flow_visualize(u, v, xs[0][0], xs[1][0], att[0,0], frames, gt=gt, mode=self.flow_show_mode)
+        return plt
 
     def vis_multiple_frrames_attention(self):
         pass
@@ -119,13 +129,14 @@ class Correspondence_Visualizer(object):
     
     def visualize(self, *args, **kwargs):
         if self.mode == 'pair':
-            self.vis_pairwise_attention(*args, **kwargs)
+            plt = self.vis_pairwise_attention(*args, **kwargs)
         elif self.mode == 'vq':
-            self.vis_vq(*args, **kwargs)
+            plt = self.vis_vq(*args, **kwargs)
         elif self.mode == 'pca':
-            self.vis_pca(*args, **kwargs)
+            plt = self.vis_pca(*args, **kwargs)
         elif self.mode == 'flow':
-            self.vis_flow(*args, **kwargs)
+            plt = self.vis_flow(*args, **kwargs)
+        return plt
             
             
     @staticmethod
@@ -202,6 +213,23 @@ def compute_flow(corr):
 
     return u, v
 
+def compute_flow_v2(corr):
+    # assume batched affinity, shape N x H * W x W x H
+    h = w = int(corr.shape[-1] ** 0.5)
+    
+    yv, xv = torch.meshgrid([torch.arange(h),torch.arange(w)])
+    grid = torch.stack((yv, xv), 2).view((32, 32, 2)).float().cuda()
+    
+    # x1 -> x2
+    warp_grid = torch.einsum("bij,jd -> bid",[corr, grid.flatten(0,1)])
+
+    off = warp_grid - grid.unsqueeze(0).flatten(1,2)
+    
+    u = off[:, :, 0].reshape(-1, h, w)
+    v = off[:, :, 1].reshape(-1, h, w)
+    
+    return u, v
+
 
 def flow_visualize(u, v, x1, x2, A, frames=None, gt=None, mode='rgb'):
     flows = torch.stack([u, v], dim=-1).cpu().numpy()
@@ -232,18 +260,20 @@ def flow_visualize(u, v, x1, x2, A, frames=None, gt=None, mode='rgb'):
         result = mmcv.visualization.flow2rgb(flows)
         
         plt.figure()
-        plt.subplot(1,4,1), plt.imshow(frames[0])
-        plt.subplot(1,4,2), plt.imshow(frames[1])
-        plt.subplot(1,4,3), plt.imshow(result)
+        plt.subplot(1,4,1), plt.axis('off'), plt.imshow(frames[0])
+        plt.subplot(1,4,2), plt.axis('off'), plt.imshow(frames[1])
+        plt.subplot(1,4,3), plt.axis('off'), plt.imshow(result)
         
         if gt.any() == None:
-            plt.subplot(1,4,4), plt.imshow(result)
+            plt.subplot(1,4,4), plt.axis('off'), plt.imshow(result)
         else:
             gt = mmcv.visualization.flow2rgb(gt)
-            plt.subplot(1,4,4), plt.imshow(gt)
+            plt.subplot(1,4,4), plt.axis('off'), plt.imshow(gt)
+    
+    return plt
 
 
-def affanity(tar, refs, per_ref=True, flatten=True, temprature=1.0, mask=None, scaling=False):
+def affanity(tar, refs, per_ref=True, flatten=True, temprature=1.0, mask=None, scaling=False, softmax=False):
     
     """ Given refs and tar, return transform tar non-local.
 
@@ -268,4 +298,31 @@ def affanity(tar, refs, per_ref=True, flatten=True, temprature=1.0, mask=None, s
         # att *= mask
         att.masked_fill_(~mask.bool(), float('-inf'))
     
+    if softmax:
+        att = F.softmax(att, dim=-1)
+    
     return att
+
+def make_mask(size, t_size, eq=True):
+    
+    if isinstance(size, tuple):
+        size_ = size[1]
+        size = size[0]
+    else:
+        size_ = size
+    
+    size = int(size)
+    t_size = int(t_size)
+        
+    masks = []
+    for i in range(size):
+        for j in range(size):
+            mask = torch.zeros((size_, size_)).cuda()
+            if eq:
+                mask[max(0, i-t_size):min(size_, i+t_size+1), max(0, j-t_size):min(size_, j+t_size+1)] = 1
+            else:
+                mask[max(0, i-t_size):min(size_, i+t_size+1), max(0, j-t_size):min(size_, j+t_size+1)] = 0.7
+                mask[i,j] = 1
+                
+            masks.append(mask.reshape(-1))
+    return torch.stack(masks)

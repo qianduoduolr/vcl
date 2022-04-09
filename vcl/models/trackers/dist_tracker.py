@@ -62,6 +62,9 @@ class Dist_Tracker(BaseModel):
         self.downsample_rate = downsample_rate
 
         self.momentum = momentum
+        self.feat_size = feat_size
+        self.radius = mask_radius
+
         self.pretrained = pretrained
         self.temperature = temperature
         self.temperature_t = temperature_t
@@ -289,10 +292,13 @@ class Dist_Tracker_Channel_Att(Dist_Tracker_V2):
     
 @MODELS.register_module()
 class Dist_Tracker_Weighted(Dist_Tracker_V2):
-    def __init__(self, thres=-1, *args, **kwargs):
+    def __init__(self, thres=-1, wr=False, weight=20, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.T = thres
-    
+        self.weight = weight
+        self.wr = wr
+        
+        
     def forward_train(self, imgs, images_lab=None):
         bsz, num_clips, t, c, h, w = imgs.shape
 
@@ -308,7 +314,7 @@ class Dist_Tracker_Weighted(Dist_Tracker_V2):
         fs2 = fs2_.reshape(bsz, t, *fs2_.shape[-3:])
         tar2, refs2 = fs2[:, -1], fs2[:, :-1]
         
-        _, att_g = non_local_attention(tar2, refs2, scaling=True)
+        _, att_g = non_local_attention(tar2, refs2, temprature=self.temperature, scaling=self.scaling, norm=self.norm)
         _, att = non_local_attention(tar1, refs1, scaling=True, mask=self.mask)
 
 
@@ -317,7 +323,8 @@ class Dist_Tracker_Weighted(Dist_Tracker_V2):
             fs_t_ = self.backbone_t(imgs.flatten(0,2))
             fs_t = fs_t_.reshape(bsz, t, *fs_t_.shape[-3:])
             tar_t, refs_t = fs_t[:, -1], fs_t[:, :-1]
-            _, target_att = non_local_attention(tar_t, refs_t)
+            _, target_att = non_local_attention(tar_t, refs_t, temprature=self.temperature_t, norm=self.norm)
+
             
             if self.T == -1:
                 tf = (tar_t.mean(1).flatten(-2)).softmax(-1)
@@ -329,6 +336,7 @@ class Dist_Tracker_Weighted(Dist_Tracker_V2):
                 T = tf_sorted[:, idx:idx+1]
                 M = ( tf > T).bool()
                 weight = torch.masked_fill(tf, ~M, float('-inf')).softmax(-1)
+                weight_rec = weight.reshape(bsz, fs2.shape[-1], -1) if self.wr else None
                 weight = weight.unsqueeze(-1).repeat(1, 1, target_att.shape[-1])
             # x = tf[0].reshape(16,16).detach().cpu().numpy()
             # x = weight[0].reshape(16,16).detach().cpu().numpy()
@@ -342,9 +350,26 @@ class Dist_Tracker_Weighted(Dist_Tracker_V2):
             ref_gt = [self.prep(gt[:,ch]) for gt in images_lab_gt[:-1]]
             outputs = frame_transform(att, ref_gt, flatten=False)
             outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, *fs1.shape[-2:])     
-            losses['l1_loss'], _ = self.compute_lphoto(images_lab_gt, ch, outputs)
+            losses['l1_loss'], _ = self.compute_lphoto(images_lab_gt, ch, outputs, weight_rec=weight_rec)
 
         return losses
+    
+    def compute_lphoto(self, images_lab_gt, ch, outputs, weight_rec=None):
+        b, c, h, w = images_lab_gt[0].size()
+
+        tar_y = images_lab_gt[-1][:,ch]  # y4
+        
+        if weight_rec == None:
+            outputs = F.interpolate(outputs, (h, w), mode='bilinear')
+            loss = F.smooth_l1_loss(outputs * self.weight, tar_y * self.weight, reduction='mean')
+        else:
+            tar_y = self.prep(images_lab_gt[-1])[:,ch]
+            loss = F.smooth_l1_loss(outputs * self.weight, tar_y * self.weight, reduction='none')
+            loss = (loss * weight_rec.unsqueeze(1)).sum() / (weight_rec.sum() + 1e-12)
+
+        err_maps = torch.abs(outputs - tar_y).sum(1).detach()
+
+        return loss, err_maps
     
 
 @MODELS.register_module()
@@ -596,8 +621,8 @@ class Dist_Tracker_Two_Teacher(Dist_Tracker):
             
 
         losses = {}
-        losses['att1_loss'] = self.loss(att_l, target_att2)
-        losses['att2_loss'] = self.loss(att_g, target_att1)
+        losses['att1_loss'] = self.loss_weight['att1_loss'] * self.loss(att_l, target_att2)
+        losses['att2_loss'] = self.loss_weight['att2_loss'] * self.loss(att_g, target_att1)
         
         
         # for mast l1_loss
@@ -608,3 +633,93 @@ class Dist_Tracker_Two_Teacher(Dist_Tracker):
             losses['l1_loss'], _ = self.compute_lphoto(images_lab_gt, ch, outputs)
 
         return losses
+    
+    
+    
+@MODELS.register_module()
+class Dist_Tracker_Pyramid_Raft(Dist_Tracker):
+    
+    def __init__(self, num_levels, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        self.num_levels = num_levels    
+        # for i in range(self.num_levels):
+        #     setattr(self, f'mask{i}', make_mask((self.feat_size, self.feat_size // 2 ** i), self.radius))
+        
+        
+    def forward_train(self, imgs, images_lab=None):
+        bsz, num_clips, t, c, h, w = imgs.shape
+
+        images_lab_gt = [images_lab[:,0,i,:].clone() for i in range(t)]
+        images_lab = [images_lab[:,0,i,:] for i in range(t)]
+        _, ch = self.dropout2d_lab(images_lab)
+        
+        # forward to get feature
+        fs1, fs2 = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        fs1 = fs1.reshape(bsz, t, *fs1.shape[-3:])
+        tar1, refs1 = fs1[:, -1], fs1[:, :-1]
+        fs2 = fs2.reshape(bsz, t, *fs2.shape[-3:])
+        tar2, refs2 = fs2[:, -1], fs2[:, :-1]
+        
+        atts = self.non_local_attention_pyramid(tar2, refs2, temprature=self.temperature, scaling=self.scaling, norm=self.norm)
+        _, att = non_local_attention(tar1, refs1, scaling=True, mask=self.mask)
+
+
+        with torch.no_grad():
+            self.backbone_t.eval()
+            fs_t = self.backbone_t(imgs.flatten(0,2))
+            fs_t = fs_t.reshape(bsz, t, *fs_t.shape[-3:])
+            tar_t, refs_t = fs_t[:, -1], fs_t[:, :-1]
+
+            target_atts = self.non_local_attention_pyramid(tar_t, refs_t, temprature=self.temperature_t, norm=self.norm)
+
+        losses = {}
+        for idx, (att_p, target_att_p) in enumerate(zip(atts, target_atts)):
+            losses[f'att_{idx}_loss'] = self.loss_weight[f'att_{idx}_loss'] * self.loss(att_p, target_att_p)
+        
+        
+        # for mast l1_loss
+        if self.l1_loss:
+            ref_gt = [self.prep(gt[:,ch]) for gt in images_lab_gt[:-1]]
+            outputs = frame_transform(att, ref_gt, flatten=False)
+            outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, *fs1.shape[-2:])     
+            losses['l1_loss'], _ = self.compute_lphoto(images_lab_gt, ch, outputs)
+
+        return losses
+    
+    def non_local_attention_pyramid(self, tar, refs, temprature=1.0, scaling=False, norm=False):
+        
+        if isinstance(refs, list):
+            refs = torch.stack(refs, 1)
+
+        tar = tar.flatten(2).permute(0, 2, 1)
+        bsz, t, feat_dim, h_, w_ = refs.shape
+        refs = refs.flatten(3).permute(0, 1, 3, 2)
+        
+        if norm:
+            tar = F.normalize(tar, dim=-1)
+            refs = F.normalize(refs, dim=-1)
+            
+        # calc correlation
+        att = torch.einsum("bic,btjc -> btij", (tar, refs)) / temprature 
+        att_pyramid = [att]
+        
+        att = att.reshape(-1, 1, h_, w_)
+        for i in range(self.num_levels-1):
+            att_ = F.avg_pool2d(att, 2, stride=2)
+            att_ = att_.reshape(bsz, 1, h_*w_, -1)
+            att_pyramid.append(att_)
+        
+        for idx, att in enumerate(att_pyramid):
+            
+            if scaling:
+                # scaling
+                att = att / torch.sqrt(torch.tensor(feat_dim).float()) 
+
+            # att *= mask
+            # mask = getattr(self, f'mask{idx}')
+            # att.masked_fill_(~mask.bool(), float('-inf'))
+            att = F.softmax(att, dim=-1)
+            att_pyramid[idx] = att
+        
+        return att_pyramid

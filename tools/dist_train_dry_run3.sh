@@ -2,6 +2,12 @@
 key="exp_name"
 mkdir -p /dev/shm/2018/train
 mkdir -p  /dev/shm/2018/train_all_frames
+mkdir -p /dev/shm/2018/valid
+mkdir -p /dev/shm/2018/valid_all_frames
+mkdir -p /dev/shm/2018/test
+mkdir -p /dev/shm/2018/test_all_frames
+
+
 
 cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/zip_data/JPEGImages_s256.zip /dev/shm/2018/train/
 unzip -d /dev/shm/2018/train/ /dev/shm/2018/train/JPEGImages_s256.zip
@@ -11,10 +17,22 @@ cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train_all_frames/zip_data/JPEGImages
 unzip -d /dev/shm/2018/train_all_frames/ /dev/shm/2018/train_all_frames/JPEGImages_s256.zip
 rm -rf /dev/shm/2018/train_all_frames/JPEGImages_s256.zip
 
-cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/*.txt /dev/shm/2018/train/
-cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/*.json /dev/shm/2018/train/
-cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train_all_frames/*.txt /dev/shm/2018/train_all_frames/
-cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train_all_frames/*.json /dev/shm/2018/train_all_frames/
+cp -r /gdata/lirui/dataset/YouTube-VOS/2018/valid/zip_data/JPEGImages_s256.zip /dev/shm/2018/valid/
+unzip -d /dev/shm/2018/valid/ /dev/shm/2018/valid/JPEGImages_s256.zip
+rm -rf /dev/shm/2018/valid/JPEGImages_s256.zip
+
+cp -r /gdata/lirui/dataset/YouTube-VOS/2018/valid_all_frames/zip_data/JPEGImages_s256.zip /dev/shm/2018/valid_all_frames/
+unzip -d /dev/shm/2018/valid_all_frames/ /dev/shm/2018/valid_all_frames/JPEGImages_s256.zip
+rm -rf /dev/shm/2018/valid_all_frames/JPEGImages_s256.zip
+
+cp -r /gdata/lirui/dataset/YouTube-VOS/2018/test/zip_data/JPEGImages_s256.zip /dev/shm/2018/test/
+unzip -d /dev/shm/2018/test/ /dev/shm/2018/test/JPEGImages_s256.zip
+rm -rf /dev/shm/2018/test/JPEGImages_s256.zip
+
+cp -r /gdata/lirui/dataset/YouTube-VOS/2018/test_all_frames/zip_data/JPEGImages_s256.zip /dev/shm/2018/test_all_frames/
+unzip -d /dev/shm/2018/test_all_frames/ /dev/shm/2018/test_all_frames/JPEGImages_s256.zip
+rm -rf /dev/shm/2018/test_all_frames/JPEGImages_s256.zip
+
 echo "finish cp data"
 
 CONFIG=$1

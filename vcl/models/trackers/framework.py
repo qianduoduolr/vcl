@@ -264,3 +264,168 @@ class Framework(BaseModel):
         mask_query_idx = mask_query_idx.bool().unsqueeze(1).repeat(1,t-1,1)
         
         return mask_query_idx
+    
+    
+
+@MODELS.register_module()
+class Framework_V2(BaseModel):
+
+    def __init__(self,
+                 backbone,
+                 backbone_t,
+                 momentum,
+                 temperature,
+                 pool_type='mean',
+                 weight=20,
+                 num_stage=2,
+                 feat_size=[64, 32],
+                 radius=[12, 6],
+                 downsample_rate=[4, 8],
+                 temperature_t=1.0,
+                 loss=None,
+                 loss_weight=None,
+                 scaling=True,
+                 norm=False,
+                 train_cfg=None,
+                 test_cfg=None,
+                 pretrained=None,
+                 ):
+        """ Distilation tracker
+
+        Args:
+            depth ([type]): ResNet depth for encoder
+            pixel_loss ([type]): loss option
+            train_cfg ([type], optional): [description]. Defaults to None.
+            test_cfg ([type], optional): [description]. Defaults to None.
+            pretrained ([type], optional): [description]. Defaults to None.
+        """
+
+        super().__init__()
+        
+        self.num_stage = num_stage
+        self.feat_size = feat_size
+        self.pool_type = pool_type
+
+        self.train_cfg = train_cfg
+        self.test_cfg = test_cfg
+        self.downsample_rate = downsample_rate
+
+        self.momentum = momentum
+        self.pretrained = pretrained
+        self.temperature = temperature
+        self.temperature_t = temperature_t
+        self.scaling = scaling
+        self.norm = norm
+        self.loss_weight = loss_weight
+        self.logger = get_root_logger()
+
+        # build backbone
+        self.backbone = build_backbone(backbone)
+        self.backbone_t = build_backbone(backbone_t)
+ 
+        # loss
+        self.loss = build_loss(loss) if loss != None else None
+        self.mask = [ make_mask(feat_size[i], radius[i]) for i in range(len(radius))]
+        
+        self.weight = weight
+        self.init_weights()
+    
+    def init_weights(self):
+        
+        self.backbone.init_weights()
+        self.backbone_t.init_weights()
+        
+        if self.pretrained is not None:
+            _ = load_checkpoint(self, self.pretrained, map_location='cpu')
+    
+    def forward_train(self, imgs, images_lab=None):
+            
+        bsz, num_clips, t, c, h, w = imgs.shape
+        
+        images_lab_gt = [images_lab[:,0,i,:].clone() for i in range(t)]
+        images_lab = [images_lab[:,0,i,:] for i in range(t)]
+        _, ch = self.dropout2d_lab(images_lab)
+        
+        # forward to get feature
+        fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        fs = [f.reshape(bsz, t, *f.shape[-3:]) for f in fs]
+        
+        tar_pyramid, refs_pyramid = [f[:, -1] for f in fs], [ f[:, :-1] for f in fs]
+        
+        losses = {}
+        
+        atts = []
+        atts_dis = []
+        for idx, (tar, refs) in enumerate(zip(tar_pyramid, refs_pyramid)):
+            # get correlation for distillation
+            if idx == len(fs) - 1:
+                _, att_g = non_local_attention(tar, refs, scaling=self.scaling)
+                break
+            # get correlation attention map            
+            _, att = non_local_attention(tar, refs, mask=self.mask[idx], scaling=True)            
+            # for mast l1_loss
+            ref_gt = [self.prep(gt[:,ch], downsample_rate=self.downsample_rate[idx]) for gt in images_lab_gt[:-1]]
+            outputs = frame_transform(att, ref_gt, flatten=False)
+            outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, self.feat_size[idx], self.feat_size[idx])     
+            losses[f'stage{idx}_l1_loss'] = self.compute_lphoto(images_lab_gt, ch, outputs)[0] * self.loss_weight[f'stage{idx}_l1_loss']
+            atts.append(att)
+        
+        # for layer distillation loss
+        if self.pool_type == 'mean':
+            att_ = atts[0].reshape(bsz, -1, *fs[0].shape[-2:])
+            att_ = F.avg_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1).reshape(bsz, -1, *fs[0].shape[-2:])
+            target = F.avg_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1)
+        elif self.pool_type == 'max':
+            att_ = atts[0].reshape(bsz, -1, *fs[0].shape[-2:])
+            att_ = F.max_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1).reshape(bsz, -1, *fs[0].shape[-2:])
+            target = F.max_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1)
+            
+        losses['layer_dist_loss'] = self.loss_weight['layer_dist_loss'] * self.loss(atts[-1][:,0], target)
+        
+        # for correlation distillation loss
+        with torch.no_grad():
+            self.backbone_t.eval()
+            fs_t = self.backbone_t(imgs.flatten(0,2))
+            fs_t = fs_t.reshape(bsz, t, *fs_t.shape[-3:])
+            tar_t, refs_t = fs_t[:, -1], fs_t[:, :-1]
+            _, target_att = non_local_attention(tar_t, refs_t, temprature=self.temperature_t, norm=self.norm)
+            
+        losses['correlation_dist_loss'] = self.loss_weight['correlation_dist_loss'] * self.loss(att_g, target_att)
+            
+        return losses
+    
+    def dropout2d_lab(self, arr): # drop same layers for all images
+        if not self.training:
+            return arr
+
+        drop_ch_num = int(np.random.choice(np.arange(1, 2), 1))
+        drop_ch_ind = np.random.choice(np.arange(1,3), drop_ch_num, replace=False)
+
+        for a in arr:
+            for dropout_ch in drop_ch_ind:
+                a[:, dropout_ch] = 0
+            a *= (3 / (3 - drop_ch_num))
+
+        return arr, drop_ch_ind # return channels not masked
+    
+    def compute_lphoto(self, images_lab_gt, ch, outputs, upsample=True):
+        b, c, h, w = images_lab_gt[0].size()
+
+        tar_y = images_lab_gt[-1][:,ch]  # y4
+
+        if upsample:
+            outputs = F.interpolate(outputs, (h, w), mode='bilinear')
+            loss = F.smooth_l1_loss(outputs * self.weight, tar_y * self.weight, reduction='mean')
+        else:
+            tar_y = self.prep(images_lab_gt[-1])[:,ch]
+            loss = F.smooth_l1_loss(outputs * self.weight, tar_y * self.weight, reduction='mean')
+
+        err_maps = torch.abs(outputs - tar_y).sum(1).detach()
+
+        return loss, err_maps
+    
+    def prep(self, image, downsample_rate):
+        _,c,_,_ = image.size()
+        x = image.float()[:,:,::downsample_rate,::downsample_rate]
+
+        return x

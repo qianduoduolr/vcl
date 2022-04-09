@@ -11,7 +11,7 @@ model = dict(
     type='Memory_Tracker_Cycle',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 1, 1), out_indices=(2, ), pool_type='mean'),
     downsample_rate=8,
-    T=0.5,
+    T=0.75,
     upsample=False,
     radius=6,
     feat_size=32,
@@ -88,8 +88,8 @@ data = dict(
             dict(
             type=train_dataset_type,
             root='/home/lr/dataset/YouTube-VOS',
-            list_path='/home/lr/dataset/YouTube-VOS/2018/train',
-            data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
+            list_path='/home/lr/dataset/YouTube-VOS/2018/train_all_frames',
+            data_prefix=dict(RGB='train_all_frames/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
             clip_length=2,
             pipeline=train_pipeline,
             test_mode=False),
@@ -140,7 +140,10 @@ log_config = dict(
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
     ])
 
-visual_config = None
+# visual_config = None
+visual_config = dict(
+    type='VisualizationHook_Custom', interval=100, res_name_list=['mask', 'imgs', 'err'], output_dir='vis'
+)
 
 
 # runtime settings

@@ -1,4 +1,5 @@
 import os
+from re import I
 import sys
 import time
 import math
@@ -30,20 +31,22 @@ def tensor2img(tensor, out_type=np.uint8, min_max=(0, 1), norm_mode='0-1'):
     Input: 4D(B,(3/1),H,W), 3D(C,H,W), or 2D(H,W), any range, RGB channel order
     Output: 3D(H,W,C) or 2D(H,W), [0,255], np.uint8 (default)
     '''
+    n_dim = tensor.dim()
+    
     if norm_mode == '0-1':
         tensor = tensor.squeeze().float().cpu() # clamp
         tensor = (tensor - min_max[0]) / (min_max[1] - min_max[0])  # to range [0,1]
     elif norm_mode == 'mean-std':
-        tensor = tensor.squeeze().float().cpu() # clamp
-        mean=torch.tensor([123.675, 116.28, 103.53]).reshape(3,1,1)
-        std=torch.tensor([58.395, 57.12, 57.375]).reshape(3,1,1)
-        tensor = (tensor * std) + mean
-        tensor = tensor.clamp(0,255)
+        if n_dim != 2:
+            tensor = tensor.squeeze().float().cpu() # clamp
+            mean=torch.tensor([123.675, 116.28, 103.53]).reshape(3,1,1)
+            std=torch.tensor([58.395, 57.12, 57.375]).reshape(3,1,1)
+            tensor = (tensor * std) + mean
+            tensor = tensor.clamp(0,255)
     else:
         tensor = tensor.squeeze().float().cpu().clamp(0, 1)
         tensor = tensor * 255
 
-    n_dim = tensor.dim()
     if n_dim == 4:
         n_img = len(tensor)
         img_np = make_grid(tensor, nrow=int(n_img), normalize=False).numpy()
@@ -52,7 +55,10 @@ def tensor2img(tensor, out_type=np.uint8, min_max=(0, 1), norm_mode='0-1'):
         img_np = tensor.numpy()
         img_np = np.transpose(img_np[[2, 1, 0], :, :], (1, 2, 0))  # HWC, BGR
     elif n_dim == 2:
-        img_np = tensor.numpy()
+        img_np = tensor.squeeze().float().cpu().numpy()
+        img_np = ((img_np - img_np.min()) * 255 / ( img_np.max() - img_np.min())).astype(np.uint8)
+        img_np = cv2.applyColorMap(img_np, cv2.COLORMAP_JET)
+        
     else:
         raise TypeError(
             'Only support 4D, 3D and 2D tensor. But received with dimension: {:d}'.format(n_dim))
@@ -118,3 +124,6 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+        
+    
+    

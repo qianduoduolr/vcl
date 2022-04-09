@@ -82,15 +82,34 @@ data = dict(
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
     # train
-    train=
-            dict(
+    train=  [
+        dict(
             type=train_dataset_type,
             root='/home/lr/dataset/YouTube-VOS',
             list_path='/home/lr/dataset/YouTube-VOS/2018/train',
-            data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
+            data_prefix=dict(RGB='train/JPEGImages_s256', ANNO='train/Annotations'),
             clip_length=2,
             pipeline=train_pipeline,
             test_mode=False),
+        dict(
+            type=train_dataset_type,
+            root='/home/lr/dataset/YouTube-VOS',
+            list_path='/home/lr/dataset/YouTube-VOS/2018/valid',
+            data_prefix=dict(RGB='valid/JPEGImages_s256',  ANNO='valid/Annotations'),
+            clip_length=2,
+            pipeline=train_pipeline,
+            split='valid',
+            test_mode=False),
+        dict(
+            type=train_dataset_type,
+            root='/home/lr/dataset/YouTube-VOS',
+            list_path='/home/lr/dataset/YouTube-VOS/2018/test',
+            data_prefix=dict(RGB='test/JPEGImages_s256',  ANNO='valid/Annotations'),
+            clip_length=2,
+            split='test',
+            pipeline=train_pipeline,
+            test_mode=False),
+    ],
 
     test =  dict(
             type=test_dataset_type,

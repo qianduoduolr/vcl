@@ -36,6 +36,8 @@ class Video_dataset_base(BaseDataset):
         self.temporal_sampling_mode = temporal_sampling_mode
         self.split = split
         self.data_backend = data_backend
+        self.env = None
+        self.txn = None
 
     def temporal_sampling(self, num_frames, num_clips, clip_length, step, mode='random'):
             
@@ -67,7 +69,7 @@ class Video_dataset_base(BaseDataset):
                 frame_list_all.append(frame)
         return frame_list_all
 
-    def _parser_rgb_lmdb(self, offsets, frames_path, clip_length, step=1, flag='color', backend='cv2'):
+    def _parser_rgb_lmdb_deprected(self, offsets, frames_path, clip_length, step=1, flag='color', backend='cv2'):
         """read frame"""
         lmdb_env = lmdb.open(os.path.dirname(frames_path[0]), readonly=True, lock=False)
         frame_list_all = []
@@ -79,3 +81,21 @@ class Video_dataset_base(BaseDataset):
                     frame = mmcv.imfrombytes(bio, backend=backend, flag=flag, channel_order='rgb')
                     frame_list_all.append(frame)
         return frame_list_all 
+    
+    def _parser_rgb_lmdb(self, offsets, frames_path, clip_length, step=1, flag='color', backend='cv2'):
+        """read frame"""
+        frame_list_all = []
+        for offset in offsets:
+            for idx in range(clip_length):
+                frame_path = '/'.join(frames_path[ offset + idx * step].split('/')[-2:])
+                bio = self.txn.get(frame_path.encode())
+                frame = mmcv.imfrombytes(bio, backend=backend, flag=flag, channel_order='rgb')
+                frame_list_all.append(frame)
+        return frame_list_all 
+    
+    def _init_db(self, db_path):
+            
+        self.env = lmdb.open(db_path, subdir=os.path.isdir(db_path),
+            readonly=True, lock=False,
+            readahead=False, meminit=False)
+        self.txn = self.env.begin(write=False)

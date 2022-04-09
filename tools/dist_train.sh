@@ -12,6 +12,8 @@ cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/*.txt /dev/shm/2018/train/
 cp -r /gdata/lirui/dataset/YouTube-VOS/2018/train/*.json /dev/shm/2018/train/
 echo "finish cp data"
 
+# export WANDB_API_KEY='ffddb91f64606cb17216362faa7bc29540061a69'
+
 CONFIG=$1
 GPUS=$2
 PORT=${PORT:-29500}
