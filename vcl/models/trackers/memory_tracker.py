@@ -373,6 +373,7 @@ class Memory_Tracker_Custom_Pyramid(Memory_Tracker_Custom):
                 feat_size=[64, 32],
                 radius=[12, 6],
                 downsample_rate=[4, 8],
+                detach=False,
                 *args,
                 **kwargs
                  ):
@@ -391,6 +392,7 @@ class Memory_Tracker_Custom_Pyramid(Memory_Tracker_Custom):
         self.loss = build_loss(loss) if loss is not None else None
         self.pool_type = pool_type
         self.bilinear_downsample = bilinear_downsample
+        self.detach = detach
         
         if not self.bilinear_downsample:
             self.cost_volume_down = nn.Conv2d(feat_size[0]**2, feat_size[1]**2, 3, 2, 1)
@@ -445,7 +447,9 @@ class Memory_Tracker_Custom_Pyramid(Memory_Tracker_Custom):
         
         if not self.reverse:
             target = target.permute(0,2,1)
-        losses['dist_loss'] = self.loss(atts[-1][:,0], target.detach())
+            
+        losses['dist_loss'] = self.loss(atts[-1][:,0], target.detach()) if self.detach else \
+            self.loss(atts[-1][:,0], target) 
             
         vis_results = dict(err=err_map[0], imgs=imgs[0,0])
 
