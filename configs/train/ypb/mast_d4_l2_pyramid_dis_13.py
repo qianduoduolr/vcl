@@ -3,30 +3,22 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'final_framework_v2_2'
+exp_name = 'mast_d4_l2_pyramid_dis_13'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='Framework_V2',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 2), out_indices=(1, 2, 3), pool_type='none'),
-    backbone_t=dict(type='ResNet',depth=50, strides=(1, 2, 1, 2), out_indices=(3,),pretrained='/home/lr/models/ssl/image_based/detco_200ep_AA.pth'),
-    loss=dict(type='MSELoss',reduction='mean'),
-    feat_size=[64, 32],
-    radius=[12, 6],
-    downsample_rate=[4, 8],
-    temperature=1.0,
-    temperature_t=0.07,
-    momentum=-1,
-    detach=True,
-    loss_weight = dict(stage0_l1_loss=1, stage1_l1_loss=1, layer_dist_loss=1000, correlation_dist_loss=200),
-    pretrained=None
+    type='Memory_Tracker_Custom_Pyramid_Reg',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(1, 2), pool_type='none'),
+    loss=dict(type='MSELoss',reduction='mean', loss_weight=1000),
+    radius=[12, 6]
 )
 
 model_test = dict(
     type='VanillaTracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
 )
+
 
 # model training and testing settings
 train_cfg = dict(syncbn=True)
@@ -46,6 +38,7 @@ test_cfg = dict(
 train_dataset_type = 'VOS_youtube_dataset_rgb'
 
 val_dataset_type = 'VOS_davis_dataset_test'
+
 test_dataset_type = 'VOS_davis_dataset_test'
 
 
@@ -57,14 +50,27 @@ train_pipeline = [
     dict(type='RandomResizedCrop', area_range=(0.6,1.0), aspect_ratio_range=(1.5, 2.0),),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
     dict(type='Flip', flip_ratio=0.5),
+    dict(type='FrameDup', keys_list=['imgs','imgs'], out_keys_list=['imgs', 'imgs_reg']),
+    dict(type='RandomScaleCrop', keys='imgs_reg',scale_range=(0.3, 0.7)),
+    dict(type='RandomScaleCrop', keys='imgs', identity=True),
+    
     dict(type='RGB2LAB', output_keys='images_lab'),
-    dict(type='Normalize', **img_norm_cfg),
+    dict(type='RGB2LAB', keys='imgs_reg', output_keys='images_lab_reg'),
+    dict(type='Normalize', **img_norm_cfg_lab, keys='images_lab_reg'),
     dict(type='Normalize', **img_norm_cfg_lab, keys='images_lab'),
-    # dict(type='ColorDropout', keys='jitter_imgs', drop_rate=0.8),
-    dict(type='FormatShape', input_format='NPTCHW'),
+    dict(type='Normalize', **img_norm_cfg, keys='imgs_reg'),
+    
+
+    dict(type='GetAffanity', keys='imgs_reg', size=(256, 256)),
+    dict(type='GetAffanity', keys='imgs', size=(256, 256), get_inverse=False),
+    
+    dict(type='FormatShape', input_format='NPTCHW',keys='images_lab_reg'),
     dict(type='FormatShape', input_format='NPTCHW', keys='images_lab'),
-    dict(type='Collect', keys=['imgs', 'images_lab'], meta_keys=[]),
-    dict(type='ToTensor', keys=['imgs', 'images_lab'])
+    dict(type='FormatShape', input_format='NPTCHW', keys='imgs_reg'),
+    
+    
+    dict(type='Collect', keys=['images_lab_reg', 'images_lab', 'affine_imgs', 'affine_imgs_reg', 'imgs_reg'], meta_keys=[]),
+    dict(type='ToTensor', keys=['images_lab_reg', 'images_lab', 'affine_imgs', 'affine_imgs_reg', 'imgs_reg'])
 ]
 
 val_pipeline = [
@@ -83,7 +89,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=4, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -91,17 +97,18 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            root='/home/lr/dataset/YouTube-VOS',
-            list_path='/home/lr/dataset/YouTube-VOS/2018/train',
-            data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
+            root='/gdata/lirui/dataset/YouTube-VOS-lmdb-v2',
+            list_path='/gdata/lirui/dataset/YouTube-VOS-lmdb-v2/2018/train',
+            data_prefix=dict(RGB='train/JPEGImages', FLOW='train/Flows_s256', ANNO='train/Annotations'),
             clip_length=2,
+            data_backend='lmdb',
             pipeline=train_pipeline,
             test_mode=False),
 
     test =  dict(
             type=test_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -109,21 +116,22 @@ data = dict(
     
     val =  dict(
             type=val_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
             ),
 )
+
 # optimizer
 optimizers = dict(
-    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
     )
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=3200
+max_epoch=1600
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,
@@ -133,7 +141,7 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=800, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=1600, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
@@ -141,31 +149,31 @@ log_config = dict(
     hooks=[
         dict(type='TextLoggerHook', by_epoch=False),
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
-        # dict(type='WandbLoggerHook', init_kwargs=dict(project='video_correspondence', name=f'{exp_name}'))
     ])
 
-visual_config = None
+# visual_config = None
+visual_config = dict(
+    type='VisualizationHook_Custom', interval=1000, res_name_list=['err', 'imgs'], output_dir='vis'
+)
+
 
 
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}'
-
-
-evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True
-                  )
+work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
+                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth',
                 )
-
+evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True
+                  )
 
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
-
+find_unused_parameters = True
 
 
 if __name__ == '__main__':

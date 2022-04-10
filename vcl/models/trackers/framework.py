@@ -286,6 +286,7 @@ class Framework_V2(BaseModel):
                  loss_weight=None,
                  scaling=True,
                  norm=False,
+                 detach=False,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
@@ -316,6 +317,7 @@ class Framework_V2(BaseModel):
         self.temperature_t = temperature_t
         self.scaling = scaling
         self.norm = norm
+        self.detach = detach
         self.loss_weight = loss_weight
         self.logger = get_root_logger()
 
@@ -379,8 +381,12 @@ class Framework_V2(BaseModel):
             att_ = atts[0].reshape(bsz, -1, *fs[0].shape[-2:])
             att_ = F.max_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1).reshape(bsz, -1, *fs[0].shape[-2:])
             target = F.max_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1)
+        
+        if not self.detach:
+            losses['layer_dist_loss'] = self.loss_weight['layer_dist_loss'] * self.loss(atts[-1][:,0], target)
+        else:
+            losses['layer_dist_loss'] = self.loss_weight['layer_dist_loss'] * self.loss(atts[-1][:,0], target.detach())
             
-        losses['layer_dist_loss'] = self.loss_weight['layer_dist_loss'] * self.loss(atts[-1][:,0], target)
         
         # for correlation distillation loss
         with torch.no_grad():
