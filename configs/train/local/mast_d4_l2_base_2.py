@@ -8,11 +8,11 @@ docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
 
 # model settings
 model = dict(
-    type='Memory_Tracker_Custom',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 1, 1, 1), out_indices=(2, ), pool_type='mean'),
-    downsample_rate=4,
-    radius=12,
-    feat_size=64,
+    type='Memory_Tracker_Custom_V2',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 2), out_indices=(0, ), pool_type='none'),
+    downsample_rate=2,
+    radius=24,
+    feat_size=128,
 )
 
 model_test = dict(
@@ -77,7 +77,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=4, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=2, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 

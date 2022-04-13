@@ -362,7 +362,9 @@ class ResNet(nn.Module):
                  norm_eval=False,
                  partial_bn=False,
                  with_cp=False,
-                 zero_init_residual=True):
+                 zero_init_residual=True,
+                 fc=False,
+                 num_classes=1000):
         super().__init__()
         if depth not in self.arch_settings:
             raise KeyError(f'invalid depth {depth} for resnet')
@@ -392,7 +394,7 @@ class ResNet(nn.Module):
         self.stage_blocks = stage_blocks[:num_stages]
         self.inplanes = 64
         self.pool_type = pool_type
-
+            
         self._make_stem_layer()
 
         self.res_layers = []
@@ -424,6 +426,11 @@ class ResNet(nn.Module):
 
         self.feat_dim = self.block.expansion * 64 * 2**(
             len(self.stage_blocks) - 1)
+        
+        self.num_classes = num_classes
+        if fc:
+            self.gpool = nn.AdaptiveAvgPool2d(1)
+            self.fc = nn.Linear(self.feat_dim, num_classes)
 
     def _make_stem_layer(self):
         """Construct the stem layers consists of a conv+norm+act module and a
@@ -501,7 +508,11 @@ class ResNet(nn.Module):
                                      strict=False,
                                      logger=None):
         """Initiate the parameters from torchvision pretrained checkpoint."""
-        state_dict_torchvision = _load_checkpoint(self.pretrained)
+        if isinstance(pretrained, str):
+            state_dict_torchvision = _load_checkpoint(self.pretrained)
+        else:
+            state_dict_torchvision = pretrained
+            
         if 'state_dict' in state_dict_torchvision:
             state_dict_torchvision = state_dict_torchvision['state_dict']
 
@@ -548,6 +559,15 @@ class ResNet(nn.Module):
                 logger.info(f'Loading {self.pretrained} not as torchvision')
                 load_checkpoint(
                     self, self.pretrained, strict=False, logger=logger)
+        elif isinstance(self.pretrained, dict):
+            logger = get_root_logger()
+            if self.torchvision_pretrain:
+                # torchvision's
+                logger.info(f'Loading state_dict as torchvision directly')
+                self._load_torchvision_checkpoint(
+                    self.pretrained, strict=False, logger=logger)
+            else:
+                raise Exception
         elif self.pretrained is None:
             for m in self.modules():
                 if isinstance(m, nn.Conv2d):
@@ -582,11 +602,16 @@ class ResNet(nn.Module):
             x = res_layer(x)
             if i in self.out_indices:
                 outs.append(x)
+        
+        if hasattr(self, 'fc'):  
+            assert outs[-1].shape[1] == self.feat_dim
+            out = self.gpool(outs[-1]).reshape(-1, self.feat_dim)
+            out =  self.fc(out)
+            outs.append(out)
+        
         if len(outs) == 1:
-            if hasattr(self, 'fc'):
-                return self.fc(outs[0])
-            else:
-                return outs[0]
+            return outs[0]
+        
         return tuple(outs)
 
     def forward_block(self, x, index):

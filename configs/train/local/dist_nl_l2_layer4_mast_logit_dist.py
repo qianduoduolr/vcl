@@ -3,29 +3,30 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'final_framework_v2_7'
+exp_name = 'dist_nl_l2_layer4_mast_logit_dist'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='Framework_V2',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 2), out_indices=(1, 2, 3), pool_type='none'),
-    backbone_t=dict(type='ResNet',depth=50, strides=(1, 2, 1, 2), out_indices=(3,),pretrained='/gdata/lirui/models/ssl/image_based/detco_200ep_AA.pth'),
-    loss=dict(type='MSELoss',reduction='mean'),
-    feat_size=[64, 32],
-    radius=[12, 6],
-    downsample_rate=[4, 8],
+    type='Dist_Tracker_Memory',
+    backbone=dict(type='ResNet',depth=50, strides=(1, 2, 1, 2), out_indices=(2, 3), pool_type='mean', fc=True, num_classes=128),
+    backbone_t=dict(type='ResNet',depth=50, strides=(1, 2, 2, 2), out_indices=(3, ), fc=True, num_classes=128),
+    backbone_k=dict(type='ResNet',depth=50, strides=(1, 2, 1, 2), out_indices=(3, ), pool_type='mean', fc=True, num_classes=128),
+    loss=dict(type='MSELoss',reduction='mean', loss_weight=200),
+    ce_loss=dict(type='Soft_Ce_Loss', reduction='mean'),
+    l1_loss=True,
+    T=0.07,
+    K=8192,
     temperature=1.0,
     temperature_t=0.07,
     momentum=-1,
-    detach=True,
-    loss_weight = dict(stage0_l1_loss=1, stage1_l1_loss=1, layer_dist_loss=1000, correlation_dist_loss=200),
-    pretrained=None
+    mask_radius=6,
+    pretrained='/home/lr/models/ssl/image_based/moco_v2_800ep_pretrain.pth.tar'
 )
 
 model_test = dict(
     type='VanillaTracker',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
+    backbone=dict(type='ResNet',depth=50, strides=(1, 2, 1, 1), out_indices=(2, ), pool_type='mean'),
 )
 
 # model training and testing settings
@@ -35,7 +36,7 @@ test_cfg = dict(
     precede_frames=20,
     topk=10,
     temperature=0.07,
-    strides=(1, 2, 2, 1),
+    strides=(1, 2, 1, 1),
     out_indices=(3, ),
     neighbor_range=24,
     with_first=True,
@@ -83,7 +84,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=4, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -91,8 +92,8 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            root='/dev/shm',
-            list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
+            root='/home/lr/dataset/YouTube-VOS',
+            list_path='/home/lr/dataset/YouTube-VOS/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
             clip_length=2,
             pipeline=train_pipeline,
@@ -100,8 +101,8 @@ data = dict(
 
     test =  dict(
             type=test_dataset_type,
-            root='/gdata/lirui/dataset/DAVIS',
-            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
+            root='/home/lr/dataset/DAVIS',
+            list_path='/home/lr/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -109,8 +110,8 @@ data = dict(
     
     val =  dict(
             type=val_dataset_type,
-            root='/gdata/lirui/dataset/DAVIS',
-            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
+            root='/home/lr/dataset/DAVIS',
+            list_path='/home/lr/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -118,22 +119,23 @@ data = dict(
 )
 # optimizer
 optimizers = dict(
-    backbone=dict(type='Adam', lr=0.0005, betas=(0.9, 0.999))
+    backbone=dict(type='Adam', lr=0.0001, betas=(0.9, 0.999))
     )
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=3200
+max_epoch=1600
 lr_config = dict(
     policy='CosineAnnealing',
-    min_lr_ratio=0.001,
+    min_lr_ratio=0.0001,
     by_epoch=False,
+    warmup='linear',
     warmup_iters=10,
-    warmup_ratio=0.1,
+    warmup_ratio=0.0001,
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=1600, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=800, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
@@ -149,23 +151,22 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
+work_dir = f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
 
-evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=1600, by_epoch=True
+evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True
                   )
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
+                  checkpoint_path=f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
                 )
 
 
 load_from = None
 resume_from = None
-ddp_shuffle = True
 workflow = [('train', 1)]
-test_mode = True
+
 
 
 if __name__ == '__main__':

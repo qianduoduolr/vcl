@@ -3,13 +3,13 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'final_framework_v2_7'
+exp_name = 'final_framework_v2_10'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
     type='Framework_V2',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 2), out_indices=(1, 2, 3), pool_type='none'),
+    backbone=dict(type='ResNet',depth=50, strides=(1, 2, 2, 2), out_indices=(1, 2, 3), pool_type='none', pretrained='/gdata/lirui/models/ssl/image_based/detco_200ep_AA.pth'),
     backbone_t=dict(type='ResNet',depth=50, strides=(1, 2, 1, 2), out_indices=(3,),pretrained='/gdata/lirui/models/ssl/image_based/detco_200ep_AA.pth'),
     loss=dict(type='MSELoss',reduction='mean'),
     feat_size=[64, 32],
@@ -25,7 +25,7 @@ model = dict(
 
 model_test = dict(
     type='VanillaTracker',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
+    backbone=dict(type='ResNet',depth=50, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
 )
 
 # model training and testing settings
@@ -83,7 +83,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=12, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -118,12 +118,12 @@ data = dict(
 )
 # optimizer
 optimizers = dict(
-    backbone=dict(type='Adam', lr=0.0005, betas=(0.9, 0.999))
+    backbone=dict(type='Adam', lr=0.0001, betas=(0.9, 0.999))
     )
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=3200
+max_epoch=1600
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,
@@ -152,7 +152,7 @@ log_level = 'INFO'
 work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
 
-evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=1600, by_epoch=True
+evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True
                   )
 
 eval_config= dict(
@@ -165,7 +165,7 @@ load_from = None
 resume_from = None
 ddp_shuffle = True
 workflow = [('train', 1)]
-test_mode = True
+
 
 
 if __name__ == '__main__':

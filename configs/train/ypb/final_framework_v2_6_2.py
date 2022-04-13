@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'final_framework_v2_7'
+exp_name = 'final_framework_v2_6'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
@@ -118,12 +118,12 @@ data = dict(
 )
 # optimizer
 optimizers = dict(
-    backbone=dict(type='Adam', lr=0.0005, betas=(0.9, 0.999))
+    backbone=dict(type='Adam', lr=0.0001, betas=(0.9, 0.999))
     )
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=3200
+max_epoch=1600
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,
@@ -166,6 +166,7 @@ resume_from = None
 ddp_shuffle = True
 workflow = [('train', 1)]
 test_mode = True
+
 
 
 if __name__ == '__main__':

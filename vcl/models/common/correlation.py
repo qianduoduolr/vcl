@@ -1,7 +1,7 @@
 import torch.nn.functional as F
 import torch
 import torch.nn as nn
-from spatial_correlation_sampler import SpatialCorrelationSampler
+# from spatial_correlation_sampler import SpatialCorrelationSampler
 from .utils import *
 
 def local_attention(correlation_sampler, tar, refs, patch_size):

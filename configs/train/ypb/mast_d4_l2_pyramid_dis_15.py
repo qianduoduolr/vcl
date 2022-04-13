@@ -3,30 +3,25 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'final_framework_v2_6'
+exp_name = 'mast_d4_l2_pyramid_dis_15'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='Framework_V2',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 2), out_indices=(1, 2, 3), pool_type='none', pretrained='/gdata/lirui/models/ssl/image_based/moco_v2_res18_ep200_lab.pth'),
-    backbone_t=dict(type='ResNet',depth=50, strides=(1, 2, 1, 2), out_indices=(3,),pretrained='/gdata/lirui/models/ssl/image_based/detco_200ep_AA.pth'),
-    loss=dict(type='MSELoss',reduction='mean'),
-    feat_size=[64, 32],
+    type='Memory_Tracker_Custom_Pyramid',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(1, 2), pool_type='none'),
+    loss=dict(type='MSELoss',reduction='mean', loss_weight=1000),
     radius=[12, 6],
-    downsample_rate=[4, 8],
-    temperature=1.0,
-    temperature_t=0.07,
-    momentum=-1,
     detach=True,
-    loss_weight = dict(stage0_l1_loss=1, stage1_l1_loss=1, layer_dist_loss=1000, correlation_dist_loss=200),
-    pretrained=None
+    reverse=False,
+    bilinear_downsample=False,
 )
 
 model_test = dict(
     type='VanillaTracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
 )
+
 
 # model training and testing settings
 train_cfg = dict(syncbn=True)
@@ -46,6 +41,7 @@ test_cfg = dict(
 train_dataset_type = 'VOS_youtube_dataset_rgb'
 
 val_dataset_type = 'VOS_davis_dataset_test'
+
 test_dataset_type = 'VOS_davis_dataset_test'
 
 
@@ -116,9 +112,10 @@ data = dict(
             test_mode=True
             ),
 )
+
 # optimizer
 optimizers = dict(
-    backbone=dict(type='Adam', lr=0.0001, betas=(0.9, 0.999))
+    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
     )
 # learning policy
 # total_iters = 200000
@@ -151,21 +148,18 @@ dist_params = dict(backend='nccl')
 log_level = 'INFO'
 work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
-
+eval_config= dict(
+                  output_dir=f'{work_dir}/eval_output',
+                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth',
+                )
 evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=1600, by_epoch=True
                   )
 
-eval_config= dict(
-                  output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
-                )
-
-
 load_from = None
-resume_from = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_1600.pth'
+resume_from = None
 ddp_shuffle = True
 workflow = [('train', 1)]
-
+find_unused_parameters = True
 
 
 if __name__ == '__main__':
