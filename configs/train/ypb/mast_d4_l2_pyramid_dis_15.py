@@ -96,10 +96,11 @@ data = dict(
 
     test =  dict(
             type=test_dataset_type,
-            root='/gdata/lirui/dataset/DAVIS',
-            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
+            root='/gdata/lirui/dataset/DAVIS-lmdb-v2',
+            list_path='/gdata/lirui/dataset/DAVIS-lmdb-v2/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
+            data_backend='lmdb',
             test_mode=True
             ),
     
@@ -160,6 +161,7 @@ resume_from = None
 ddp_shuffle = True
 workflow = [('train', 1)]
 find_unused_parameters = True
+test_mode = True
 
 
 if __name__ == '__main__':

@@ -16,7 +16,7 @@ from collections import *
 import pdb
 from mmcv.utils import print_log
 import mmcv
-from vcl.utils import add_prefix, terminal_is_available
+from vcl.utils import *
 
 from davis2017.evaluation import DAVISEvaluation
 
@@ -55,31 +55,47 @@ class VOS_davis_dataset_test(Video_dataset_base):
         self.samples = []
         self.mask_dir = osp.join(self.root, 'Annotations', '480p')
         self.video_dir = osp.join(self.root, 'JPEGImages', '480p')
-        list_path = osp.join(self.list_path, f'davis{self.year}_{self.split}_list.txt')
-
-        with open(list_path, 'r') as f:
-            for idx, line in enumerate(f.readlines()):
-                # if idx >= 2: break
-                sample = dict()
-                vname, num_frames = line.strip('\n').split()
-                sample['masks_path'] = sorted(glob.glob(osp.join(self.mask_dir, vname, '*.png')))
-                sample['frames_path'] = sorted(glob.glob(osp.join(self.video_dir, vname, '*.jpg')))
-                sample['video_path'] = osp.join(self.video_dir, vname)
-                sample['num_frames'] = int(num_frames)
-                self.samples.append(sample)
+        list_path = osp.join(self.list_path, f'davis{self.year}_{self.split}_list.json')                
+        data = mmcv.load(list_path)
+        
+        for vname, frames in data.items():
+            sample = dict()
+            sample['frames_path'] = []
+            sample['masks_path'] = []
+            for frame in frames:
+                sample['frames_path'].append(osp.join(self.video_dir, vname, frame))
+                sample['masks_path'].append(osp.join(self.mask_dir, vname, frame.replace('jpg','png')))
+            sample['video_path'] = osp.join(self.video_dir, vname)
+            sample['num_frames'] = len(sample['frames_path'])
+            if sample['num_frames'] < self.clip_length * self.step:
+                continue
+        
+            self.samples.append(sample)
+        
+        logger = get_root_logger()
+        logger.info(" Load dataset with {} videos ".format(len(self.samples)))
 
     def __len__(self):
         return len(self.samples)
 
     def prepare_test_data(self, index):
+        if self.data_backend == 'lmdb' and self.env == None and self.txn == None:
+            self._init_db(self.video_dir)
+            self._init_db(self.mask_dir, anno=True)
+        
         sample = self.samples[index]
         num_frames = sample['num_frames']
         masks_path = sample['masks_path']
         frames_path = sample['frames_path']
         
         # load frames and masks
-        frames = self._parser_rgb_rawframe([0], frames_path, num_frames)
-        ref = np.array(self._parser_rgb_rawframe([0], masks_path, 1, flag='unchanged', backend='pillow')[0])
+        if self.data_backend != 'lmdb':
+            frames = self._parser_rgb_rawframe([0], frames_path, num_frames)
+            ref = np.array(self._parser_rgb_rawframe([0], masks_path, 1, flag='unchanged', backend='pillow')[0])
+        else:
+            frames = self._parser_rgb_lmdb(self.txn, [0], frames_path, num_frames)
+            ref = np.array(self._parser_rgb_lmdb(self.txn_anno, [0], masks_path, 1, flag='unchanged', backend='pillow')[0])
+        
         original_shape = frames[0].shape[:2]
 
         data = {
@@ -93,37 +109,7 @@ class VOS_davis_dataset_test(Video_dataset_base):
         }
 
         return self.pipeline(data)
-    
-    def prepare_test_data_vis(self, index):
-        sample = self.samples[index]
-        frames_path = sample['frames_path']
-        masks_path = sample['masks_path']
-        num_frames = sample['num_frames']
 
-        offset = [ random.randint(1, num_frames-4)]
-        frames = self._parser_rgb_rawframe([0], frames_path, 2, step=offset[0])[::-1]
-        mask = self._parser_rgb_rawframe([0], masks_path, 1, flag='unchanged', backend='pillow')[0]
-
-        mask = cv2.resize(mask, (32, 32), cv2.INTER_NEAREST).reshape(-1)
-        obj_idxs = np.nonzero(mask)[0]
-
-        if mask.max() > 0:
-            sample_idx = np.array(random.sample(obj_idxs.tolist(), 1))
-        else:
-            sample_idx = np.array(random.sample(range(self.vq_res * self.vq_res), 1))
-
-        assert sample_idx.shape[0] == 1
-
-        data = {
-            'imgs': frames,
-            'mask_query_idx': sample_idx,
-            'modality': 'RGB',
-            'num_clips': 1,
-            'num_proposals':1,
-            'clip_len': 2
-        }
-
-        return self.pipeline(data)
 
     def davis_evaluate(self, results, output_dir, logger=None):
         dataset_eval = DAVISEvaluation(

@@ -105,6 +105,7 @@ data = dict(
             root='/home/lr/dataset/DAVIS',
             list_path='/home/lr/dataset/DAVIS/ImageSets',
             data_prefix='2017',
+            # data_backend='lmdb',
             pipeline=val_pipeline,
             test_mode=True
             ),

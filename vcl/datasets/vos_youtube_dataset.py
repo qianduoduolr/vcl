@@ -85,7 +85,7 @@ class VOS_youtube_dataset_rgb(Video_dataset_base):
         if self.data_backend == 'raw':
             frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length, step=self.step)
         else:
-            frames = self._parser_rgb_lmdb(offsets, frames_path, self.clip_length, step=self.step)
+            frames = self._parser_rgb_lmdb(self.txn, offsets, frames_path, self.clip_length, step=self.step)
 
         data = {
             'imgs': frames,

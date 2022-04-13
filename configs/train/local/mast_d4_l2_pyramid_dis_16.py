@@ -3,21 +3,23 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'mast_d4_l2_base_2'
-docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corr'
+exp_name = 'mast_d4_l2_pyramid_dis_16'
+docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='Memory_Tracker_Custom_V2',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 2), out_indices=(2, ), pool_type='none'),
-    downsample_rate=8,
-    radius=6,
-    feat_size=32,
+    type='Memory_Tracker_Custom_Pyramid_V2',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 1, 2, 1), out_indices=(1, 2), pool_type='none'),
+    loss=dict(type='MSELoss',reduction='mean', loss_weight=1000),
+    radius=[24, 12],
+    downsample_rate=[2,4],
+    feat_size=[128,64],
+    detach=True
 )
 
 model_test = dict(
     type='VanillaTracker',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 1, 1, 1), out_indices=(2, ), pool_type='mean'),
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
 )
 
 
@@ -28,7 +30,7 @@ test_cfg = dict(
     precede_frames=20,
     topk=10,
     temperature=0.07,
-    strides=(1, 2, 1, 1),
+    strides=(1, 2, 2, 1),
     out_indices=(3, ),
     neighbor_range=24,
     with_first=True,
@@ -89,8 +91,8 @@ data = dict(
             list_path='/home/lr/dataset/YouTube-VOS/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
             clip_length=2,
-            pipeline=train_pipeline,
             data_backend='lmdb',
+            pipeline=train_pipeline,
             test_mode=False),
 
     test =  dict(
@@ -139,9 +141,7 @@ log_config = dict(
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
     ])
 
-visual_config = dict(
-    type='VisualizationHook_Custom', interval=100, res_name_list=['err', 'imgs'], output_dir='vis_'
-)
+visual_config = None
 
 
 # runtime settings
@@ -158,6 +158,7 @@ evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epo
 
 load_from = None
 resume_from = None
+ddp_shuffle = True
 workflow = [('train', 1)]
 find_unused_parameters = True
 
