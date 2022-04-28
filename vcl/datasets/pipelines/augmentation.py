@@ -13,6 +13,10 @@ import numpy as np
 from numpy import random as npr
 from PIL import Image, ImageFilter
 from skimage.util import view_as_windows
+from scipy.ndimage.filters import maximum_filter
+from scipy import signal
+import scipy.ndimage as ndimage
+
 from torch.nn.modules.utils import _pair
 from torchvision.transforms import ColorJitter as _ColorJitter
 from torchvision.transforms import RandomAffine as _RandomAffine
@@ -370,6 +374,9 @@ class RandomResizedCrop(object):
                 results['crop_bbox'] = np.array([left, top, right, bottom])
                 results['img_shape'] = (new_h, new_w)
                 results[self.keys][i] = img[top:bottom, left:right]
+                if results.get('flows', False):
+                    flow = results['flows'][i]
+                    results['flows'][i] = flow[top:bottom, left:right]
 
                 if results.get('bboxs', None) and self.with_bbox:
                     results['crop_bbox_ratio'].append(self.get_ratio(results, left, top, new_w, new_h, i))
@@ -764,6 +771,9 @@ class Resize(object):
                     results['ref_seg_map'], (new_w, new_h),
                     interpolation='bilinear',
                     backend='cv2')
+                
+                # if results['ref_seg_map'].n_dim() == 3:
+                results['ref_seg_map'] = results['ref_seg_map'].transpose(2,0,1)
 
         if 'crop_bbox_ratio' in results:
             ratios = results['crop_bbox_ratio']
@@ -893,6 +903,9 @@ class Flip(object):
                         mmcv.imflip_(results['mask_query_idx'][i], self.direction)
                     if 'grids' in results:
                         mmcv.imflip_(results['grids'][i], self.direction)
+                        
+                    if results.get('flows', False):
+                        mmcv.imflip_(results['flows'][i], self.direction)
 
                 if results.get('bbox_mask', None) and self.with_bbox:
                     size = results['mask_sample_size']
@@ -911,29 +924,6 @@ class Flip(object):
                 if 'masks' in results:
                     if flip:
                         mmcv.imflip_(results['masks'][i])
-                
-                # imgs.append(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-            
-            # if results.get('bbox_mask', None):
-            #     if results.get('return_first_query', False):
-            #         mask1 = results['mask_query_idx'][0]
-            #         mask2 = results['mask_query_idx'][-1]
-            #     else:
-            #         mask1 = results['mask_query_idx'][-1]
-            #         mask2 = results['mask_query_idx'][0]
-                
-            #     mask1 = cv2.resize(mask1.astype(np.uint8), (256,256), cv2.INTER_NEAREST)[:,:,None].repeat(3, -1) * 255
-            #     mask2 = cv2.resize(mask2.astype(np.uint8), (256,256), cv2.INTER_NEAREST)[:,:,None].repeat(3, -1) * 255
-                
-            #     mask1 = np.concatenate([mask1, np.ones((256,8,3))*255], 1)
-            #     mask2 = np.concatenate([mask2, np.ones((256,8,3))*255], 1)
-                
-            #     imgs.append(mask1)
-            #     imgs.append(mask2)
-                
-            # out = np.concatenate(imgs, 1)
-            # num = random.randint(0,1000)
-            # cv2.imwrite(f'/home/lr/project/vcl_output/output/aug_vis/same5_/{num}.jpg', out)
                
             if flip:
                 lt = len(results[self.keys])
@@ -1930,22 +1920,7 @@ class ColorJitter(torch.nn.Module):
                    saturation: Optional[List[float]],
                    hue: Optional[List[float]]
                    ) -> Tuple[Tensor, Optional[float], Optional[float], Optional[float], Optional[float]]:
-        """Get the parameters for the randomized transform to be applied on image.
 
-        Args:
-            brightness (tuple of float (min, max), optional): The range from which the brightness_factor is chosen
-                uniformly. Pass None to turn off the transformation.
-            contrast (tuple of float (min, max), optional): The range from which the contrast_factor is chosen
-                uniformly. Pass None to turn off the transformation.
-            saturation (tuple of float (min, max), optional): The range from which the saturation_factor is chosen
-                uniformly. Pass None to turn off the transformation.
-            hue (tuple of float (min, max), optional): The range from which the hue_factor is chosen uniformly.
-                Pass None to turn off the transformation.
-
-        Returns:
-            tuple: The parameters used to apply the randomized transform
-            along with their random order.
-        """
         fn_idx = torch.randperm(4)
 
         b = None if brightness is None else float(torch.empty(1).uniform_(brightness[0], brightness[1]))
@@ -2121,3 +2096,111 @@ class GetAffanity(object):
             results[f'affine_{self.keys}'] = self._get_affine_inv(results[f'affine_{self.keys}'], results[f'affine_params_{self.keys}'])
         
         return results
+    
+@PIPELINES.register_module()
+class Flow_Sampler(object):
+    def __init__(self,
+        strategy=['watershed'], 
+        bg_ratio=0.00015625, 
+        nms_ks=15, 
+        max_num_guide=-1, 
+        guidepoint=None
+    ):
+        self.strategy = strategy
+        self.bg_ratio = bg_ratio
+        self.nms_ks = nms_ks
+        self.max_num_guide = max_num_guide
+        self.guidepoint = guidepoint
+
+
+    def __call__(self, results):
+        
+        flow = results['flows'][0][:,:,:2]
+        h = flow.shape[0]
+        w = flow.shape[1]
+        ds = max(1, max(h, w) // 400) # reduce computation
+
+        pts_h = []
+        pts_w = []
+
+        stride = int(np.sqrt(1./self.bg_ratio))
+        mesh_start_h = int((h - h // stride * stride) / 2)
+        mesh_start_w = int((w - w // stride * stride) / 2)
+        mesh = np.meshgrid(np.arange(mesh_start_h, h, stride), np.arange(mesh_start_w, w, stride))
+        pts_h.append(mesh[0].flat)
+        pts_w.append(mesh[1].flat)
+       
+        edge = self.get_edge(flow[::ds,::ds,:])
+        edge /= max(edge.max(), 0.01)
+        edge = (edge > 0.1).astype(np.float32)
+        watershed = ndimage.distance_transform_edt(1-edge)
+        nms_res = self.nms(watershed, self.nms_ks)
+        self.remove_border(nms_res)
+        pth, ptw = np.where(nms_res > 0)
+        pth, ptw = self.neighbor_elim(pth, ptw, (self.nms_ks-1)/2)
+        pts_h.append(pth * ds)
+        pts_w.append(ptw * ds)
+      
+        pts_h = np.concatenate(pts_h)
+        pts_w = np.concatenate(pts_w)
+
+        if self.max_num_guide == -1:
+           self.max_num_guide = np.inf
+
+        randsel = np.random.permutation(len(pts_h))[:len(pts_h)]
+        selidx = randsel[np.arange(min(self.max_num_guide, len(randsel)))]
+        pts_h = pts_h[selidx]
+        pts_w = pts_w[selidx]
+
+        sparse = np.zeros(flow.shape, dtype=flow.dtype)
+        mask = np.zeros(flow.shape, dtype=np.int)
+        
+        sparse[:, :, 0][(pts_h, pts_w)] = flow[:, :, 0][(pts_h, pts_w)]
+        sparse[:, :, 1][(pts_h, pts_w)] = flow[:, :, 1][(pts_h, pts_w)]
+        
+        mask[:,:,0][(pts_h, pts_w)] = 1
+        mask[:,:,1][(pts_h, pts_w)] = 1
+        
+        results['sparse'] = sparse
+        results['mask'] = mask
+        
+        return results
+    
+    def get_edge(self, data, blur=False):
+        if blur:
+            data = cv2.GaussianBlur(data, (3, 3), 1.)
+        sobel = np.array([[1,0,-1],[2,0,-2],[1,0,-1]]).astype(np.float32)
+        ch_edges = []
+        for k in range(data.shape[2]):
+            edgex = signal.convolve2d(data[:,:,k], sobel, boundary='symm', mode='same')
+            edgey = signal.convolve2d(data[:,:,k], sobel.T, boundary='symm', mode='same')
+            ch_edges.append(np.sqrt(edgex**2 + edgey**2))
+            
+        return sum(ch_edges)
+    
+    def nms(self, score, ks):
+        assert ks % 2 == 1
+        ret_score = score.copy()
+        maxpool = maximum_filter(score, footprint=np.ones((ks, ks)))
+        ret_score[score < maxpool] = 0.
+        return ret_score
+    
+    def neighbor_elim(self, ph, pw, d):
+        valid = np.ones((len(ph))).astype(np.int)
+        h_dist = np.fabs(np.tile(ph[:,np.newaxis], [1,len(ph)]) - np.tile(ph.T[np.newaxis,:], [len(ph),1]))
+        w_dist = np.fabs(np.tile(pw[:,np.newaxis], [1,len(pw)]) - np.tile(pw.T[np.newaxis,:], [len(pw),1]))
+        idx1, idx2 = np.where((h_dist < d) & (w_dist < d))
+        for i,j in zip(idx1, idx2):
+            if valid[i] and valid[j] and i != j:
+                if np.random.rand() > 0.5:
+                    valid[i] = 0
+                else:
+                    valid[j] = 0
+        valid_idx = np.where(valid==1)
+        return ph[valid_idx], pw[valid_idx]
+
+    def remove_border(self, mask):
+        mask[0,:] = 0
+        mask[:,0] = 0
+        mask[mask.shape[0]-1,:] = 0
+        mask[:,mask.shape[1]-1] = 0

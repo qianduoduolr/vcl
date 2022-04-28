@@ -326,3 +326,23 @@ def make_mask(size, t_size, eq=True):
                 
             masks.append(mask.reshape(-1))
     return torch.stack(masks)
+
+def color_map(x, norm=False):
+    assert len(x.shape) == 2
+    if norm:
+        x = (x - x.min()) / (x.max() - x.min()) * 255
+    x = cv2.applyColorMap(x.astype(np.uint8), cv2.COLORMAP_JET)
+    return x    
+
+
+def show_cam_on_image(img, mask, norm=True):
+    if norm:
+        mask = (mask - mask.min()) / (mask.max() - mask.min()) * 255
+    heatmap = cv2.applyColorMap(np.uint8(mask), cv2.COLORMAP_JET)
+    
+    img = Image.fromarray(img).convert('RGBA')
+    heatmap = Image.fromarray(heatmap).convert('RGBA')
+    blend_out = Image.blend(img, heatmap, 0.7)
+    blend_out = np.array(blend_out)
+
+    return blend_out

@@ -9,3 +9,4 @@ from .modules import *
 from .sim_siam_base_tracker import *
 from .warp_tracker import *
 from .framework import *
+from .single_frame_tracker import *

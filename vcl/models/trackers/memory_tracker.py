@@ -439,7 +439,7 @@ class Memory_Tracker_Custom_Pyramid(Memory_Tracker_Custom):
 
             if not self.reverse:
                 target = target.permute(0,2,1)
-                
+        
             losses['dist_loss'] = self.loss(atts[-1][:,0], target.detach()) if self.detach else \
                 self.loss(atts[-1][:,0], target) 
         else:
@@ -659,95 +659,6 @@ class Memory_Tracker_Custom_Inter(Memory_Tracker_Custom_Pyramid):
 
         return outputs
 
-
-@MODELS.register_module()
-class Memory_Tracker_Custom_Inter_V2(Memory_Tracker_Custom_Inter):
-    
-    def forward_train(self, imgs, images_lab=None, progress_ratio=None):
-        
-        bsz, num_clips, t, c, h, w = imgs.shape
-        
-        images_lab_gt = [images_lab[:,0,i,:].clone() for i in range(t)]
-        images_lab = [images_lab[:,0,i,:] for i in range(t)]
-        _, ch = self.dropout2d_lab(images_lab)
-        
-        # forward to get feature
-        fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
-        fs = [f.reshape(bsz, t, *f.shape[-3:]) for f in fs]
-
-        tar_pyramid, refs_pyramid = [f[:, -1] for f in fs], [ f[:, :-1] for f in fs]
-        
-        # for queue update
-        with torch.no_grad():
-            refs_m = self.backbone_m(images_lab[0])
-            if progress_ratio == 0:
-                feat = refs_m.reshape(bsz, -1, self.q_dim).reshape(-1, self.q_dim)[:self.K//4]
-                pixel = [self.prep(gt[:,ch], downsample_rate=self.downsample_rate[-1]) for gt in images_lab_gt[:-1]]
-                pixel_gt = torch.stack(pixel, 1).flatten(2).permute(0, 2, 1).reshape(-1,1)[:self.K//4]
-                ch_ = torch.tensor([ch]).repeat(feat.shape[0],1).cuda()
-                self._dequeue_and_enqueue(feat, pixel_gt, ch_)
-
-
-        losses = {}
-        
-        atts = []
-        for idx, (tar, refs) in enumerate(zip(tar_pyramid, refs_pyramid)):
-            
-            # get correlation attention map            
-            _, att = non_local_attention(tar, refs, mask=self.mask[idx], scaling=True)  
-                      
-            # for mast l1_loss
-            if idx == 0:
-                ref_gt = [self.prep(gt[:,ch], downsample_rate=self.downsample_rate[idx]) for gt in images_lab_gt[:-1]]
-                outputs = frame_transform(att, ref_gt, flatten=False)
-                outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, self.feat_size[idx], self.feat_size[idx])     
-                losses[f'stage{idx}_l1_loss'], err_map = self.compute_lphoto(images_lab_gt, ch, outputs)
-            else:
-                att_intra = non_local_attention(tar, refs_m.unsqueeze(1), mask=self.mask[idx], scaling=True, att_only=True)
-                att_inter = self.non_local_attention_with_queue(tar, self.queue_feat.clone().detach(), scaling=True, ch=ch)
-                att_inter_intra = torch.cat([att_intra,att_inter], -1).softmax(-1)
-                pixel_gt_intra = self.prep(images_lab_gt[0][:,ch], downsample_rate=self.downsample_rate[idx])
-                pixel_with_queue = torch.cat([pixel_gt_intra.flatten(-2).permute(0,2,1), self.queue_pixel[None,:].repeat(bsz, 1, 1)], -2)
-                outputs =  torch.einsum('bij,bjc -> bic', [att_inter_intra[:,0], pixel_with_queue])
-                outputs = outputs.permute(0,2,1).reshape(bsz, -1, self.feat_size[idx], self.feat_size[idx])     
-                losses[f'stage{idx}_l1_loss'], err_map = self.compute_lphoto(images_lab_gt, ch, outputs)
-            
-            atts.append(att)
-            
-        # for layer dist loss
-        assert len(atts) == 2
-        if not self.reverse:
-            atts[0] = atts[0].permute(0,1,3,2)
-        if self.bilinear_downsample:
-            if self.pool_type == 'mean':
-                att_ = atts[0].reshape(bsz, -1, *fs[0].shape[-2:])
-                att_ = F.avg_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1).reshape(bsz, -1, *fs[0].shape[-2:])
-                target = F.avg_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1)    
-            elif self.pool_type == 'max':
-                att_ = atts[0].reshape(bsz, -1, *fs[0].shape[-2:])
-                att_ = F.max_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1).reshape(bsz, -1, *fs[0].shape[-2:])
-                target = F.max_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1)
-        else:
-            att_ = atts[0].reshape(bsz, -1, *fs[0].shape[-2:])
-            target = self.cost_volume_down(att_).flatten(-2).permute(0,2,1)
-        
-        if not self.reverse:
-            target = target.permute(0,2,1)
-
-        losses['dist_loss'] = self.loss(atts[-1][:,0], target)
-        
-        
-        if progress_ratio > 0:
-            sample_idx = torch.randint(0, self.feat_size[-1] ** 2 -1, (self.sample_num_per_frame,)).cuda()
-            feat = refs_m.reshape(bsz, -1, self.q_dim)[:, sample_idx].reshape(-1, self.q_dim)
-            pixel = pixel_gt_intra.reshape(bsz, -1, 1)[:, sample_idx].reshape(-1, 1)
-            ch_ = torch.tensor([ch]).repeat(feat.shape[0],1).cuda()
-            self._dequeue_and_enqueue(feat, pixel, ch_)
-
-
-        return losses
-    
-
 @MODELS.register_module()
 class Memory_Tracker_Custom_V2(Memory_Tracker_Custom):
     def __init__(self,
@@ -909,3 +820,319 @@ class Memory_Tracker_Custom_Pyramid_V2(Memory_Tracker_Custom_V2):
         x = image.float()[:,:,::downsample_rate,::downsample_rate]
 
         return x
+    
+    
+@MODELS.register_module()
+class Memory_Tracker_Custom_Pyramid_Cmp(Memory_Tracker_Custom):
+    def __init__(self,
+                loss=None,
+                cmp_loss=None,
+                pool_type='mean',
+                bilinear_downsample=True,
+                reverse=True,
+                T=0.2,
+                num_stage=2,
+                feat_size=[64, 32],
+                radius=[12, 6],
+                downsample_rate=[4, 8],
+                output_dim=-1,
+                detach=False,
+                rand_mask=False,
+                inpaint_only=False,
+                mode='classification',
+                *args,
+                **kwargs
+                 ):
+        """ MAST  (CVPR2020) with CMP (CVPR2019)
+
+        Args:
+            backbone ([type]): [description]
+            test_cfg ([type], optional): [description]. Defaults to None.
+            train_cfg ([type], optional): [description]. Defaults to None.
+        """
+        super().__init__(*args, **kwargs)
+        from mmcv.ops import Correlation
+        
+        self.reverse = reverse
+        self.num_stage = num_stage
+        self.feat_size = feat_size
+        self.downsample_rate = downsample_rate
+        self.loss = build_loss(loss) if loss is not None else None
+        self.pool_type = pool_type
+        self.bilinear_downsample = bilinear_downsample
+        self.detach = detach
+        self.rand_mask = rand_mask
+        self.radius = radius
+        self.ouput_dim = (2 * radius[-1] + 1) ** 2 if output_dim == -1 else output_dim
+        self.T = T
+        self.inpaint_only = inpaint_only
+        self.mode = mode
+        
+        self.mask = [ make_mask(feat_size[i], radius[i]) for i in range(len(radius)) if radius[i] != -1]        
+        self.cmp_loss = build_loss(cmp_loss) if cmp_loss != None else None
+        self.flow_decoder = MotionDecoderPlain(
+        input_dim=self.backbone.feat_dim+self.ouput_dim+1,
+        output_dim=self.ouput_dim,
+        combo=[1,2,4])
+        
+        self.corr = [Correlation(max_displacement=R) for R in radius ]
+        
+        if self.pool_type == 'max':
+            self.pool = nn.AdaptiveMaxPool2d((radius[-1] *2 +1, radius[-1] *2 +1))
+        else:
+            self.pool = nn.AdaptiveAvgPool2d((radius[-1] *2 +1, radius[-1] *2 +1))
+        
+        
+    def forward_train(self, imgs, images_lab=None):
+            
+        bsz, num_clips, t, c, h, w = images_lab.shape
+        
+        images_lab_gt = [images_lab[:,0,i,:].clone() for i in range(t)]
+        images_lab = [images_lab[:,0,i,:] for i in range(t)]
+        _, ch = self.dropout2d_lab(images_lab)
+        
+        # forward to get feature
+        fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        fs = [f.reshape(bsz, t, *f.shape[-3:]) for f in fs]
+        tar_cmp = self.backbone(images_lab_gt[-1])[-1]
+        
+        tar_pyramid, refs_pyramid = [f[:, -1] for f in fs], [ f[:, :-1] for f in fs]
+        
+        losses = {}
+        
+        atts = []
+        corrs = []
+        for idx, (tar, refs) in enumerate(zip(tar_pyramid, refs_pyramid)):
+            if idx == len(tar_pyramid) - 1: break
+            # get correlation attention map            
+            _, att = non_local_attention(tar, refs, mask=self.mask[idx], scaling=True)            
+            # for mast l1_loss
+            ref_gt = [self.prep(gt[:,ch], downsample_rate=self.downsample_rate[idx]) for gt in images_lab_gt[:-1]]
+            outputs = frame_transform(att, ref_gt, flatten=False)
+            outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, self.feat_size[idx], self.feat_size[idx])     
+            losses[f'stage{idx}_l1_loss'], err_map = self.compute_lphoto(images_lab_gt, ch, outputs)
+            
+            corr = self.corr[idx](tar, refs[:,0])
+            atts.append(att)
+            corrs.append(corr)
+        
+        # for cmp loss
+        corr_feat = corrs[-1].reshape(bsz, -1, self.feat_size[-1], self.feat_size[-1])
+        
+        if not self.rand_mask:
+            corr = corr_feat.softmax(1)
+            corr_en = (-torch.log(corr+1e-12)).sum(1).flatten(-2)
+            corr_sorted, _ = torch.sort(corr_en, dim=-1, descending=True)
+            idx = int(corr_en.shape[-1] * self.T) - 1
+            T = corr_sorted[:, idx:idx+1]
+            sparse_mask = (corr_en > T).reshape(bsz, 1, *corr_feat.shape[-2:]).float()
+            
+        else:
+            sample_idx = torch.randint(0, self.feat_size[-1] ** 2 -1, (int(self.feat_size[-1] ** 2 * self.T),)).cuda()
+            sparse_mask = torch.zeros(bsz, self.feat_size[-1] ** 2).cuda()
+            sparse_mask[:, sample_idx] = 1
+            sparse_mask = sparse_mask.reshape(bsz, 1, *corr_feat.shape[-2:])
+        
+        
+        if self.bilinear_downsample:
+            if not self.reverse:
+                atts[0] = atts[0].permute(0,1,3,2)
+            if self.pool_type == 'mean':
+                att_ = atts[0].reshape(bsz, -1, *fs[0].shape[-2:])
+                att_ = F.avg_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1).reshape(bsz, -1, *fs[0].shape[-2:])
+                target = F.avg_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1)    
+            elif self.pool_type == 'max':
+                att_ = atts[0].reshape(bsz, -1, *fs[0].shape[-2:])
+                att_ = F.max_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1).reshape(bsz, -1, *fs[0].shape[-2:])
+                target = F.max_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1)
+
+            if not self.reverse:
+                target = target.permute(0,2,1)
+                
+            losses['dist_loss'] = self.loss(atts[-1][:,0], target.detach()) if self.detach else \
+                self.loss(atts[-1][:,0], target) 
+        else:
+            if not self.reverse:
+                atts[1] = atts[1].permute(0,1,3,2)
+    
+            att_ = atts[1].reshape(bsz, -1, *fs[1].shape[-2:])
+            att_ = F.interpolate(att_, size=fs[0].shape[-2:],mode="bilinear").flatten(-2).permute(0,2,1).reshape(bsz, -1, *fs[1].shape[-2:])
+            att_ = F.interpolate(att_, size=fs[0].shape[-2:],mode="bilinear").flatten(-2).permute(0,2,1)    
+
+            if not self.reverse:
+                att_ = att_.permute(0,2,1)
+                
+            losses['dist_loss'] = self.loss(att_, atts[0][:,0].detach()) if self.detach else \
+                self.loss(att_, atts[0][:,0]) 
+        
+        concat_input = torch.cat([tar_cmp, corr_feat*sparse_mask, sparse_mask], 1)
+        corr_predict = self.flow_decoder(concat_input).flatten(-2)
+        
+        # for cmp loss target
+        if self.mode == 'classification':
+            corr_predict = corr_predict.permute(0,2,1).reshape(-1, self.ouput_dim)
+            if not self.inpaint_only:
+                target = corrs[0].reshape(bsz, -1, self.feat_size[0], self.feat_size[0])
+                target = F.avg_pool2d(target, 2, stride=2).flatten(-2).permute(0,2,1).reshape(bsz, -1, 2*self.radius[0]+1, 2*self.radius[0]+1)
+                target = self.pool(target).reshape(-1, self.ouput_dim)
+                target = target.max(-1)[1].detach().reshape(-1, 1)
+            else:
+                target = corrs[1].reshape(bsz, -1, self.feat_size[-1] ** 2).permute(0,2,1)
+                target = target.max(-1)[1].reshape(-1, 1)
+        
+            losses['cmp_loss'] = self.cmp_loss(corr_predict, target)
+        elif self.mode == 'rec':
+            ref_gt = self.prep(images_lab_gt[0][:,ch], self.downsample_rate[-1])
+            ref_gt = F.unfold(ref_gt, self.radius[-1] * 2 + 1, padding=self.radius[-1])
+            corr_predict = corr_predict.reshape(bsz, tar.shape[-1]**2, -1).permute(0,2,1)
+            outputs = (corr_predict * ref_gt).sum(1).reshape(bsz, -1, *tar_cmp.shape[-2:])        
+            losses['cmp_loss'] = 0.1 * self.compute_lphoto(images_lab_gt, ch, outputs, upsample=self.upsample)[0]
+        elif self.mode == 'l1_loss':
+            target = corrs[0].reshape(bsz, -1, self.feat_size[0], self.feat_size[0])
+            target = F.avg_pool2d(target, 2, stride=2).flatten(-2).permute(0,2,1).reshape(bsz, -1, 2*self.radius[0]+1, 2*self.radius[0]+1)
+            target = self.pool(target).detach().flatten(-2).permute(0,2,1)
+            losses['cmp_loss'] = self.cmp_loss(corr_predict, target)
+        else:
+            raise NotImplemented
+            
+        vis_results = dict(mask=sparse_mask[0,0], imgs=imgs[0,0])
+
+        return losses, vis_results
+
+
+    def prep(self, image, downsample_rate):
+        _,c,_,_ = image.size()
+        x = image.float()[:,:,::downsample_rate,::downsample_rate]
+
+        return x
+    
+    
+@MODELS.register_module()
+class Memory_Tracker_Custom_Pyramid_Cmp_V2(Memory_Tracker_Custom):
+    def __init__(self,
+                loss=None,
+                pool_type='mean',
+                bilinear_downsample=True,
+                reverse=True,
+                T=0.2,
+                num_stage=2,
+                feat_size=[64, 32],
+                radius=[12, 6],
+                downsample_rate=[4, 8],
+                detach=False,
+                *args,
+                **kwargs
+                 ):
+        """ MAST  (CVPR2020) with with entropy-based selection
+
+        Args:
+            backbone ([type]): [description]
+            test_cfg ([type], optional): [description]. Defaults to None.
+            train_cfg ([type], optional): [description]. Defaults to None.
+        """
+        super().__init__(*args, **kwargs)
+        from mmcv.ops import Correlation
+        
+        self.reverse = reverse
+        self.num_stage = num_stage
+        self.feat_size = feat_size
+        self.downsample_rate = downsample_rate
+        self.loss = build_loss(loss) if loss is not None else None
+        self.pool_type = pool_type
+        self.bilinear_downsample = bilinear_downsample
+        self.detach = detach
+        self.radius = radius
+        self.T = T
+        
+        self.mask = [ make_mask(feat_size[i], radius[i]) for i in range(len(radius)) if radius[i] != -1]        
+        self.corr = [Correlation(max_displacement=R) for R in radius ]
+        
+        
+        
+    def forward_train(self, imgs, images_lab=None):
+            
+        bsz, num_clips, t, c, h, w = images_lab.shape
+        
+        images_lab_gt = [images_lab[:,0,i,:].clone() for i in range(t)]
+        images_lab = [images_lab[:,0,i,:] for i in range(t)]
+        _, ch = self.dropout2d_lab(images_lab)
+        
+        # forward to get feature
+        fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        fs = [f.reshape(bsz, t, *f.shape[-3:]) for f in fs]
+        
+        tar_pyramid, refs_pyramid = [f[:, -1] for f in fs], [ f[:, :-1] for f in fs]
+        
+        losses = {}
+        
+        atts = []
+        corrs = []
+        for idx, (tar, refs) in enumerate(zip(tar_pyramid, refs_pyramid)):
+            # get correlation attention map            
+            _, att = non_local_attention(tar, refs, mask=self.mask[idx], scaling=True)            
+            # for mast l1_loss
+            ref_gt = [self.prep(gt[:,ch], downsample_rate=self.downsample_rate[idx]) for gt in images_lab_gt[:-1]]
+            outputs = frame_transform(att, ref_gt, flatten=False)
+            outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, self.feat_size[idx], self.feat_size[idx])     
+            losses[f'stage{idx}_l1_loss'], err_map = self.compute_lphoto(images_lab_gt, ch, outputs)
+            
+            corr = self.corr[idx](tar, refs[:,0])
+            atts.append(att)
+            corrs.append(corr)
+        
+        # for cmp weight
+        corr_feat = corrs[-1].reshape(bsz, -1, self.feat_size[-1], self.feat_size[-1])
+        corr = corr_feat.softmax(1)
+        corr_en = (-torch.log(corr+1e-12)).sum(1).flatten(-2)
+        corr_sorted, _ = torch.sort(corr_en, dim=-1, descending=True)
+        idx = int(corr_en.shape[-1] * self.T) - 1
+        T = corr_sorted[:, idx:idx+1]
+        sparse_mask = (corr_en > T).reshape(bsz, 1, *corr_feat.shape[-2:]).float().detach()
+            
+        if self.bilinear_downsample:
+            if not self.reverse:
+                atts[0] = atts[0].permute(0,1,3,2)
+            if self.pool_type == 'mean':
+                att_ = atts[0].reshape(bsz, -1, *fs[0].shape[-2:])
+                att_ = F.avg_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1).reshape(bsz, -1, *fs[0].shape[-2:])
+                target = F.avg_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1)    
+            elif self.pool_type == 'max':
+                att_ = atts[0].reshape(bsz, -1, *fs[0].shape[-2:])
+                att_ = F.max_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1).reshape(bsz, -1, *fs[0].shape[-2:])
+                target = F.max_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1)
+
+            if not self.reverse:
+                target = target.permute(0,2,1)
+            
+            weight = sparse_mask.flatten(-2).permute(0,2,1).repeat(1, 1, target.shape[-1])
+            
+            losses['dist_loss'] = self.loss(atts[-1][:,0], target.detach(), weight=weight) if self.detach else \
+                self.loss(atts[-1][:,0], target, weight=weight) 
+            
+        else:
+            if not self.reverse:
+                atts[1] = atts[1].permute(0,1,3,2)
+    
+            att_ = atts[1].reshape(bsz, -1, *fs[1].shape[-2:])
+            att_ = F.interpolate(att_, size=fs[0].shape[-2:],mode="bilinear").flatten(-2).permute(0,2,1).reshape(bsz, -1, *fs[1].shape[-2:])
+            att_ = F.interpolate(att_, size=fs[0].shape[-2:],mode="bilinear").flatten(-2).permute(0,2,1)    
+
+            if not self.reverse:
+                att_ = att_.permute(0,2,1)
+                
+            losses['dist_loss'] = self.loss(att_, atts[0][:,0].detach()) if self.detach else \
+                self.loss(att_, atts[0][:,0]) 
+        
+            
+        vis_results = dict(mask=sparse_mask[0,0], imgs=imgs[0,0])
+
+        return losses, vis_results
+
+
+    def prep(self, image, downsample_rate):
+        _,c,_,_ = image.size()
+        x = image.float()[:,:,::downsample_rate,::downsample_rate]
+
+        return x
+    
+    

@@ -1,5 +1,7 @@
 import os
 import sys
+
+from cv2 import split
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
@@ -46,7 +48,9 @@ test_cfg = dict(
 train_dataset_type = 'VOS_youtube_dataset_mlm'
 
 val_dataset_type = None
-test_dataset_type = 'VOS_davis_dataset_test'
+test_dataset_type = 'jhmdb_dataset_rgb'
+# test_dataset_type = 'VOS_davis_dataset_test'
+
 
 
 # train_pipeline = None
@@ -68,7 +72,7 @@ train_pipeline = [
 ]
 
 val_pipeline = [
-    dict(type='Resize', scale=(-1, 480), keep_ratio=True),
+    dict(type='Resize', scale=(-1, 240), keep_ratio=True),
     dict(type='Flip', flip_ratio=0),
     dict(type='RGB2LAB'),
     dict(type='Normalize', **img_norm_cfg_lab),
@@ -102,13 +106,30 @@ data = dict(
 
     test =  dict(
             type=test_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
-            data_prefix='2017',
+            root='/home/lr/dataset',
+            list_path='/home/lr/dataset/JHMDB',
+            split='val',
             # data_backend='lmdb',
             pipeline=val_pipeline,
             test_mode=True
             ),
+    # test =  dict(
+    #         type=test_dataset_type,
+    #         root='/home/lr/dataset/DAVIS',
+    #         list_path='/home/lr/dataset/DAVIS/ImageSets',
+    #         data_prefix='2017',
+    #         pipeline=val_pipeline,
+    #         test_mode=True
+    #         ),
+    
+    # val =  dict(
+    #         type=val_dataset_type,
+    #         root='/home/lr/dataset/DAVIS',
+    #         list_path='/home/lr/dataset/DAVIS/ImageSets',
+    #         data_prefix='2017',
+    #         pipeline=val_pipeline,
+    #         test_mode=True
+    #         ),
 )
 
 # optimizer

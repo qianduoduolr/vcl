@@ -8,13 +8,14 @@ docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='Memory_Tracker_Custom_Pyramid_V2',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 1, 2, 1), out_indices=(1, 2), pool_type='none'),
+    type='Memory_Tracker_Custom_Pyramid_Cmp_V2',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(1, 2), pool_type='none'),
     loss=dict(type='MSELoss',reduction='mean', loss_weight=1000),
-    radius=[24, 12],
-    downsample_rate=[2,4],
-    feat_size=[128,64],
-    detach=True
+    radius=[12, 6],
+    T=0.3,
+    downsample_rate=[4,8],
+    feat_size=[64,32],
+    detach=True,
 )
 
 model_test = dict(
@@ -79,7 +80,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=2, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=4, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -87,11 +88,10 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            root='/home/lr/dataset/YouTube-VOS-lmdb-v2',
+            root='/home/lr/dataset/YouTube-VOS',
             list_path='/home/lr/dataset/YouTube-VOS/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
             clip_length=2,
-            data_backend='lmdb',
             pipeline=train_pipeline,
             test_mode=False),
 
@@ -116,12 +116,12 @@ data = dict(
 
 # optimizer
 optimizers = dict(
-    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
+        backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999)),
     )
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=1600
+max_epoch=3200
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,
@@ -141,7 +141,10 @@ log_config = dict(
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
     ])
 
-visual_config = None
+# visual_config = None
+visual_config = dict(
+    type='VisualizationHook_Custom', interval=1000, res_name_list=['mask', 'imgs'], output_dir='vis'
+)
 
 
 # runtime settings
@@ -153,7 +156,7 @@ eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
                   checkpoint_path=f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth',
                 )
-evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True
+evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=1600, by_epoch=True
                   )
 
 load_from = None

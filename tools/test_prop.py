@@ -16,7 +16,7 @@ from vcl.models import build_model
 
 def parse_args():
     parser = argparse.ArgumentParser(description='mmediting tester')
-    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/train/local/vqvae_mlm_d4_nemd2048_byol_dyt_nl_l2_fc_orivq_withbbox_random_v2_38.py')
+    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/train/local/final_framework_v2_11.py')
     # parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_dyt_nl_l2_nofc_orivq/epoch_800.pth')
     parser.add_argument('--checkpoint', type=str, help='checkpoint file', default=None)
     parser.add_argument('--out-indices', nargs='+', type=int, default=[2])
@@ -82,7 +82,7 @@ def main():
     # Load eval_config from cfg
     eval_config = cfg.get('eval_config', {})
     # Overwrite eval_config from args.eval
-    eval_config = merge_configs(eval_config, dict(metrics=args.eval))
+    # eval_config = merge_configs(eval_config, dict(metrics=args.eval))
 
     if 'out_indices' in eval_config:
         args.out_indices = eval_config['out_indices']

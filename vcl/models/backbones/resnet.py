@@ -509,7 +509,7 @@ class ResNet(nn.Module):
                                      logger=None):
         """Initiate the parameters from torchvision pretrained checkpoint."""
         if isinstance(pretrained, str):
-            state_dict_torchvision = _load_checkpoint(self.pretrained)
+            state_dict_torchvision = _load_checkpoint(self.pretrained, map_location='cpu')
         else:
             state_dict_torchvision = pretrained
             

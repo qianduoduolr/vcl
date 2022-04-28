@@ -195,7 +195,6 @@ class VOS_youtube_dataset_rgb_withbbox(VOS_youtube_dataset_rgb):
 @DATASETS.register_module()
 class VOS_youtube_dataset_rgb_withbbox_V2(VOS_youtube_dataset_rgb_withbbox):
 
-    
     def prepare_train_data(self, idx):
 
         sample = self.samples[idx]
@@ -442,3 +441,67 @@ class VOS_youtube_dataset_mlm_withbbox_random(VOS_youtube_dataset_mlm):
             return self.pipeline(data)
 
 
+
+@DATASETS.register_module()
+class VOS_youtube_dataset_rgb_flow(VOS_youtube_dataset_rgb):
+
+    def load_annotations(self):
+        
+        self.samples = []
+        self.video_dir = osp.join(self.root, self.year, self.data_prefix['RGB'])
+        self.flow_dir = osp.join(self.list_path, self.data_prefix['FLOW'])
+        
+        list_path = osp.join(self.list_path, f'youtube{self.year}_{self.split}.json')
+        data = mmcv.load(list_path)
+        
+        for vname, frames in data.items():
+            sample = dict()
+            sample['frames_path'] = []
+            sample['flows_path'] = []
+            
+            for idx, frame in enumerate(frames):
+                if idx < len(frames) -1:
+                    sample['frames_path'].append(osp.join(self.video_dir, vname, frame))
+                    sample['flows_path'].append(osp.join(self.flow_dir, vname, frame))
+                
+            sample['num_frames'] = len(sample['frames_path'])
+            if sample['num_frames'] < self.clip_length * self.step:
+                continue
+        
+            self.samples.append(sample)
+        
+        logger = get_root_logger()
+        logger.info(" Load dataset with {} videos ".format(len(self.samples)))
+        
+    def prepare_train_data(self, idx):
+        
+        if self.data_backend == 'lmdb' and self.env == None and self.txn == None:
+            self._init_db(self.video_dir)
+
+        sample = self.samples[idx]
+        frames_path = sample['frames_path']
+        flows_path = sample['flows_path']
+        num_frames = sample['num_frames']
+        
+        offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, self.step, mode=self.temporal_sampling_mode)
+        
+        # load frame
+        if self.data_backend == 'raw':
+            frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length, step=self.step)
+        else:
+            frames = self._parser_rgb_lmdb(self.txn, offsets, frames_path, self.clip_length, step=self.step)
+
+        flows = self._parser_rgb_rawframe(offsets, flows_path, self.clip_length, step=self.step)
+        flows = [ cv2.resize(flow, frames[0].shape[:2][::-1]) / 255 * 100 - 50 for flow in flows ]
+        
+        
+        data = {
+            'imgs': frames,
+            'flows': flows,
+            'modality': 'RGB',
+            'num_clips': self.num_clips,
+            'num_proposals':1,
+            'clip_len': self.clip_length
+        } 
+
+        return self.pipeline(data)

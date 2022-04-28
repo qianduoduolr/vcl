@@ -1,1 +1,1 @@
-mast_d4_l2_pyramid_dis_15
+train_dry_run

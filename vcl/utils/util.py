@@ -18,13 +18,6 @@ import copy
 from mmcv.runner import load_state_dict
 
 
-def show_cam_on_image(img, mask):
-    heatmap = cv2.applyColorMap(np.uint8(mask), cv2.COLORMAP_JET)
-    heatmap = np.float32(heatmap) / 255
-    cam = heatmap + np.float32(img)
-    cam = cam / np.max(cam)
-    return np.uint8(255 * cam)
-
 def tensor2img(tensor, out_type=np.uint8, min_max=(0, 1), norm_mode='0-1'):
     '''
     Converts a torch Tensor into an image Numpy array

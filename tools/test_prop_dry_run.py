@@ -83,7 +83,7 @@ def main():
         return 0
 
     # Overwrite eval_config from args.eval
-    eval_config = merge_configs(eval_config, dict(metrics=args.eval))
+    # eval_config = merge_configs(eval_config, dict(metrics=args.eval))
 
     if 'out_indices' in eval_config:
         args.out_indices = eval_config['out_indices']
@@ -175,10 +175,15 @@ def main():
         device_id = torch.cuda.current_device()
 
         if args.checkpoint:
+            # _ = load_checkpoint(
+            #     model,
+            #     args.checkpoint,
+            #     map_location=lambda storage, loc: storage.cuda(device_id))
+            
             _ = load_checkpoint(
                 model,
                 args.checkpoint,
-                map_location=lambda storage, loc: storage.cuda(device_id))
+                map_location='cpu')
 
         outputs = multi_gpu_test(
             model,

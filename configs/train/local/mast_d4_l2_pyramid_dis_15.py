@@ -12,9 +12,7 @@ model = dict(
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(1, 2), pool_type='none'),
     loss=dict(type='MSELoss',reduction='mean', loss_weight=1000),
     radius=[12, 6],
-    detach=True,
-    reverse=False,
-    bilinear_downsample=False,
+    detach=True
 )
 
 model_test = dict(
@@ -87,11 +85,10 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            root='/home/lr/dataset/YouTube-VOS-lmdb-v2',
+            root='/home/lr/dataset/YouTube-VOS',
             list_path='/home/lr/dataset/YouTube-VOS/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
             clip_length=2,
-            data_backend='lmdb',
             pipeline=train_pipeline,
             test_mode=False),
 

@@ -341,3 +341,42 @@ class CosineSimLoss(nn.Module):
         #     pass
             
         return loss * self.loss_weight
+    
+    
+
+@LOSSES.register_module()
+class DiscreteLoss(nn.Module):
+    """NLL Loss.
+
+    It will calculate Cosine Similarity loss given cls_score and label.
+    """
+
+    def __init__(self,
+                 nbins,
+                 fmax,
+                 loss_weight=1.0,
+                 reduction='mean',
+                 **kwargs):
+        super().__init__()
+      
+        self.loss_weight = loss_weight
+        self.reduction = reduction
+        self.loss = nn.CrossEntropyLoss()
+        assert nbins % 2 == 1, "nbins should be odd"
+        self.nbins = nbins
+        self.fmax = fmax
+        self.step = 2 * fmax / float(nbins)
+        
+    def tobin(self, target):
+        target = torch.clamp(target, -self.fmax + 1e-3, self.fmax - 1e-3)
+        quantized_target = torch.floor((target + self.fmax) / self.step)
+        return quantized_target.type(torch.cuda.LongTensor)
+
+    def __call__(self, input, target):
+        size = target.shape[2:4]
+        if input.shape[2] != size[0] or input.shape[3] != size[1]:
+            input = nn.functional.interpolate(input, size=size, mode="bilinear", align_corners=True)
+        target = self.tobin(target)
+        assert input.size(1) == self.nbins * 2
+        loss = self.loss(input[:,:self.nbins,...], target[:,0,...]) + self.loss(input[:,self.nbins:,...], target[:,1,...])
+        return loss * self.loss_weight

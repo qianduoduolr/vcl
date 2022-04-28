@@ -44,7 +44,7 @@ def _concat_dataset(cfg, default_args=None):
         data_cfg = copy.deepcopy(cfg)
         data_cfg['ann_file'] = ann_files[i]
         datasets.append(build_dataset(data_cfg, default_args))
-
+    
     return ConcatDataset(datasets)
 
 
