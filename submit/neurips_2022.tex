@@ -34,6 +34,7 @@
 \usepackage{nicefrac}       % compact symbols for 1/2, etc.
 \usepackage{microtype}      % microtypography
 \usepackage{xcolor}         % colors
+\usepackage{wrapfig}
 
 
 \usepackage{times}
@@ -61,7 +62,6 @@
 % lines. Using \AND forces a line break at that point. So, if LaTeX puts 3 of 4
 % authors names on the first line, and the last on the second line, try using
 % \AND instead of \And before the third author name.
-
 
 \author{%
   David S.~Hippocampus\thanks{Use footnote for providing further information
@@ -168,9 +168,9 @@ The spatial feature mainly describes appearance of objects involved in a image. 
 			\mathcal{L}_{\text{nce}}=-\log \frac{\exp \left(\boldsymbol{q}^{T} \boldsymbol{k}^{+} / \tau_c\right)}{\exp \left(\boldsymbol{q}^{T} \boldsymbol{k}^{+} / \tau_c\right)+\sum_{i=1}^{K} \exp \left(\boldsymbol{q}^{T} \boldsymbol{k}_{i}^{-} / \tau_c\right)}
 		\end{aligned}~~,
 	\end{equation}
-	where the similarity is measured via dot product, and $\tau_c$ is the temperature hyper-parameter. MoCo [14] builds a dynamic memory bank to maintain a large number of negative samples with a moving-averaged encoder. DetCo [15] further introduces global and local contrastive learning to enhance local representation for dense prediction. In this paper, we adopt the same framework of DetCo [15] to learn a appearance model.\\
+	where the similarity is measured via dot product, and $\tau_c$ is the temperature hyper-parameter. MoCo [14] builds a dynamic memory bank to maintain a large number of negative samples with a moving-averaged encoder. DetCo [15] further improves the contrastive loss $\mathcal{L}_{\text{nce}}$ by introducing a global and local contrastive learning to enhance local representation for dense prediction. In this paper, we adopt the same framework as MoCo [14] and DetCo [15] to learn a appearance model for most of our experiments.\\
 \\
-\textbf{Global correlation distillation.} After main training with contrastive loss, we get a encoder $\phi$. Then we continuously train it on video data to learn the fine-grained correspondence (See section \ref{temporal_feature_learning}). However, directly fine-tuning the old model with only new data will lead to a well-known phenomenon of catastrophic forgetting, which degrades the performance. Thus we introduce a global correlation distillation loss in order to maintain the ability to capture object appearance. More specifically, we first fix the feature encoder $\phi$ as teacher denoted as $\phi_t$. Given a pair of video frames consisting of target and reference frame $I_{t}, I_r \in \mathbb{R}^{H\times W \times 3}$, the  $\phi$ maps them to a pair of feature embeddings $F^l_t,F^l_{r} \in \mathbb{R}^{h^l\times w^l \times d^l}$, where $l \in \{0, 1, \ldots, N \}$ is the index of each pyramid level and the smaller number represents the coarser level. Here $l$ is set to $N$. For each query point $F^l_t(i)$ and key point $F^l_r(j)$, we have global correlation $a_{i, j}$ ( See Figure \ref{fig:framework} ) using a softmax over similarities $w. r. t.$ all keys in reference frame, $i. e$:\\
+\textbf{Global correlation distillation.} After main training with contrastive loss, we get a encoder $\phi$. Then we continuously train it on video data to learn the fine-grained correspondence ( See section \ref{temporal_feature_learning} ). However, directly fine-tuning the old model with only new data will lead to a well-known phenomenon of catastrophic forgetting, which degrades the performance. Thus we introduce a global correlation distillation loss in order to maintain the ability to capture object appearance. More specifically, we first fix the feature encoder $\phi$ as teacher denoted as $\phi_t$. Given a pair of video frames consisting of target and reference frame $I_{t}, I_r \in \mathbb{R}^{H\times W \times 3}$, the  $\phi$ maps them to a pair of feature embeddings $F^l_t,F^l_{r} \in \mathbb{R}^{h^l\times w^l \times d^l}$, where $l \in \{0, 1, \ldots, N \}$ is the index of each pyramid level and the smaller number represents the coarser level. Here $l$ is set to $N$. For each query point $F^l_t(i)$ and key point $F^l_r(j)$, we have global correlation $a_{i, j}$ ( See Figure \ref{fig:framework} ) using a softmax over similarities $w. r. t.$ all keys in reference frame, $i. e$:\\
 \begin{equation}\label{eq:global_correlation}
   \small
   \begin{aligned}
@@ -236,7 +236,7 @@ Then we obtain a mask $m \in \mathbb{R}^{h^{N-1}w^{N-1}}$ to filter out the regi
     \mathcal{L}^e_{\mathrm{lc}}=\sum_im_i\left\|c_{i,:}^{N-1}-c_{i,:}^t\right\|^2_{2}
   \end{aligned}~~,
 \end{equation}
-Eventually, our training loss of temporal feature learning is defined as: $\mathcal{L}_\mathrm{t}$ =  $\mathcal{L}^p_{\mathrm{rec}} + \alpha  \mathcal{L}_{\mathrm{lc}}$. The final loss is a weighted sum of  $\mathcal{L}_\mathrm{t}$ and a regularization term $\mathcal{L}_\mathrm{gc}$ introduced in Section \ref{spatial_feature_learning}:
+Eventually, our training loss of temporal feature learning is defined as: $\mathcal{L}_\mathrm{t}$ =  $\mathcal{L}^p_{\mathrm{rec}} + \alpha  \mathcal{L}^e_{\mathrm{lc}}$. The final loss of training on video data is a weighted sum of  $\mathcal{L}_\mathrm{t}$ and a regularization term $\mathcal{L}_\mathrm{gc}$ introduced in Section \ref{spatial_feature_learning}:
 \begin{equation}\label{eq:final loss}
   \small
   \begin{aligned}
@@ -252,13 +252,13 @@ We verify the merit of our method in a series of correspondence-related tasks, i
 % Further more we set the stride of $res5$ layer to 4 in order to increase the receptive filed for spatial feature learning.
 
 \textbf{Training.}
-We first train our model for 200 epochs on ImageNet [11] adopting the same hyperparameter as DetCo [15]. Then we perform temporal feature learning on YouTube-VOS train set [16] which consists of 3.5k videos. In this stage, the video frame is resized into 256$\times$256 and channel-wise dropout in Lab color space [39] is adopted as the information bottleneck. We train the encoder for 100k iterations with mini-batch of 128  using Adam as our optimizer. The initial learning rate is set to 1e-4 with a cosine (half-period) learning rate schedule. The frame reconstruction is applied on both $res3$ and $res4$ layer while we realize global correlation distillation on $res5$ layer.
+We first train our model using contrastive loss for 200 epochs on ImageNet following most hyper-parameters settings of [76]. Then we perform temporal feature learning on YouTube-VOS train set [16] which consists of 3.5k videos. In this stage, the video frame is resized into 256$\times$256 and channel-wise dropout in Lab color space [39] is adopted as the information bottleneck. We train the encoder for 100k iterations with mini-batch of 128  using Adam as our optimizer. The initial learning rate is set to 1e-4 with a cosine (half-period) learning rate schedule. The frame reconstruction is applied on both $res3$ and $res4$ layer while we realize global correlation distillation on $res5$ layer.
 
 \textbf{Evaluation.}
-We follow the same evaluation protocol and downstream tasks in [33, 71]. We directly utilize unsupervised pre-trained model as the feature extractor without any fine-tuning.  Given the input frame with  spatial resolution of $H\times W$, the evaluation is realized on the $res4$ layer with a spatial resolution of $\frac{H}{8} \times \frac{W}{8}$ or $\frac{H}{4} \times \frac{W}{4}$. To propagate the semantic labels from the initial ground-truth annotation, the recurrent inference strategy is applied following recent works [12]. More specifically,  the semantical label of first frame as well as previous predictions are propagated to the current frame with the help of affinity between video frames. We evaluate our method over three downstream tasks including semi-supervised video object segmentation in DAVIS-2017 [8], human part tracking in VIP [10] and human pose tracking in JHMDB [9].
+We follow the same evaluation protocol and downstream tasks in [33, 71]. We directly utilize unsupervised pre-trained model as the feature extractor without any fine-tuning.  Given the input frame with  spatial resolution of $H\times W$, the evaluation is realized on the $res4$ layer with a spatial resolution of $\frac{H}{8} \times \frac{W}{8}$ or $\frac{H}{4} \times \frac{W}{4}$. To propagate the semantic labels from the initial ground-truth annotation, the recurrent inference strategy is applied following recent works [12]. More specifically,  the semantical label of first frame as well as previous predictions are propagated to the current frame with the help of affinity between video frames. We evaluate our method over three downstream tasks including semi-supervised video object segmentation in DAVIS-2017 [8], human part propagation in VIP [10] and human pose tracking in JHMDB [9].
 
 \subsection{Ablation Study}
-The ablation study is performed with semi-supervised video object segmentation on DAVIS-2017 validation set. We conduct a series of experiments to prove the effectiveness of each  component. 
+The ablation study is performed with semi-supervised video object segmentation on DAVIS-2017 validation set. Following the official protocol [68], we use the mean of region similarity $\mathcal{J}_m$, mean of contour accuracy $\mathcal{F}_m$ and their average $\mathcal{J} \& \mathcal{F}_m$ as the evaluation metrics. We conduct a series of experiments to prove the effectiveness of each  component. The stride of encoder is all set to 8 for training and evaluation.
 
 \begin{table*}[t]
   \centering
@@ -269,155 +269,215 @@ The ablation study is performed with semi-supervised video object segmentation o
             \subfloat[{Ablation study of each component.} \label{table:ablation2}]{
               \resizebox{0.6\textwidth}{!}{
               %   \tablestyle{1pt}{1.1}
-            \begin{tabular}{c|cc|ccccccc}
+            \begin{tabular}{c|cc|cccc|ccc}
               \hline
               \# &
               $\mathcal{L}_{\mathrm{nce}}$ &
-              $\mathcal{L}_{\mathrm{rec}}$ &
-              $\mathcal{L}^{p}_{\mathrm{rec}}$ &
-              $\mathcal{L}_{\mathrm{lc}}$ &
-              $\mathcal{L}^e_{\mathrm{lc}}$ &
               $\mathcal{L}_{\mathrm{gc}}$ &
+              $\mathcal{L}_{\mathrm{rec}}$ &
+              % $\mathcal{L}^{p}_{\mathrm{rec}}$ &
+              $p$ &
+              $\mathcal{L}_{\mathrm{lc}}$ &
+              % $\mathcal{L}^e_{\mathrm{lc}}$ &
+              $e$ &
               Dataset &
               Arch &
-                $\mathcal{J} \& \mathcal{F}(\text { Mean }) \uparrow$ \\ 
+                $\mathcal{J} \& \mathcal{F}_m \uparrow$ \\ 
               \hline
-              1&$\checkmark$& & &             &   &   & I&Res18&61.7 \\
+              % 1&$\checkmark$& & &             &   &   & I&Res18&61.7 \\
+              % \hline
+              1&&&$\checkmark$ & &  &   &    YTV& Res18 &64.6 \\
+              2&&& $\checkmark$ & $\checkmark$&  &  &    YTV& Res18 &65.4 \\
+              3&&& $\checkmark$& $\checkmark$& $\checkmark$ &   &    YTV& Res18 &68.1 \\
+              4&&& $\checkmark$& $\checkmark$& $\checkmark$ &  $\checkmark$ &   YTV& Res18 & 69.0 \\ 
               \hline
-              2&&$\checkmark$ & &  &   &   & YT& Res18 &64.7 \\
-              3&& $\checkmark$ & $\checkmark$&  &  &   & YT& Res18 &65.4 \\
-              4&& $\checkmark$& $\checkmark$& $\checkmark$ &   &   & YT& Res18 &68.1 \\
-              5&& $\checkmark$& $\checkmark$& $\checkmark$ &  $\checkmark$ &  & YT& Res18 & 69.1 \\ 
-              \hline
-              6&$\checkmark$& $\checkmark$& $\checkmark$& $\checkmark$ &  $\checkmark$ &  & I + YT & Res18 & 69.4 \\ 
-              7&$\checkmark$& $\checkmark$& $\checkmark$& $\checkmark$ &  $\checkmark$ &  $\checkmark$ & I + YT & Res18 & \textbf{70.4} \\ 
+              5&$\checkmark$& &$\checkmark$& $\checkmark$& $\checkmark$ &  $\checkmark$ &   ImageNet & Res18 & 69.3 \\ 
+              6&$\checkmark$& $\checkmark$  &$\checkmark$& $\checkmark$& $\checkmark$ &  $\checkmark$ &   ImageNet & Res18 & \textbf{70.5} \\ 
               \hline
             \end{tabular}%
               }
             }
-            \subfloat[{Ablation study of $L_{\mathrm{gc}}$.} \label{table:ablation2}]{
+            \subfloat[{Ablation study of $\mathcal{L}_{\mathrm{gc}}$.} \label{table:ablation2}]{
             \resizebox{0.38\textwidth}{!}{
             % \tablestyle{1pt}{1.1}
             \begin{tabular}{@{}cccc@{}}
             \hline
-            Method         & Dataset       & Arch &$\mathcal{J} \& \mathcal{F}(\text { Mean }) \uparrow$ \\ 
+            Method         & Dataset       & Arch &$\mathcal{J} \& \mathcal{F}_m \uparrow$ \\ 
             \hline
-            DetCo [12] & I         & Res50 &66.5          \\
-            + Fine-tuning    & I + YTV & Res50 &68.3          \\
-            + EWC            & I + YTV & Res50 &67.9          \\
-            + LwF            & I + YTV & Res50 &68.6          \\
-            + $\mathcal{L}_{\mathrm{gc}}$ (Ours) & I + YTV & Res50 &\textbf{71.1} \\ 
+            $\mathcal{L}_{\mathrm{nce}}$ & I         & Res50 &66.5          \\
+            w $\mathcal{L}_{\mathrm{t}}$    & ImageNet & Res50 &69.6          \\
+            % + EWC            & ImageNet & Res50 &68.9          \\
+            w $\mathcal{L}_{\mathrm{t}}$ + LwF            & ImageNet & Res50 &69.9          \\
+            w $\mathcal{L}_{\mathrm{t}}$ + $\mathcal{L}_{\mathrm{gc}}$ & ImageNet & Res50 &\textbf{71.2} \\ 
             \hline
             \end{tabular}%
             }
           }
     \captionsetup{font=small}
-    \caption{Ablation study for each component in spatial and temporal feature learning.  The "+" in (b) represents the method used in additional to $\mathcal{L}_{\mathrm{t}}$ after trained with contrastive loss. I: ImageNet [11].  YTV: YouTube-VOS [12].}
+    \caption{Ablation study for each component in spatial and temporal feature learning.  The "$p$" and "$e$" in (a) correspond to pyramid frame reconstruction and entropy-based selection. Models in (b) are all pre-trained on ImageNet with contrastive loss and models with "w" are subsequently trained on YouTube-VOS using different methods. I: ImageNet [11].  YTV: YouTube-VOS [12].}
     \label{tab:ablations}\vspace{-6mm}
 \end{table*}
 
-\textbf{Temporal feature learning.} We first examine how each design in temporal feature learning impacts the overall performance, which are shown in Table \ref{tab:ablations} (a) 2 $\sim$ 5. To have a clear look, we train model from scratch on YouTube-VOS when examine the efficacy of our components for temporal feature learning. The baseline is to apply frame reconstruction $\mathcal{L}_{\mathrm{rec}}$ on layer $res4$. The $\mathcal{L}^{p}_{\mathrm{rec}}$, $\mathcal{L}_{\mathrm{lc}}$ and $\mathcal{L}^e_{\mathrm{lc}}$ represents pyramid frame reconstruction, local correlation distillation without or with entropy-based selection. From the table we can see $\mathcal{L}^{p}_{\mathrm{rec}}$ leads to a improvements by leveraging more supervision of reconstruction at each level.  With the guidance of more fine-grained local correlation map, $\mathcal{L}_{\mathrm{lc}}$ boosts up the accuracy from 65.4\% to 68.1\%.  Moreover, enforcing the local correlation distillation to focus on the region with higher entropy leads to a performance gain in the range of 1\%. By fusing the above components, the performance of our method finally reaches 69.1\%.
+\textbf{Temporal feature learning.} We first examine how each design in temporal feature learning impacts the overall performance, which are shown in Table \ref{tab:ablations} (a) 1 $\sim$ 4. To have a clear look, we train the model from scratch on YouTube-VOS when examining the efficacy of our components for temporal feature learning. The baseline is to apply frame reconstruction $\mathcal{L}_{\mathrm{rec}}$. The $p$, $\mathcal{L}_{\mathrm{lc}}$ and $e$ represents pyramid frame reconstruction, local correlation distillation without and with entropy-based selection. From the table, we can see leveraging more supervision of reconstruction at each level leads to an improvement in the range of 0.8\%. With the guidance of a more fine-grained local correlation map, $\mathcal{L}_{\mathrm{lc}}$ boosts up the accuracy from 65.4\% to 68.1\%. Moreover, enforcing the local correlation distillation to focus on the region with higher entropy leads to a performance gain in the range of 1\%. By fusing the above components, the performance finally reaches 69.0\%.
 
-\textbf{Spatial featuer learning.} We investigate the effect of training with each component in spatial feature learning. The results are shown in Table \ref{fig:ablations} (a) 6 $\sim$ 7, with help of the pre-training on ImageNet using contrastive loss, the performance of our method reaches 69.4\%. Moreover, the global correlation distillation loss $\mathcal{L}_{\mathrm{gc}}$ boosts up the performance from 69.4\% to 70.4\% by keeping the ability of model to capture object-level correspondence which is closely related to object appearance modeling.
+\textbf{Spatial feature learning.} We investigate the effect of training with each component in spatial feature learning. The results are shown in Table \ref{fig:ablations} (a) 5 $\sim$ 6, with the help of the pre-training on ImageNet using contrastive loss, the performance of our method reaches 69.3\%. Moreover, the global correlation distillation loss $\mathcal{L}_{\mathrm{gc}}$ boosts up the performance from 69.3\% to 70.5\% by keeping the ability of the model to capture object-level correspondence which is closely related to object appearance modeling.
 
-\textbf{Further exploitation of $\mathcal{L}_{\mathrm{gc}}$.} As we mentioned above, directly finetuning the model pre-trained on image data will leads to a well-known phenomenon of catastrophic forgetting, which is closely related to continue learning. To further verify the effectiveness of  $\mathcal{L}_{\mathrm{gc}}$,  \textcolor{red}{we exploit several classic methods of continue learning including EWC [7] and LwF [23] apart from directly finetuning on video dataset.}  We adopt ResNet50 as our encoder which has a more stronger ability to capture object appearance and train model with all modules in temporal feature learning. The results are shown on Table \ref{tab:ablations} (b). All methods achieve  better result attributed to the temporal feature learning on video data while our method gets the best performance.  Interestingly, we found integrate EWC into our framework gets  worse result compared fine-tuning with temporal feature learning. We speculate that this may be the result of inferior learning of temporal representation due to the influence of the regularization loss in EWC. 
+\textbf{Further exploitation of $\mathcal{L}_{\mathrm{gc}}$.}  Directly fine-tuning the model pre-trained with contrastive loss $\mathcal{L}_{\mathrm{nce}}$ will lead to a well-known phenomenon of catastrophic forgetting, which is closely related to continual learning. To further verify the effectiveness of  $\mathcal{L}_{\mathrm{gc}}$,  \textcolor{red}{we exploit a general continual model LwF [23]  based on knowledge distillation apart from directly fine-tuning on video dataset. We modify the framework of LwF ( see Appendix ) to adapt to the paradigm of self-supervised learning and adopt ResNet-50 as our encoder which has a stronger ability to capture object appearance.} The results are shown on Table \ref{tab:ablations} (b). All methods achieve better results attributed to the proposed temporal feature learning while our method using $\mathcal{L}_{\mathrm{gc}}$ gets the best performance. 
 
 \begin{figure}[!tb]
   \centering
   {\includegraphics[width=0.8\textwidth]{figure/abalations/ablataions.pdf}}
-  \caption{\small Visualization of the ablation study. Given a query point randomly sampled in target frame, we visualize the result of computing the local correlation and global correlation map $w.r.t.$ reference frame. Here "$\mathcal{L}_{\mathrm{nce}}$", "$\mathcal{L}_{\mathrm{t}}$" and "all" corresponds to contrastive loss of spatial feature learning, the loss of temporal feature learning and our full model. }
+  \caption{\small Visualization of the ablation study. Given a query point randomly sampled in target frame, we visualize the result of computing the local correlation and global correlation map $w.r.t.$ reference frame. The dashed line in red represents the range of computing correlation map $w.r.t.$ query point. The reference frame is randomly sampled in the memory bank of inference strategy [11]. }
   \label{fig:ablations}
-  \vspace{-5mm}
+  \vspace{-7mm}
 \end{figure}
 
 
-\textbf{Discussion.} 
-We give a further discussion here base on the above analysis. On the one hand, the temporal feature learning helps to learn the fine-grained correspondence related to motion estimation between frames within a local range, which is unable to accomplish by training a appearance model. As you can see in the first row of Figure \ref{fig:ablations}, the appearance model trained with $\mathcal{L}_{\mathrm{nce}}$ is misled by two patches at different location ( $i.e.$ two feats of the tiger ) with similar appearance while the model trained with $\mathcal{L}_{\mathrm{t}}$ tends to learn a better temporal representation for fine-grained correspondence. However, in the second row of Figure \ref{fig:ablations}, the video contains large motion and deformation especially on the moving objects, which result in severe temporal discontinuity between frames. In such scenarios, the model trained with $\mathcal{L}_{\mathrm{t}}$ fails to capture temporal correspondence with a local correlation while the model trained with $\mathcal{L}_{\mathrm{nce}}$ is able to correct the mistakes by tracking the points base on the object appearance (see with $\mathcal{L}_{\mathrm{nce}}$ and with all).
- Besides, the performance comparison of ResNet18 and ResNet50 in Table \ref{tab:ablations}, $i.e.$ 70.4\% and 71.1\%, indicates that our method is able to scale up to deeper models which is not achieved in the most of previous methods reported in [12].
-
-
-
+\textbf{Further analysis.} 
+We give a further analysis here based on the above experiments. On the one hand, temporal feature learning helps to learn the fine-grained correspondence related to motion estimation between frames, which is unable to accomplish by training an appearance model. As you can see in the first row of Figure \ref{fig:ablations}, the appearance model trained with $\mathcal{L}_{\mathrm{nce}}$ is misled by two patches at different locations ( $i.e.$ two feats of the tiger ) with similar appearance while the model trained with $\mathcal{L}_{\mathrm{t}}$ tends to learn a better temporal representation for fine-grained correspondence. However, in the second row of Figure \ref{fig:ablations}, the model trained with $\mathcal{L}_{\mathrm{t}}$ fails to capture temporal correspondence with a local correlation  when facing severe temporal discontinuity  while the model trained with $\mathcal{L}_{\mathrm{nce}}$ is able to correct the mistakes by tracking the points based on the object appearance ( see with $\mathcal{L}_{\mathrm{nce}}$ and with all ).
 
 
 \subsection{Comparison with State-of-the-art}
-We compare fine-grained correspondence results of VFS against previous self-supervised methods. The results are all reported with the last block in res4 across all methods. Our method achieves state-of-the-art performance using ResNet-50. With ResNet-50, we observes UVC [42] does not benefit from using a deeper networks and the performance of CRW [33] becomes significantly worse. Learning with VFS, the deeper network with ResNet-50 improves 2.2\% on DAVIS and 3.3\% on VIP over ResNet-18, which is significant. We observe consistent results across the JHMDB [35] human pose and VIP [82] human part tracking tasks. With ResNet-18, VFS achieves comparable performance with CRW [33]. the last block in res4 may not achieve the optimal performance, thus we also report the result of the best block with gray color for reference. We compare fine-grained correspondence results of VFS against previous self-supervised methods. The results are all reported with the last block in res4 across all methods. Our method achieves state-of-the-art performance using ResNet-50. With ResNet-50, we observes UVC [42] does not benefit from using a deeper networks and the performance of CRW [33] becomes significantly worse. Learning with VFS, the deeper network with ResNet-50 improves 2.2\% on DAVIS and 3.3\% on VIP over ResNet-18, which is significant. We observe consistent results across the JHMDB [35] human pose and VIP [82] human part tracking tasks. With ResNet-18, VFS achieves comparable performance with CRW [33]. the last block in res4 may not achieve the optimal performance, thus we also report the result of the best block with gray color for reference. We compare fine-grained correspondence results of VFS against previous self-supervised methods. The results are all reported with the last block in res4 across all methods. Our method achieves state-of-the-art performance using ResNet-50. With ResNet-50, we observes UVC [42] does not benefit from using a deeper networks and the performance of CRW [33] becomes significantly worse. Learning with VFS, the deeper network with ResNet-50 improves 2.2\% on DAVIS and 3.3\% on VIP over ResNet-18, which is significant. We observe consistent results across the JHMDB [35] human pose and VIP [82] human part tracking tasks. With ResNet-18, VFS achieves comparable performance with CRW [33]. the last block in res4 may not achieve the optimal performance, thus we also report the result of the best block with gray color for reference.
+\textbf{Results for video object segmentation.}
+We compare our method against previous self-supervised methods in Table \ref{table:sota}. For fair comparison, we report both results with setting the stride of encoder to 4 and 8. The results are all reported with layer $res4$ across all methods. Our method achieves state-of-the-art performance using both ResNet-18 and ResNet-50. For ResNet-18, our method with a stride of 8 achieves 70.5\%, making a absolute performance improvement by 1.2\% over all baselines using same architecture. Benefiting from less information lost for temporal feature learning by setting the stride of encoder to 4, the performance of method reaches 73.2\%, leading a performance gain of 3.5\% over MAMP, which consistently verify the idea of our methods. Besides, we found our method trained with only temporal feature learning  reaches 69.0\%/71.2\% with stride of 8/4, surpassing all methods pre-trained on Kinetics and TrackingNet which have much bigger size than YouTube-VOS. For ResNet-50, our method still outperforms all baseline methods by 2.3\%. More remarkably, our method even outperforms some task-specific fully-supervised algorithms [14][15].
 
 \begin{table*}[t]
 	\centering
 	\small
 	\resizebox{0.99\textwidth}{!}{
-		\setlength\tabcolsep{1pt}
+		\setlength\tabcolsep{7.3pt}
 		\renewcommand\arraystretch{1.05}
-		\begin{tabular}{cccrlccccc}
+		\begin{tabular}{ccccccccc}
 			\toprule
-			Method & Arch & Stride & Dataset &(size) & $\mathcal{J}$ \& $\mathcal{F}$(Mean) $\uparrow$ & $\mathcal{J}$(Mean) $\uparrow$ & $\mathcal{J}$(Recall) $\uparrow$  &  $\mathcal{F}$(Mean) $\uparrow$  & $\mathcal{F}$(Recall) $\uparrow$  \\  \hline
-      Supervised & ResNet-18 & 8 & I &(1.28M, ~-~)
-			& 62.9 & 60.6 & - & 65.2 & - \\
-      MoCo & ResNet-18 & 8 & I &(1.28M, ~-)
-			& 60.8 & 58.6 & - & 63.1 & - \\
-      DetCo & ResNet-18 & 8 & I &(1.28M, ~-)
-			& 61.7 & 59.6 & - & 62.8 & - \\
-      SimSiam & ResNet-18 & 8 & I &(1.28M, ~-)
-			& 62.0 & 60.0 & - & 64.0 & - \\
-			Colorization & ResNet-18 & 8 & Kinetics &(~-~, 800 hours)
-			& 34.0 & 34.6 & 34.1 & 32.7 & 26.8 \\
-			CorrFlow & ResNet-18 & 8 & OxUvA &(~-~, 14 hours)
-			& 50.3 & 48.4 & 53.2 & 52.2 & 56.0 \\
-			MuG & ResNet-18 &  8 & OxUvA &(~-~, 14 hours)
-			& 54.3 & 52.6 & 57.4 & 56.1 & 58.1  \\
-			CRW & ResNet-18 & 8 & Kinetics &(~-~, 800 hours)
-			& 68.3 & 65.5 & 78.6 & 71.0 & 82.9 \\
-			ContrastCorr & ResNet-18 & 8 & C + T &(30k, 300 hours)
-			& 63.0 & 60.5 & - & 65.5 & - \\
-			VFS  & ResNet-18 & 8 & Kinetics &(~-~, 800 hours)
-			& 66.7 & 64.0 & - & 69.4 & - \\
-			JSTG & ResNet-18 & 8 & Kinetics &(~-~, 800 hours)
-			& 68.7 & 65.8 & 77.7  & 71.6 & 84.3 \\
-      MAST & ResNet-18 & 4 & YTV &(~-~, 5 hours)
-			& 65.5 & 63.3 & 73.2 & 67.6 & 77.7  \\
-      MAMP & ResNet-18 & 4 & YTV &(~-~, 5 hours)
-			& 69.7 & 68.3 & -  & 71.2 & - \\
+      & &  & & \multicolumn{2}{c}{Dataset} & & &  \\
+      \cline{5-6}
+			\multirow{-2}{*}{Method} & \multirow{-2}{*}{Sup.} & \multirow{-2}{*}{Arch} & \multirow{-2}{*}{Stride} & Image & Video & \multirow{-2}{*}{$\mathcal{J}$\&$\mathcal{F}_m$ $\uparrow$} & \multirow{-2}{*}{$\mathcal{J}_m$ $\uparrow$}  &  \multirow{-2}{*}{$\mathcal{F}_m$ $\uparrow$}   \\  \hline
+      Supervised &$\checkmark$ & ResNet-18 & 8 & ImageNet & -
+			& 62.9 & 60.6  & 65.2  \\
+      MoCo & & ResNet-18 & 8 & ImageNet &-
+			& 60.8 & 58.6  & 63.1  \\
+      % DetCo & ResNet-18 & 8 & I &-
+			% & 61.7 & 59.6  & 62.8  \\
+      SimSiam & & ResNet-18 & 8 & ImageNet &-
+			& 62.0 & 60.0  & 64.0  \\
+			Colorization & & ResNet-18 & 8 & - & Kinetics
+			& 34.0 & 34.6  & 32.7 \\
+			CorrFlow & & ResNet-18 & 8 & - & OxUvA
+			& 50.3 & 48.4  & 52.2  \\
+			MuG & & ResNet-18 &  8 & - & OxUvA
+			& 54.3 & 52.6 & 56.1   \\
+			ContrastCorr & & ResNet-18 & 8 & COCO  & TrackingNet
+			& 63.0 & 60.5  & 65.5  \\
+      UVC  & & ResNet-18 & 8 & - & Kinetics
+			& 57.8 & 56.3  & 59.2  \\
+			VFS  & & ResNet-18 & 8 & - & Kinetics
+			& 66.7 & 64.0  & 69.4  \\
+      CRW & & ResNet-18 & 8 & - & Kinetics
+			& 67.6 & 64.8  & 70.2  \\
+			JSTG & & ResNet-18 & 8 & - & Kinetics
+			& 68.7 & 65.8   & 71.6  \\
+      DUL & & ResNet-18 & 8 & - & YTV
+			& 69.3 & 67.1   & 71.6  \\
+      MAST & & ResNet-18 & 4 & - & YTV
+			& 65.5 & 63.3  & 67.6  \\
+      MAMP & & ResNet-18 & 4 & - & YTV
+			& 69.7 & 68.3   & 71.2  \\
 			% CLTC  & ResNet-18 & 8 & YT &(~-~, 5.58 hours)
 			% & 70.3 & 67.9 & 78.2 & 72.6 & 83.7 \\
       \hline
-			\textbf{Ours} & ResNet-18 & 8 & YTV &(~-~, 5 hours)
-			& 69.1 & \textbf{-} & \textbf{-} & - & \textbf{-} \\
-      \textbf{Ours} & ResNet-18 & 8 & I + YTV &(1.28M, 5 hours)
-			& 70.4 & - & - & - & - \\
-      \textbf{Ours} & ResNet-18 & 4 & YTV &(~-~, 5 hours)
-			& 71.3 & - & - & - & - \\
-      \textbf{Ours} & ResNet-18 & 4 & I + YTV &(1.28M, 5 hours)
-			& \textbf{73.2} & - & - & - & - \\
+			\textbf{Ours} & & ResNet-18 & 8 & - & YTV
+			& 69.0 & & \\
+      \textbf{Ours} & & ResNet-18 & 8 & ImageNet & YTV
+			& 70.5   & & \\
+      \textbf{Ours} & & ResNet-18 & 4 & - & YTV
+			& 71.3    & & \\
+      \textbf{Ours} & & ResNet-18 & 4 & ImageNet & YTV
+			& \textbf{73.2}   & &  \\
 			\hline
       \hline
-      Supervised & ResNet-50 & 8 & I &(1.28M, ~-)
-			& 66.0 & 63.7 & - & 68.4 & - \\
-      MoCo & ResNet-50 & 8 & I &(1.28M, ~-)
-			& 65.4 & 63.2 & - & 67.6 & - \\
-      SimSiam & ResNet-50 & 8 & I &(1.28M, ~-)
-			& 66.3 & 64.5 & - & 68.2 & - \\
-      DetCo & ResNet-50 & 8 & I &(1.28M, ~-)
-			& 66.5 & 64.7 & - & 68.4 & - \\
-      VINCE & ResNet-50 & 8 & Kinetics &(~-~, 800 hours)
-			& 65.6 & 63.4 & - & 67.8 & - \\
-      SeCo & ResNet-50 & 8 & Kinetics &(~-~, 800 hours)
-			& 60.6 & 60.4 & - & 62.8 & - \\
-      VFS  & ResNet-50 & 8 & Kinetics &(~-~, 800 hours)
-			& 68.9 & - & - & - & - \\
+      Supervised & $\checkmark$& ResNet-50 & 8 & ImageNet &-
+			& 66.0 & 63.7  & 68.4  \\
+      MoCo & & ResNet-50 & 8 & ImageNet &-
+			& 65.4 & 63.2  & 67.6  \\
+      SimSiam & & ResNet-50 & 8 & ImageNet &-
+			& 66.3 & 64.5  & 68.2  \\
+      % DetCo & ResNet-50 & 8 & I &-
+			% & 66.5 & 64.7  & 68.4  \\
+      UVC  & & ResNet-50 & 8 & - & Kinetics
+			& 57.8 & 56.3  & 59.2  \\
+      VINCE & & ResNet-50 & 8 & - & Kinetics
+			& 65.6 & 63.4  & 67.8  \\
+      SeCo & & ResNet-50 & 8 & - & Kinetics
+			& 60.6 & 60.4  & 62.8  \\
+      VFS  & & ResNet-50 & 8 & - & Kinetics
+			& 68.9     \\
       \hline
-      \textbf{Ours} & ResNet-50 & 8 & I + YTV &(1.28M, 5 hours)
-			& \textbf{71.1} & - & - & - & - \\
+      \textbf{Ours} & & ResNet-50 & 8 & ImageNet & YTV
+			& \textbf{71.2}   & &  \\
+      \hline
+      \textcolor{gray}{SiamMask} & \textcolor{gray}{$\checkmark$} & \textcolor{gray}{ResNet-50} & \textcolor{gray}{-} & \textcolor{gray}{I + C} & \textcolor{gray}{YTV}
+			& \textcolor{gray}{56.4} & \textcolor{gray}{54.3}  & \textcolor{gray}{58.5}  \\
+      \textcolor{gray}{OnAVOS} & \textcolor{gray}{$\checkmark$} & \textcolor{gray}{ResNet-38} & \textcolor{gray}{-} & \textcolor{gray}{I + C + P} & \textcolor{gray}{D}
+			& \textcolor{gray}{65.4} & \textcolor{gray}{61.6}  & \textcolor{gray}{69.1}  \\
+      \textcolor{gray}{OSVOS-S}  & \textcolor{gray}{$\checkmark$} & \textcolor{gray}{VGG-16} & \textcolor{gray}{-} & \textcolor{gray}{I + P} & \textcolor{gray}{D}
+			& \textcolor{gray}{68.0}   & \textcolor{gray}{64.7} & \textcolor{gray}{71.3}  \\
+			\bottomrule
+		\end{tabular}
+	}
+	\captionsetup{font=footnotesize}
+	\caption{\textbf{Quantitative results for video object segmentation on validation set of DAVIS-2017}. We show results of state-of-the-art self-supervised methods and some \textcolor{gray}{supervised} methods for comparison. "Dataset" represents the dataset(s) for pre-training, including: ~I:ImageNet~(1.28m). ~C:COCO~(30k). ~T:TrackingNet~(300h). ~K:Kinetics~(800h). ~YTV:YouTube-VOS~(5h). ~D:DAVIS 2017~(-). ~P:PASCAL-VOC~(-). We report the data size for self-supervised methods~(~total number/duration of image/video dataset~).}
+	\label{table:sota}
+	\vspace{-29pt}
+\end{table*}
+
+\textbf{Results for human part propagation.} Next, we evaluate our method on human part tracking. Experiments are conducted on the validation set of VIP [11], which consists of 50 videos with 19 human semantic part classes, requiring more precise matching than DAVIS. Following [45], we adopt mean intersection-over-union (mIoU) as our evaluation metric and resize the video frames to 560 $\times$ 560. All models are set to ResNet-18 with a stride of 8 for fair comparison.  The results are shown in Table \ref{table:vip}. Our method achieves state-of-the-art performance, surpassing all previous state-of-the-art by 0.8\%. Notably, our model outperforms ATEN [18] which is specifically designed for this dataset using human annotations.
+
+  
+\begin{wraptable}{r}{8cm}
+	\centering
+	\small
+	\resizebox{0.5\textwidth}{!}{
+			\setlength\tabcolsep{3pt}
+		\renewcommand\arraystretch{1.05}
+		\begin{tabular}{ccccc}
+            \toprule
+		     & & \multicolumn{1}{c}{VIP} & \multicolumn{2}{c}{JHMDB} \\ \cline{3-5}
+            \multirow{-2}{*}{Methods} & \multirow{-2}{*}{Sup.} & mIoU $\uparrow$   & PCK@0.1 $\uparrow$ & PCK@0.2 $\uparrow$
+			\\ \midrule
+      ResNet-18 & $\checkmark$ & 31.9 & 53.8 & 74.6 \\
+      % ResNet-50 & $\checkmark$ & 39.5 & 59.2 & 78.3 \\
+			TimeCycle &  & 28.9 & 57.3 & 78.1 \\
+			UVC &  & 34.1  & 58.6 & 79.6\\
+			CRW &  & 38.6  & 59.3 & 80.3 \\
+			ContrastCorr &  & 37.4  & 61.1 & 80.8 \\
+			VFS  &  & 39.9  & 60.5 & 79.5\\
+			CLTC &  & 37.8  & 60.5 & 82.3\\
+			JSTG &  & 40.2  & 61.4 & \textbf{85.3}\\
+			\textbf{Ours} &  & \textbf{41.0} & \textbf{63.1} & 82.9\\
+      \hline
+      \textcolor{gray}{ATEN} & \textcolor{gray}{$\checkmark$} & \textcolor{gray}{37.9} & \textcolor{gray}{-} & \textcolor{gray}{-}\\
+      \textcolor{gray}{Thin-Slicing Net} & \textcolor{gray}{$\checkmark$} & \textcolor{gray}{-} & \textcolor{gray}{68.7} & \textcolor{gray}{92.1}\\
 			\bottomrule
 		\end{tabular}
 	}
 	\captionsetup{font=small}
-	\caption{\textbf{Quantitative results for video object segmentation}. I: ImageNet. YTV: YouTube-VOS. C: COCO. T: TrackingNet.}
-	\label{table:davis}
-	\vspace{-8pt}
-\end{table*}
+	\caption{\textbf{Quantitative results for human part propagation and human pose tracking.} We show results of state-of-the-art self-supervised methods and some \textcolor{gray}{supervised} methods for comparison.}
+	\label{table:vip}
+	\vspace{-5pt}
+\end{wraptable}
+\textbf{Results for human pose tracking.} We then make performance comparison on the downstream task of human pose tracking. We conduct the experiments on the validation of JHMDB [35] which has 268 videos.  The annotations consist of 15 body joints for each person. Probability of correct keypoint(PCK) [101] is utilized here to examine the accuracy between result and  ground-truth with different threshold. Follow the evaluation protocol of [24, 15], we resize the video frames to 320 $\times$ 320. The results in Table \ref{table:vip} show a consistently performance gain over previous methods. which successfully demonstrates the transferability of our method to different downstream tasks.
+
+
+\begin{figure}[!tb]
+  \centering
+  {\includegraphics[width=1.0\textwidth]{figure/quantitative_results/quan.pdf}}
+  \caption{\small Visualization of the ablation study. Given a query point randomly sampled in target frame, we visualize the result of computing the local correlation and global correlation map $w.r.t.$ reference frame. The dashed line in red represents the range of computing correlation map $w.r.t.$ query point. The reference frame is randomly sampled in the memory bank of inference strategy [11]. }
+  \label{fig:quan}
+  \vspace{-3mm}
+\end{figure}
 
 \section{Conclusions}
-
+We then make performance comparison on the downstream task of human pose tracking. We conduct the experiments on the validation of JHMDB [35] which has 268 videos. The annotations consist of 15 body joints for each person. Probability of correct keypoint(PCK) [101] is utilized here to examine the accuracy between result and  ground-truth with a threshold $\sigma $. The results in Table \ref{table:vip} show a consistently performance gain over previous methods, which successfully demonstrates the transferability of our method to different downstream tasks.We then make performance comparison on the downstream task of human pose tracking. We conduct the experiments on the validation of JHMDB [35] which has 268 videos. The annotations consist of 15 body joints for each person. Probability of correct keypoint(PCK) [101] is utilized here to examine the accuracy between result and  ground-truth with a threshold $\sigma $. The results in Table \ref{table:vip} show a consistently performance gain over previous methods, which successfully demonstrates the transferability of our method to different downstream tasks.
 
 \section*{References}
 \medskip
