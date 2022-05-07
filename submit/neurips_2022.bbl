@@ -1,0 +1,102 @@
+\begin{thebibliography}{17}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Caelles et~al.(2017)Caelles, Maninis, Pont-Tuset, Leal-Taix{\'e},
+  Cremers, and Van~Gool]{caelles2017one}
+S.~Caelles, K.-K. Maninis, J.~Pont-Tuset, L.~Leal-Taix{\'e}, D.~Cremers, and
+  L.~Van~Gool.
+\newblock One-shot video object segmentation.
+\newblock In \emph{CVPR}, 2017.
+
+\bibitem[Carreira and Zisserman(2017)]{carreira2017quo}
+J.~Carreira and A.~Zisserman.
+\newblock Quo vadis, action recognition? a new model and the kinetics dataset.
+\newblock In \emph{CVPR}, 2017.
+
+\bibitem[Deng(2009)]{deng2009large}
+J.~Deng.
+\newblock A large-scale hierarchical image database.
+\newblock In \emph{CVPR}, 2009.
+
+\bibitem[Dosovitskiy et~al.(2015)Dosovitskiy, Fischer, Ilg, Hausser, Hazirbas,
+  Golkov, Van Der~Smagt, Cremers, and Brox]{dosovitskiy2015flownet}
+A.~Dosovitskiy, P.~Fischer, E.~Ilg, P.~Hausser, C.~Hazirbas, V.~Golkov, P.~Van
+  Der~Smagt, D.~Cremers, and T.~Brox.
+\newblock Flownet: Learning optical flow with convolutional networks.
+\newblock In \emph{ICCV}, 2015.
+
+\bibitem[He et~al.(2020)He, Fan, Wu, Xie, and Girshick]{he2020momentum}
+K.~He, H.~Fan, Y.~Wu, S.~Xie, and R.~Girshick.
+\newblock Momentum contrast for unsupervised visual representation learning.
+\newblock In \emph{CVPR}, 2020.
+
+\bibitem[Horn and Schunck(1981)]{horn1981determining}
+B.~K. Horn and B.~G. Schunck.
+\newblock Determining optical flow.
+\newblock \emph{Artificial intelligence}, 1981.
+
+\bibitem[Jabri et~al.(2020)Jabri, Owens, and Efros]{jabri2020space}
+A.~Jabri, A.~Owens, and A.~Efros.
+\newblock Space-time correspondence as a contrastive random walk.
+\newblock In \emph{NeurIPS}, 2020.
+
+\bibitem[Lai et~al.(2020)Lai, Lu, and Xie]{lai2020mast}
+Z.~Lai, E.~Lu, and W.~Xie.
+\newblock Mast: A memory-augmented self-supervised tracker.
+\newblock In \emph{CVPR}, 2020.
+
+\bibitem[Li and Hoiem(2017)]{li2017learning}
+Z.~Li and D.~Hoiem.
+\newblock Learning without forgetting.
+\newblock \emph{IEEE transactions on PAMI}, 2017.
+
+\bibitem[Oh et~al.(2019)Oh, Lee, Xu, and Kim]{oh2019video}
+S.~W. Oh, J.-Y. Lee, N.~Xu, and S.~J. Kim.
+\newblock Video object segmentation using space-time memory networks.
+\newblock In \emph{ICCV}, 2019.
+
+\bibitem[Wang et~al.(2020)Wang, Zhou, and Li]{wang2020contrastive}
+N.~Wang, W.~Zhou, and H.~Li.
+\newblock Contrastive transformation for self-supervised correspondence
+  learning.
+\newblock In \emph{AAAI}, 2020.
+
+\bibitem[Wang et~al.(2019)Wang, Jabri, and Efros]{wang2019learning}
+X.~Wang, A.~Jabri, and A.~A. Efros.
+\newblock Learning correspondence from the cycle-consistency of time.
+\newblock In \emph{CVPR}, 2019.
+
+\bibitem[Wang et~al.(2021)Wang, Zhao, Li, Wang, Torr, and
+  Bertinetto]{wang2021different}
+Z.~Wang, H.~Zhao, Y.-L. Li, S.~Wang, P.~Torr, and L.~Bertinetto.
+\newblock Do different tracking tasks require different appearance models?
+\newblock In \emph{NeurIPS}, 2021.
+
+\bibitem[Xie et~al.(2021)Xie, Ding, Wang, Zhan, Xu, Sun, Li, and
+  Luo]{xie2021detco}
+E.~Xie, J.~Ding, W.~Wang, X.~Zhan, H.~Xu, P.~Sun, Z.~Li, and P.~Luo.
+\newblock Detco: Unsupervised contrastive learning for object detection.
+\newblock In \emph{ICCV}, 2021.
+
+\bibitem[Xiu et~al.(2018)Xiu, Li, Wang, Fang, and Lu]{xiu2018pose}
+Y.~Xiu, J.~Li, H.~Wang, Y.~Fang, and C.~Lu.
+\newblock Pose flow: Efficient online pose tracking.
+\newblock In \emph{BMVC}, 2018.
+
+\bibitem[Xu and Wang(2021)]{xu2021rethinking}
+J.~Xu and X.~Wang.
+\newblock Rethinking self-supervised correspondence learning: A video
+  frame-level similarity perspective.
+\newblock In \emph{ICCV}, 2021.
+
+\bibitem[Xu et~al.(2018)Xu, Yang, Fan, Yue, Liang, Yang, and
+  Huang]{xu2018youtube}
+N.~Xu, L.~Yang, Y.~Fan, D.~Yue, Y.~Liang, J.~Yang, and T.~Huang.
+\newblock Youtube-vos: A large-scale video object segmentation benchmark.
+\newblock \emph{arXiv preprint arXiv:1809.03327}, 2018.
+
+\end{thebibliography}

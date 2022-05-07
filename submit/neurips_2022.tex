@@ -2,7 +2,7 @@
 
 
 % if you need to pass options to natbib, use, e.g.:
-%     \PassOptionsToPackage{numbers, compress}{natbib}
+\PassOptionsToPackage{numbers, sort&compress}{natbib}
 % before loading neurips_2022
 
 
@@ -19,7 +19,7 @@
 
 
 % to avoid loading the natbib package, add option nonatbib:
-%    \usepackage[nonatbib]{neurips_2022}
+% \usepackage[nonatbib]{neurips_2022}
 
 
 \usepackage[utf8]{inputenc} % allow utf-8 input
@@ -108,44 +108,34 @@
 
 
 \section{Introduction}
-Learning representations for video correspondence is a fundamental problem in computer vision, which is closely related to different video applications, including optical flow estimation, video object segmentation, keypoint tracking, etc. However, supervising such a representation requires a large number of dense annotations, which is unaffordable. Thus most approaches acquire supervision from simulations or limited annotations, which result in poor generalization in different downstream tasks. Recently, self-supervised feature learning is gaining significant momentum, and several pretext tasks are designed for space-time visual correspondence using abundant unlabeled videos. \\
-\\
-The key to this task lies in two different perspectives. The first one is \textbf{temporal feature learning}, which aims to learn the fine-grained correspondence of pixel/object between frames. With the nature of temporal coherence in the video, the temporal feature learning can be formed as a reconstruction task, where the query pixel in the target frame can be reconstructed by leveraging the information of adjacent reference frames within a local region. Then a reconstruction loss is applied to minimize the photometric error between the raw frame and its reconstruction [1][2]. However, in real videos, the temporal discontinuity occurs frequently due to the occlusions, illumination changes, and deformations, especially for pixels in each frame with severe down-sampling. In such scenarios, the frame reconstruction loss apparently becomes invalid. To alleviate the problem, MAST[1] proposes to apply frame reconstruction with a higher feature resolution by decreasing the stride of the backbone, which requires a larger memory and computation cost. Another way to exploit the free temporal supervision is by applying object-level reconstruction. [3] track object forward and backward with the objective of maximizing the temporal cycle correspondence consistency with reconstruction loss. However, compared to object-level reconstruction, which needs an extra localization module, the frame reconstruction is conducted on raw image space, which provides more accurate supervision for learning fine-grained correspondence.\\
-\\
-The second one is \textbf{spatial feature learning}, which pays more attention to learning the object appearance that is invariant to viewpoint and deformation changes. [4] adopt a novel intra-inter consistency loss to learn inter-video discriminative feature. [5] learn the space-time correspondence through a frame-wise contrastive loss. However, both methods are trained on video datasets and try to realize the spatial and temporal feature learning in a unified framework, which is sub-optimal for each of them. Recently, the contrastive model pre-trained on image data shows impressive performance for dense representation. This motivates us to design a framework that learns the spatial and temporal feature independently with image and video data.  \\
-\\
-In this paper, we decouple video correspondence learning into two separate processes, including spatial and temporal feature learning. To achieve this, we first train the model in a contrastive learning paradigm on ImageNet, which gives the model the ability to capture object appearance. Then, instead of training with a large video dataset, i.e., Kinetics[4] with 300k videos, we perform the temporal feature learning on YouTube-VOS, which consists of 3.5k videos. However, apart from the severe  information lost and temporal discontinuity due to large spatial down-sampling on frames, directly fine-tuning the old model with only new data will leads to a well-known phenomenon of catastrophic forgetting, which degrades the performance. To address the first problem, we propose a novel pyramid learning framework. The frame reconstruction is applied at different levels of network to better exploit the free temporal supervision. The pixels of target and reference frame with higher resolution have a lower chance of occurring temporal discontinuity, which induce a more accurate local correlation map. Thus we design a new loss named \textbf{local correlation distillation loss} that supports explicitly learning of the correlation map at the region with high uncertainty, which is achieved by taking the finest local correlation map as pseudo labels. At the same time, we freeze the model pre-trained on ImageNet as teacher. Then a \textbf{global correlation distillation loss} is proposed to keep the student the ability of instance discrimination which is closely related to object appearance modeling. \\
-% With both local and global distillation loss, the model learn a better representation for space-time correspondence.\\
-\\
-To sum up, our main contributions include: (a) We proposed a novel decoupled self-supervised video correspondence learning paradigm, including spatial and temporal feature learning. (b) We proposed a pyramid learning framework with local and global distillation loss to enable the model to estimate fine-grained correspondence and capture object appearance. (c) Last but not least, we verify the proposed approach in a series of correspondence-related tasks including video object segmentation, pose tracking, etc. Our approach consistently outperforms previous state-of-the-art self-supervised methods and is even comparable with some task-specific fully-supervised algorithms.
+Learning representations for video correspondence is a fundamental problem in computer vision, which is closely related to different video applications, including optical flow estimation~\cite{dosovitskiy2015flownet}\cite{horn1981determining}, video object segmentation~\cite{caelles2017one}\cite{oh2019video}, keypoint tracking~\cite{xiu2018pose}, etc. However, supervising such a representation requires a large number of dense annotations, which is unaffordable. Thus most approaches acquire supervision from simulations or limited annotations, which result in poor generalization in different downstream tasks. Recently, self-supervised feature learning is gaining significant momentum, and several pretext tasks are designed for space-time visual correspondence using abundant unlabeled videos. 
 
+The key to this task lies in two different perspectives. The first one is \textbf{temporal feature learning}, which aims to learn the fine-grained correspondence of pixel/object between frames. With the nature of temporal coherence in the video, the temporal feature learning can be formed as a reconstruction task, where the query pixel in the target frame can be reconstructed by leveraging the information of adjacent reference frames within a local region. Then a reconstruction loss is applied to minimize the photometric error between the raw frame and its reconstruction. However, in real videos, the temporal discontinuity occurs frequently due to the occlusions, dramatic appearance changes, and deformations, especially for pixels in each frame with severe down-sampling. In such scenarios, the frame reconstruction loss apparently becomes invalid, which result in inferior performance. MAST~\cite{lai2020mast} proposes to apply frame reconstruction with a higher feature resolution by decreasing the stride of the backbone, which requires a larger memory and computation cost. Besides, the frame reconstruction is achieved under the assumption of temporal continuity, thus fail to learn representation that is invariant to appearance change in time.  Another way to exploit the free temporal supervision is by exploiting temporal cycle-consistency.  \cite{jabri2020space}\cite{wang2019learning} track object forward and backward with the objective of maximizing the temporal cycle correspondence consistency with reconstruction and contrastive loss. However, compared to the correspondence which is realized at object-level, the frame reconstruction is conducted on raw image space, which provides more accurate supervision for learning fine-grained correspondence.
 
-% \begin{figure}[!tb]
-%   \centering
-%   \subfigure[\scriptsize Temporal Feature Learning]{
-%     \label{fig:motion_map:a}
-%     \includegraphics[width=1.0\textwidth]{figure/tissor/tissor.pdf}}
-%   % \hspace{0.1in}
-%   \subfigure[\scriptsize Spatial Feature Learning]{
-%     \label{fig:motion_map:b}
-%     \includegraphics[width=1.0\textwidth]{figure/tissor/tissor2.pdf}}
-%   \caption{\small The example of (a) input video sequence, (b) optical flow, (c) motion boundary, (d) motion map, (e) valuable mutual information in the region with large movement and (f) nuisance mutual information in the relatively static region. The red box and green box represent two views generated from the identical instance for contrastive learning.}
-%   \label{fig:motion_map}
-% \end{figure}
 \begin{figure}[!tb]
   \centering
   {\includegraphics[width=1.0\textwidth]{figure/tissor/tissor6.pdf}}
-  \caption{\small tissor.}
+  \caption{\small Visualization of our key idea. Given a query point randomly sampled in target frame, we visualize the result of computing the local correlation and global correlation map $w.r.t.$ reference frame. The dashed line in red represents the range of computing correlation map $w.r.t.$ query point. The reference frame is randomly sampled in the memory bank of inference strategy [11]. }
   \label{fig:tissor}
   \vspace{-6mm}
 \end{figure}
 
-\section{Related Work}
-\textbf{Object-level correspondence.} The goal of visual tracking is to determine a bounding box in each frame based on an annotated box in the reference image. Most methods belong to one of the two categories that use: (a) the tracking-by-detection framework [1, 20, 46, 25], which models tracking as detection applied independently to individual frames; or (b) the tracking-by-matching framework that models cross-frame relations and includes several early attempts, e.g., mean-shift trackers [8, 54], kernelized correlation filters (KCF) [14, 27], and several works that model correlation filters as differentiable blocks [32, 33, 7, 47]. Most of these methods use annotated bounding boxes [52] in every frame of the videos to learn feature representations for tracking. Our work can be viewed as exploiting the tracking-by-matching framework in a self-supervised manner. \\
-\\
-\textbf{Fine-grained correspondence.} Dense correspondence between video frames has been widely applied for optical flow and motion estimation [31, 40, 29, 16], where the goal is to track individual pixels. Most deep neural networks [16, 40] are trained with the objective of regressing the groundtruth optical flow produced by synthetic datasets [4, 10]. In contrast to many classic methods [31, 29] that model dense correspondence as a matching problem, direct regression of pixel offsets has limited capability for frames containing dramatic appearance changes [3, 39], and suffers from problems related to domain shift when applied to real-world scenarios.
+The second one is \textbf{spatial feature learning}, which pays more attention to learning the object appearance that is invariant to viewpoint and deformation changes. \cite{wang2020contrastive} adopts a novel intra-inter consistency loss to learn inter-video discriminative feature while \cite{xu2021rethinking} learns the space-time correspondence through a frame-wise contrastive loss. However, both methods are trained on video datasets and try to realize the spatial and temporal feature learning in a unified framework, which is sub-optimal for each of them. Recently, as mentioned in~\cite{wang2021different}, the contrastive model~\cite{he2020momentum}\cite{xie2021detco} pre-trained on image data shows impressive performance for video correspondence. This motivates us to design a framework that learns the spatial and temporal feature independently with image and video data.  
 
-\textbf{Self-supervised learning.} Recently, numerous approaches have been developed for correspondence learning via various self-supervised signals, including image [17] or color transformation [44] and cycle-consistency [51, 45]. Self-supervised learning of correspondence in videos has been explored along the two different directions – for region-level localization [51, 45] and for fine-grained pixel level matching [44, 23]. In [45], a correlation filter is learned to track regions via a cycle-consistency constraint, and no pixel-level correspondence is determined. [51] develops patch-level tracking by modeling the similarity transformation of pixels within a fixed rectangular region. Conversely, several methods learn a matching network by transforming color/RGB information between adjacent frames [44, 24, 23]. As no region-level regularization is exploited, these approaches are less effective when color features are less distinctive (see Figure 1(b)). In contrast, our method learns object-level and pixel-level correspondence jointly across video frames in a self-supervised manner.
+In this paper, we decouple video correspondence learning into two separate processes, including spatial and temporal feature learning. To achieve this, we first train the model in a contrastive learning paradigm on ImageNet~\cite{deng2009large}, which gives the model the ability to capture object appearance. Then, instead of training with a large video dataset, $i.e.$, Kinetics~\cite{carreira2017quo} with 300k videos, we perform the temporal feature learning on YouTube-VOS~\cite{xu2018youtube}, which consists of 3.5k videos. However, apart from the severe  information lost and temporal discontinuity due to large spatial down-sampling on frames, directly fine-tuning the old model with only new data will leads to a well-known phenomenon of catastrophic forgetting~\cite{li2017learning}. To address the first problem, we propose a novel pyramid learning framework. The frame reconstruction is applied at different levels of network to better exploit the free temporal supervision. As you can see in Figure \ref{fig:tissor} (a), the pixels of target and reference frame with higher resolution have a lower chance of occurring temporal discontinuity, which provides a more accurate local correlation map. Thus we design a new loss named \textbf{local correlation distillation loss} that supports explicitly learning of the correlation map in the region with high uncertainty, which is achieved by taking the finest local correlation map as pseudo labels. At the same time, as shown in Figure \ref{fig:tissor} (b), we freeze the model pre-trained on ImageNet as teacher. Then a \textbf{global correlation distillation loss} is proposed to keep the student the ability of capturing object-level correspondence which is closely related to object appearance modeling. 
+
+To sum up, our main contributions include: (a) We propose a decoupled learning paradigm for self-supervised video correspondence, including spatial and temporal feature learning. (b) We propose a pyramid learning framework with local correlation distillation to enable the model to estimate fine-grained correspondence. (c) We introduce a global correlation distillation loss to keep the ability of capturing object appearance when training on video dataset. (d) Last but not least, we verify the proposed approach in a series of correspondence-related tasks including video object segmentation, human parts propagation and pose tracking. Our approach consistently outperforms previous state-of-the-art self-supervised methods and is even comparable with some task-specific fully-supervised algorithms.
+
+\section{Related Work}
+\textbf{Self-supervised learning for video correspondence.} 
+Recent approaches focus on learning correspondence from unlabeled videos in a self-supervised manner. The task requires the model to have the ability to capture object appearance and estimate the fine-grained correspondence between frames at the same time, which has proceeded along two different dimensions: reconstruction-based methods and cycle-consistency-based methods. In the first type, a query point is reconstructed from adjacent frames while the latter performs forward-backward tracking with the objective of minimize the cycle inconsistency. Through getting promising results, most methods address the problem considering only one perspective. VFS learns the spatial temporal representation through a frame-wise contrastive loss while DUL and Contra try to realize the spatial and temporal feature learning in a unified framework by exploiting the inter-video constraint, which may result in sub-optimal performance. In this paper, we learn a better representation by decoupling the video correspondence learning to two separate processes including spatial and temporal feature learning.
+
+
+\textbf{Self-supervised spatial feature learning.} Self-supervised spatial feature learning aims to learn discriminative feature of object appearance with unlabeled data, which recently has get promising result with contrastive learning. In an early work [44], the constrastive learning is formulated as instance discrimination task, which requires the model to return low values for similar pairs and high values for dissimilar pairs. Recently, the performance is further improved by creating a dynamic memory-bank, introducing online clustering and avoiding the use of negative pairs. Further more, DensCL, InsLoc and DetCo propose various pre-text tasks to adapt the contrastive learning to tasks which require dense prediction. Even through showing superior performance for video correspondence learning~[11], the contrastive model pre-trained on image data still struggles to modeling the fine-graied correspondence between video frames. 
+
+\textbf{Self-supervised temporal feature learning. } 
+Compared to spatial feature learning, temporal feature learning focus on learning the motion information of video, which is closely related to optical flow and motion estimation. Most methods [12][11] directly regress the groundtruth optical flow produced by synthetic datasets thus suffering from severe domain shift. To deal with the problem, [1][3] try to learn the dense correspondence on real video without any label by minimizing the photometric error between the raw frame and its reconstruction. However, the video frames usually contain temporal discontinuity including dramatic appearance change and occlusions, which seriously degrades the capability of the method. [12][14] alleviate the problem by utilizing the optical flow predictions from teacher model to guide the learning of student model in the region with occlusions. In this paper, we address the issue from two perspectives: (1)~Learning a better representation that is invariant for appearance change. (2)~Supervising the correlation by taking the finest corelation as pseudo labels.
+
 
 \begin{figure}[!tb]
   \centering
@@ -154,7 +144,8 @@ To sum up, our main contributions include: (a) We proposed a novel decoupled sel
   \label{fig:framework}
   \vspace{-7mm}
 \end{figure}
-% \vspace{-10pt}
+
+
 
 \section{Approach}
 The basic idea of our method is to decouple video correspondence learning into two separate processes including spatial feature learning and temporal feature learning. We first train our model using contrastive loss with image data to learn the object appearance that is invariant to viewpoint. Then, we perform the temporal feature learning on a small video dataset to learn the fine-grained correspondence between frames. To deal with the problems including temporal discontinuity and catastrophic forgetting when training on video data, a pyramid learning framework is proposed with local and global correlation distillation loss.
@@ -188,7 +179,7 @@ Where ‘·’ stands for the dot product. Each point in $F^l_t$ and $F^l_{r}$ c
 
 \subsection{Temporal Feature Learning}
 \label{temporal_feature_learning}
-We then perform temporal feature learning right after spatial feature learning. Temporal feature learning is aiming to learn the fine-grained correspondence between video frames. Recently, a few studies [40, 84] introduce a reconstruction-based correspondence learning scheme, where each query pixel in the target frame can be reconstructed by leveraging the information of adjacent reference frames within a local region. More specifically, the target and reference frame $I_{t}, I_r$ are projected into a  fine-grained pixel embedding space. We denoted these embedding as $F_t,F_{r} \in \mathbb{R}^{hw \times d}$. For each query pixel $i$ in $I_{t}$, we can calculate the local correlation $c_{i,j}$ with reference frame within a local region with a softmax formulation:
+We then perform temporal feature learning right after spatial feature learning. Temporal feature learning aims to learn the fine-grained correspondence between video frames. Recently, a few studies [40, 84] introduce a reconstruction-based correspondence learning scheme, where each query pixel in the target frame can be reconstructed by leveraging the information of adjacent reference frames within a local region. More specifically, the target and reference frame $I_{t}, I_r$ are projected into a  fine-grained pixel embedding space. We denoted these embedding as $F_t,F_{r} \in \mathbb{R}^{hw \times d}$. For each query pixel $i$ in $I_{t}$, we can calculate the local correlation $c_{i,j}$ with reference frame within a local region with a softmax formulation:
 \begin{equation}\label{eq:local_correlation}
   \small
   \begin{aligned}
@@ -249,7 +240,7 @@ Eventually, our training loss of temporal feature learning is defined as: $\math
 We verify the merit of our method in a series of correspondence-related tasks, including semi-supervised video object segmentation, pose keypoints tracking, human parts segmentation propagation. In this section we will first introduce our experiments settings including details of implementation  and evaluation. Then detailed ablation studies are performed to  explain how each component of our method works. Last but not least, we finally report the performance comparision with state-of-the-art methods to further verify the effectiveness of our method.
 \subsection{Implementation Details}
 \textbf{Architectures.} We exploit the encoder $\phi$ with both ResNet-18 and ResNet-50 [27, 37] for self-supervised training. Following prior works [12], we reduce the stride of convolutional layers in $\phi$ to increase the spatial resolution of feature maps on layer $res4$  by a factor of 4 or 8 ($i.e,$ downsampling rate 8 or 4). 
-% Further more we set the stride of $res5$ layer to 4 in order to increase the receptive filed for spatial feature learning.
+Further more we set the stride of $res5$ layer to 4 in order to increase the receptive filed for spatial feature learning.
 
 \textbf{Training.}
 We first train our model using contrastive loss for 200 epochs on ImageNet following most hyper-parameters settings of [76]. Then we perform temporal feature learning on YouTube-VOS train set [16] which consists of 3.5k videos. In this stage, the video frame is resized into 256$\times$256 and channel-wise dropout in Lab color space [39] is adopted as the information bottleneck. We train the encoder for 100k iterations with mini-batch of 128  using Adam as our optimizer. The initial learning rate is set to 1e-4 with a cosine (half-period) learning rate schedule. The frame reconstruction is applied on both $res3$ and $res4$ layer while we realize global correlation distillation on $res5$ layer.
@@ -291,8 +282,8 @@ The ablation study is performed with semi-supervised video object segmentation o
               3&&& $\checkmark$& $\checkmark$& $\checkmark$ &   &    YTV& Res18 &68.1 \\
               4&&& $\checkmark$& $\checkmark$& $\checkmark$ &  $\checkmark$ &   YTV& Res18 & 69.0 \\ 
               \hline
-              5&$\checkmark$& &$\checkmark$& $\checkmark$& $\checkmark$ &  $\checkmark$ &   ImageNet & Res18 & 69.3 \\ 
-              6&$\checkmark$& $\checkmark$  &$\checkmark$& $\checkmark$& $\checkmark$ &  $\checkmark$ &   ImageNet & Res18 & \textbf{70.5} \\ 
+              5&$\checkmark$& &$\checkmark$& $\checkmark$& $\checkmark$ &  $\checkmark$ &   I + YTV & Res18 & 69.3 \\ 
+              6&$\checkmark$& $\checkmark$  &$\checkmark$& $\checkmark$& $\checkmark$ &  $\checkmark$ &   I + YTV & Res18 & \textbf{70.5} \\ 
               \hline
             \end{tabular}%
               }
@@ -305,17 +296,17 @@ The ablation study is performed with semi-supervised video object segmentation o
             Method         & Dataset       & Arch &$\mathcal{J} \& \mathcal{F}_m \uparrow$ \\ 
             \hline
             $\mathcal{L}_{\mathrm{nce}}$ & I         & Res50 &66.5          \\
-            w $\mathcal{L}_{\mathrm{t}}$    & ImageNet & Res50 &69.6          \\
+            w $\mathcal{L}_{\mathrm{t}}$    & I + YTV & Res50 &69.6          \\
             % + EWC            & ImageNet & Res50 &68.9          \\
-            w $\mathcal{L}_{\mathrm{t}}$ + LwF            & ImageNet & Res50 &69.9          \\
-            w $\mathcal{L}_{\mathrm{t}}$ + $\mathcal{L}_{\mathrm{gc}}$ & ImageNet & Res50 &\textbf{71.2} \\ 
+            w $\mathcal{L}_{\mathrm{t}}$ + LwF            & I + YTV & Res50 &69.9          \\
+            w $\mathcal{L}_{\mathrm{t}}$ + $\mathcal{L}_{\mathrm{gc}}$ & I + YTV & Res50 &\textbf{71.3} \\ 
             \hline
             \end{tabular}%
             }
           }
     \captionsetup{font=small}
     \caption{Ablation study for each component in spatial and temporal feature learning.  The "$p$" and "$e$" in (a) correspond to pyramid frame reconstruction and entropy-based selection. Models in (b) are all pre-trained on ImageNet with contrastive loss and models with "w" are subsequently trained on YouTube-VOS using different methods. I: ImageNet [11].  YTV: YouTube-VOS [12].}
-    \label{tab:ablations}\vspace{-6mm}
+    \label{tab:ablations}\vspace{-3mm}
 \end{table*}
 
 \textbf{Temporal feature learning.} We first examine how each design in temporal feature learning impacts the overall performance, which are shown in Table \ref{tab:ablations} (a) 1 $\sim$ 4. To have a clear look, we train the model from scratch on YouTube-VOS when examining the efficacy of our components for temporal feature learning. The baseline is to apply frame reconstruction $\mathcal{L}_{\mathrm{rec}}$. The $p$, $\mathcal{L}_{\mathrm{lc}}$ and $e$ represents pyramid frame reconstruction, local correlation distillation without and with entropy-based selection. From the table, we can see leveraging more supervision of reconstruction at each level leads to an improvement in the range of 0.8\%. With the guidance of a more fine-grained local correlation map, $\mathcal{L}_{\mathrm{lc}}$ boosts up the accuracy from 65.4\% to 68.1\%. Moreover, enforcing the local correlation distillation to focus on the region with higher entropy leads to a performance gain in the range of 1\%. By fusing the above components, the performance finally reaches 69.0\%.
@@ -334,12 +325,11 @@ The ablation study is performed with semi-supervised video object segmentation o
 
 
 \textbf{Further analysis.} 
-We give a further analysis here based on the above experiments. On the one hand, temporal feature learning helps to learn the fine-grained correspondence related to motion estimation between frames, which is unable to accomplish by training an appearance model. As you can see in the first row of Figure \ref{fig:ablations}, the appearance model trained with $\mathcal{L}_{\mathrm{nce}}$ is misled by two patches at different locations ( $i.e.$ two feats of the tiger ) with similar appearance while the model trained with $\mathcal{L}_{\mathrm{t}}$ tends to learn a better temporal representation for fine-grained correspondence. However, in the second row of Figure \ref{fig:ablations}, the model trained with $\mathcal{L}_{\mathrm{t}}$ fails to capture temporal correspondence with a local correlation  when facing severe temporal discontinuity  while the model trained with $\mathcal{L}_{\mathrm{nce}}$ is able to correct the mistakes by tracking the points based on the object appearance ( see with $\mathcal{L}_{\mathrm{nce}}$ and with all ).
-
+We give a further analysis here based on the above experiments. On the one hand, temporal feature learning helps to learn the fine-grained correspondence related to motion estimation between frames, which is unable to accomplish by training an appearance model. As you can see in the first row of Figure \ref{fig:ablations}, the appearance model trained with $\mathcal{L}_{\mathrm{nce}}$ is misled by two patches at different locations ( $i.e.$ two feats of the tiger ) which has similar appearance, while the model trained with $\mathcal{L}_{\mathrm{t}}$ tends to learn a better temporal representation for fine-grained correspondence. However, in the second row of Figure \ref{fig:ablations}, the model trained with $\mathcal{L}_{\mathrm{t}}$ fails to capture temporal correspondence with a local correlation  when facing severe temporal discontinuity  while the model trained with $\mathcal{L}_{\mathrm{nce}}$ is able to correct the mistakes by tracking the points based on the object appearance ( see with $\mathcal{L}_{\mathrm{nce}}$ and with all ).
 
 \subsection{Comparison with State-of-the-art}
 \textbf{Results for video object segmentation.}
-We compare our method against previous self-supervised methods in Table \ref{table:sota}. For fair comparison, we report both results with setting the stride of encoder to 4 and 8. The results are all reported with layer $res4$ across all methods. Our method achieves state-of-the-art performance using both ResNet-18 and ResNet-50. For ResNet-18, our method with a stride of 8 achieves 70.5\%, making a absolute performance improvement by 1.2\% over all baselines using same architecture. Benefiting from less information lost for temporal feature learning by setting the stride of encoder to 4, the performance of method reaches 73.2\%, leading a performance gain of 3.5\% over MAMP, which consistently verify the idea of our methods. Besides, we found our method trained with only temporal feature learning  reaches 69.0\%/71.2\% with stride of 8/4, surpassing all methods pre-trained on Kinetics and TrackingNet which have much bigger size than YouTube-VOS. For ResNet-50, our method still outperforms all baseline methods by 2.3\%. More remarkably, our method even outperforms some task-specific fully-supervised algorithms [14][15].
+We compare our method against previous self-supervised methods in Table \ref{table:sota}. For fair comparison, we report both results with setting the stride of encoder to 4 and 8. The results are all reported with layer $res4$ across all methods. Our method achieves state-of-the-art performance using both ResNet-18 and ResNet-50. For ResNet-18, our method with a stride of 8 achieves 70.5\%, making a absolute performance improvement by 1.2\% over all baselines using same architecture. Benefiting from less information lost for temporal feature learning by setting the stride of encoder to 4, the performance of method reaches 73.2\%, leading a performance gain of 3.5\% over MAMP, which consistently verify the idea of our methods. Besides, we found our method trained with only temporal feature learning  reaches 69.0\%/71.2\% with stride of 8/4, surpassing all methods pre-trained on Kinetics and TrackingNet which have much bigger size than YouTube-VOS. For ResNet-50, our method still outperforms all baseline methods by 2.4\%. More remarkably, our method even outperforms some task-specific fully-supervised algorithms [14][15].
 
 \begin{table*}[t]
 	\centering
@@ -368,7 +358,7 @@ We compare our method against previous self-supervised methods in Table \ref{tab
 			& 54.3 & 52.6 & 56.1   \\
 			ContrastCorr & & ResNet-18 & 8 & COCO  & TrackingNet
 			& 63.0 & 60.5  & 65.5  \\
-      UVC  & & ResNet-18 & 8 & - & Kinetics
+      UVC  & & ResNet-18 & 8 & COCO & Kinetics
 			& 57.8 & 56.3  & 59.2  \\
 			VFS  & & ResNet-18 & 8 & - & Kinetics
 			& 66.7 & 64.0  & 69.4  \\
@@ -403,7 +393,9 @@ We compare our method against previous self-supervised methods in Table \ref{tab
 			& 66.3 & 64.5  & 68.2  \\
       % DetCo & ResNet-50 & 8 & I &-
 			% & 66.5 & 64.7  & 68.4  \\
-      UVC  & & ResNet-50 & 8 & - & Kinetics
+      TimeCycle & & ResNet-50 & 8 & - & VLOG
+			& 48.7 & 46.4  & 50.0  \\
+      \textcolor{red}{UVC}  & & ResNet-50 & 8 & COCO & Kinetics
 			& 57.8 & 56.3  & 59.2  \\
       VINCE & & ResNet-50 & 8 & - & Kinetics
 			& 65.6 & 63.4  & 67.8  \\
@@ -413,7 +405,7 @@ We compare our method against previous self-supervised methods in Table \ref{tab
 			& 68.9     \\
       \hline
       \textbf{Ours} & & ResNet-50 & 8 & ImageNet & YTV
-			& \textbf{71.2}   & &  \\
+			& \textbf{71.3}   & &  \\
       \hline
       \textcolor{gray}{SiamMask} & \textcolor{gray}{$\checkmark$} & \textcolor{gray}{ResNet-50} & \textcolor{gray}{-} & \textcolor{gray}{I + C} & \textcolor{gray}{YTV}
 			& \textcolor{gray}{56.4} & \textcolor{gray}{54.3}  & \textcolor{gray}{58.5}  \\
@@ -425,14 +417,11 @@ We compare our method against previous self-supervised methods in Table \ref{tab
 		\end{tabular}
 	}
 	\captionsetup{font=footnotesize}
-	\caption{\textbf{Quantitative results for video object segmentation on validation set of DAVIS-2017}. We show results of state-of-the-art self-supervised methods and some \textcolor{gray}{supervised} methods for comparison. "Dataset" represents the dataset(s) for pre-training, including: ~I:ImageNet~(1.28m). ~C:COCO~(30k). ~T:TrackingNet~(300h). ~K:Kinetics~(800h). ~YTV:YouTube-VOS~(5h). ~D:DAVIS 2017~(-). ~P:PASCAL-VOC~(-). We report the data size for self-supervised methods~(~total number/duration of image/video dataset~).}
+	\caption{\textbf{Quantitative results for video object segmentation on validation set of DAVIS-2017}. We show results of state-of-the-art self-supervised methods and some \textcolor{gray}{supervised} methods for comparison. "Dataset" represents the dataset(s) for pre-training, including: ~I:ImageNet~(1.28m). ~C:COCO~(30k). ~O:OxUvA~(14h). ~T:TrackingNet~(300h). ~K:Kinetics~(800h). ~V:VLOG~(344h). ~YTV:YouTube-VOS~(5h). ~D:DAVIS 2017~(-). ~P:PASCAL-VOC~(-). We report the data size for self-supervised methods~(~total number/duration of image/video dataset~).}
 	\label{table:sota}
-	\vspace{-29pt}
+	\vspace{-17pt}
 \end{table*}
 
-\textbf{Results for human part propagation.} Next, we evaluate our method on human part tracking. Experiments are conducted on the validation set of VIP [11], which consists of 50 videos with 19 human semantic part classes, requiring more precise matching than DAVIS. Following [45], we adopt mean intersection-over-union (mIoU) as our evaluation metric and resize the video frames to 560 $\times$ 560. All models are set to ResNet-18 with a stride of 8 for fair comparison.  The results are shown in Table \ref{table:vip}. Our method achieves state-of-the-art performance, surpassing all previous state-of-the-art by 0.8\%. Notably, our model outperforms ATEN [18] which is specifically designed for this dataset using human annotations.
-
-  
 \begin{wraptable}{r}{8cm}
 	\centering
 	\small
@@ -465,29 +454,39 @@ We compare our method against previous self-supervised methods in Table \ref{tab
 	\label{table:vip}
 	\vspace{-5pt}
 \end{wraptable}
-\textbf{Results for human pose tracking.} We then make performance comparison on the downstream task of human pose tracking. We conduct the experiments on the validation of JHMDB [35] which has 268 videos.  The annotations consist of 15 body joints for each person. Probability of correct keypoint(PCK) [101] is utilized here to examine the accuracy between result and  ground-truth with different threshold. Follow the evaluation protocol of [24, 15], we resize the video frames to 320 $\times$ 320. The results in Table \ref{table:vip} show a consistently performance gain over previous methods. which successfully demonstrates the transferability of our method to different downstream tasks.
+
+\textbf{Results for human part propagation.} Next, we evaluate our method on human part tracking. Experiments are conducted on the validation set of VIP [11], which consists of 50 videos with 19 human semantic part classes, requiring more precise matching than DAVIS. Following [45], we adopt mean intersection-over-union (mIoU) as our evaluation metric and resize the video frames to 560 $\times$ 560. All models except Time-Cycle~\cite{wang2019learning} are set to ResNet-18 with a stride of 8 for fair comparison.  The results are shown in Table \ref{table:vip}. Our method achieves state-of-the-art performance, surpassing all previous state-of-the-art by 0.8\%. Notably, our model outperforms ATEN [18] which is specifically designed for the task using human annotations. Figure \ref{fig:quan} (b) depicts some visualization results on several representative videos.
+
+  
+
+\textbf{Results for human pose tracking.} We then make performance comparison on the downstream task of human pose tracking. We conduct the experiments on the validation of JHMDB [35] which has 268 videos.  The annotations consist of 15 body joints for each person. Probability of correct keypoint(PCK) [101] is utilized here to examine the accuracy between result and  ground-truth with different thresholds. Follow the evaluation protocol of [24, 15], we resize the video frames to 320 $\times$ 320. The results in Table \ref{table:vip} show a consistently performance gain over previous methods, which successfully demonstrates the transferability of our method to different downstream tasks. The visualization results in Figure \ref{fig:quan}~(c) show the robustness of our approach towards various challenges.
 
 
 \begin{figure}[!tb]
   \centering
   {\includegraphics[width=1.0\textwidth]{figure/quantitative_results/quan.pdf}}
-  \caption{\small Visualization of the ablation study. Given a query point randomly sampled in target frame, we visualize the result of computing the local correlation and global correlation map $w.r.t.$ reference frame. The dashed line in red represents the range of computing correlation map $w.r.t.$ query point. The reference frame is randomly sampled in the memory bank of inference strategy [11]. }
+  \caption{\small Qualitative results for label propagation. Given a first frame with different annotation highlighted with a blue outline, we propagate it to current frame without fine-tuning. (a) Video object segmentation on DAVIS-2017. (b) Human part propagation on VIP. (c) Pose keypoint tracking on JHMDB. }
   \label{fig:quan}
   \vspace{-3mm}
 \end{figure}
 
 \section{Conclusions}
-We then make performance comparison on the downstream task of human pose tracking. We conduct the experiments on the validation of JHMDB [35] which has 268 videos. The annotations consist of 15 body joints for each person. Probability of correct keypoint(PCK) [101] is utilized here to examine the accuracy between result and  ground-truth with a threshold $\sigma $. The results in Table \ref{table:vip} show a consistently performance gain over previous methods, which successfully demonstrates the transferability of our method to different downstream tasks.We then make performance comparison on the downstream task of human pose tracking. We conduct the experiments on the validation of JHMDB [35] which has 268 videos. The annotations consist of 15 body joints for each person. Probability of correct keypoint(PCK) [101] is utilized here to examine the accuracy between result and  ground-truth with a threshold $\sigma $. The results in Table \ref{table:vip} show a consistently performance gain over previous methods, which successfully demonstrates the transferability of our method to different downstream tasks.
+We then make performance comparison on the downstream task of human pose tracking. We conduct the experiments on the validation of JHMDB [35] which has 268 videos. The annotations consist of 15 body joints for each person. Probability of correct keypoint(PCK) [101] is utilized here to examine the accuracy between result and  ground-truth with a threshold $\sigma $. The results in Table \ref{table:vip} show a consistently performance gain over previous methods, which successfully demonstrates the transferability of our method to different downstream tasks.We then make performance comparison on the downstream task of human pose tracking. We conduct the experiments on the validation of JHMDB [35] which has 268 videos. The annotations consist of 15 body joints for each person. Probability of correct keypoint(PCK) [101] is utilized here to examine the accuracy between result and  ground-truth with different thresholds. The results in Table \ref{table:vip} show a consistently performance gain over previous methods, which successfully demonstrates the transferability of our method to different downstream tasks.
 
-\section*{References}
+
 \medskip
 
 
 {
 \small
 
-
+\bibliographystyle{abbrvnat}
+\bibliography{neurips_2022}
 }
+% {\small
+% \bibliographystyle{ieee_fullname}
+% \bibliography{neurips_2022}
+% }
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
