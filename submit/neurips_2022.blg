@@ -3,44 +3,44 @@ Capacity: max_strings=100000, hash_size=100000, hash_prime=85009
 The top-level auxiliary file: neurips_2022.aux
 The style file: abbrvnat.bst
 Database file #1: neurips_2022.bib
-You've used 17 entries,
+You've used 53 entries,
             2763 wiz_defined-function locations,
-            656 strings with 7036 characters,
-and the built_in function-call counts, 8459 in all, are:
-= -- 640
-> -- 688
-< -- 5
-+ -- 230
-- -- 213
-* -- 687
-:= -- 1329
-add.period$ -- 51
-call.type$ -- 17
-change.case$ -- 122
-chr.to.int$ -- 17
-cite$ -- 34
-duplicate$ -- 391
-empty$ -- 663
-format.name$ -- 238
-if$ -- 1749
-int.to.chr$ -- 1
+            777 strings with 13091 characters,
+and the built_in function-call counts, 27616 in all, are:
+= -- 2093
+> -- 2343
+< -- 11
++ -- 784
+- -- 729
+* -- 2318
+:= -- 4338
+add.period$ -- 159
+call.type$ -- 53
+change.case$ -- 401
+chr.to.int$ -- 51
+cite$ -- 106
+duplicate$ -- 1232
+empty$ -- 2074
+format.name$ -- 800
+if$ -- 5699
+int.to.chr$ -- 3
 int.to.str$ -- 1
-missing$ -- 17
-newline$ -- 93
-num.names$ -- 68
-pop$ -- 301
+missing$ -- 53
+newline$ -- 273
+num.names$ -- 212
+pop$ -- 971
 preamble$ -- 1
-purify$ -- 105
+purify$ -- 348
 quote$ -- 0
-skip$ -- 284
+skip$ -- 910
 stack$ -- 0
-substring$ -- 34
-swap$ -- 31
-text.length$ -- 0
+substring$ -- 151
+swap$ -- 112
+text.length$ -- 1
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 187
+type$ -- 583
 warning$ -- 0
-while$ -- 51
+while$ -- 162
 width$ -- 0
-write$ -- 211
+write$ -- 644

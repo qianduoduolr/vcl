@@ -1,9 +1,15 @@
-\begin{thebibliography}{17}
+\begin{thebibliography}{53}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
   \providecommand{\doi}[1]{doi: #1}\else
   \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Araslanov et~al.(2021)Araslanov, Schaub-Meyer, and
+  Roth]{araslanov2021dense}
+N.~Araslanov, S.~Schaub-Meyer, and S.~Roth.
+\newblock Dense unsupervised learning for video segmentation.
+\newblock In \emph{NeurIPS}, 2021.
 
 \bibitem[Caelles et~al.(2017)Caelles, Maninis, Pont-Tuset, Leal-Taix{\'e},
   Cremers, and Van~Gool]{caelles2017one}
@@ -12,10 +18,22 @@ S.~Caelles, K.-K. Maninis, J.~Pont-Tuset, L.~Leal-Taix{\'e}, D.~Cremers, and
 \newblock One-shot video object segmentation.
 \newblock In \emph{CVPR}, 2017.
 
+\bibitem[Caron et~al.(2020)Caron, Misra, Mairal, Goyal, Bojanowski, and
+  Joulin]{caron2020unsupervised}
+M.~Caron, I.~Misra, J.~Mairal, P.~Goyal, P.~Bojanowski, and A.~Joulin.
+\newblock Unsupervised learning of visual features by contrasting cluster
+  assignments.
+\newblock In \emph{NeurIPS}, 2020.
+
 \bibitem[Carreira and Zisserman(2017)]{carreira2017quo}
 J.~Carreira and A.~Zisserman.
 \newblock Quo vadis, action recognition? a new model and the kinetics dataset.
 \newblock In \emph{CVPR}, 2017.
+
+\bibitem[Chen and He(2021)]{chen2021exploring}
+X.~Chen and K.~He.
+\newblock Exploring simple siamese representation learning.
+\newblock In \emph{CVPR}, 2021.
 
 \bibitem[Deng(2009)]{deng2009large}
 J.~Deng.
@@ -28,6 +46,38 @@ A.~Dosovitskiy, P.~Fischer, E.~Ilg, P.~Hausser, C.~Hazirbas, V.~Golkov, P.~Van
   Der~Smagt, D.~Cremers, and T.~Brox.
 \newblock Flownet: Learning optical flow with convolutional networks.
 \newblock In \emph{ICCV}, 2015.
+
+\bibitem[Everingham et~al.(2015)Everingham, Eslami, Van~Gool, Williams, Winn,
+  and Zisserman]{everingham2015pascal}
+M.~Everingham, S.~Eslami, L.~Van~Gool, C.~K. Williams, J.~Winn, and
+  A.~Zisserman.
+\newblock The pascal visual object classes challenge: A retrospective.
+\newblock \emph{International journal of computer vision}, 2015.
+
+\bibitem[Fouhey et~al.(2018)Fouhey, Kuo, Efros, and Malik]{fouhey2018lifestyle}
+D.~F. Fouhey, W.-c. Kuo, A.~A. Efros, and J.~Malik.
+\newblock From lifestyle vlogs to everyday interactions.
+\newblock In \emph{CVPR}, 2018.
+
+\bibitem[Gordon et~al.(2020)Gordon, Ehsani, Fox, and
+  Farhadi]{gordon2020watching}
+D.~Gordon, K.~Ehsani, D.~Fox, and A.~Farhadi.
+\newblock Watching the world go by: Representation learning from unlabeled
+  videos.
+\newblock \emph{arXiv preprint arXiv:2003.07990}, 2020.
+
+\bibitem[Grill et~al.(2020)Grill, Strub, Altch{\'e}, Tallec, Richemond,
+  Buchatskaya, Doersch, Avila~Pires, Guo, Gheshlaghi~Azar,
+  et~al.]{grill2020bootstrap}
+J.-B. Grill, F.~Strub, F.~Altch{\'e}, C.~Tallec, P.~Richemond, E.~Buchatskaya,
+  C.~Doersch, B.~Avila~Pires, Z.~Guo, M.~Gheshlaghi~Azar, et~al.
+\newblock Bootstrap your own latent-a new approach to self-supervised learning.
+\newblock In \emph{NeurIPS}, 2020.
+
+\bibitem[He et~al.(2016)He, Zhang, Ren, and Sun]{he2016deep}
+K.~He, X.~Zhang, S.~Ren, and J.~Sun.
+\newblock Deep residual learning for image recognition.
+\newblock In \emph{CVPR}, 2016.
 
 \bibitem[He et~al.(2020)He, Fan, Wu, Xie, and Girshick]{he2020momentum}
 K.~He, H.~Fan, Y.~Wu, S.~Xie, and R.~Girshick.
@@ -44,20 +94,143 @@ A.~Jabri, A.~Owens, and A.~Efros.
 \newblock Space-time correspondence as a contrastive random walk.
 \newblock In \emph{NeurIPS}, 2020.
 
+\bibitem[Jeon et~al.(2021)Jeon, Min, Kim, and Sohn]{jeon2021mining}
+S.~Jeon, D.~Min, S.~Kim, and K.~Sohn.
+\newblock Mining better samples for contrastive learning of temporal
+  correspondence.
+\newblock In \emph{CVPR}, 2021.
+
+\bibitem[Jhuang et~al.(2013)Jhuang, Gall, Zuffi, Schmid, and
+  Black]{jhuang2013towards}
+H.~Jhuang, J.~Gall, S.~Zuffi, C.~Schmid, and M.~J. Black.
+\newblock Towards understanding action recognition.
+\newblock In \emph{ICCV}, 2013.
+
+\bibitem[Jonschkowski et~al.(2020)Jonschkowski, Stone, Barron, Gordon,
+  Konolige, and Angelova]{jonschkowski2020matters}
+R.~Jonschkowski, A.~Stone, J.~T. Barron, A.~Gordon, K.~Konolige, and
+  A.~Angelova.
+\newblock What matters in unsupervised optical flow.
+\newblock In \emph{ECCV}, 2020.
+
+\bibitem[Lai and Xie(2019)]{lai2019self}
+Z.~Lai and W.~Xie.
+\newblock Self-supervised learning for video correspondence flow.
+\newblock In \emph{BMVC}, 2019.
+
 \bibitem[Lai et~al.(2020)Lai, Lu, and Xie]{lai2020mast}
 Z.~Lai, E.~Lu, and W.~Xie.
 \newblock Mast: A memory-augmented self-supervised tracker.
 \newblock In \emph{CVPR}, 2020.
+
+\bibitem[Li et~al.(2019)Li, Liu, De~Mello, Wang, Kautz, and Yang]{li2019joint}
+X.~Li, S.~Liu, S.~De~Mello, X.~Wang, J.~Kautz, and M.-H. Yang.
+\newblock Joint-task self-supervised learning for temporal correspondence.
+\newblock In \emph{NeurIPS}, 2019.
 
 \bibitem[Li and Hoiem(2017)]{li2017learning}
 Z.~Li and D.~Hoiem.
 \newblock Learning without forgetting.
 \newblock \emph{IEEE transactions on PAMI}, 2017.
 
+\bibitem[Lin et~al.(2014)Lin, Maire, Belongie, Hays, Perona, Ramanan,
+  Doll{\'a}r, and Zitnick]{lin2014microsoft}
+T.-Y. Lin, M.~Maire, S.~Belongie, J.~Hays, P.~Perona, D.~Ramanan,
+  P.~Doll{\'a}r, and C.~L. Zitnick.
+\newblock Microsoft coco: Common objects in context.
+\newblock In \emph{ECCV}, 2014.
+
+\bibitem[Liu et~al.(2020)Liu, Zhang, He, Liu, Wang, Tai, Luo, Wang, Li, and
+  Huang]{liu2020learning}
+L.~Liu, J.~Zhang, R.~He, Y.~Liu, Y.~Wang, Y.~Tai, D.~Luo, C.~Wang, J.~Li, and
+  F.~Huang.
+\newblock Learning by analogy: Reliable supervision from transformations for
+  unsupervised optical flow estimation.
+\newblock In \emph{CVPR}, 2020.
+
+\bibitem[Liu et~al.(2019)Liu, King, Lyu, and Xu]{liu2019ddflow}
+P.~Liu, I.~King, M.~R. Lyu, and J.~Xu.
+\newblock Ddflow: Learning optical flow with unlabeled data distillation.
+\newblock In \emph{AAAI}, 2019.
+
+\bibitem[Lu et~al.(2020)Lu, Wang, Shen, Tai, Crandall, and Hoi]{lu2020learning}
+X.~Lu, W.~Wang, J.~Shen, Y.-W. Tai, D.~J. Crandall, and S.~C. Hoi.
+\newblock Learning video object segmentation from unlabeled videos.
+\newblock In \emph{CVPR}, 2020.
+
+\bibitem[Maninis et~al.(2018)Maninis, Caelles, Chen, Pont-Tuset,
+  Leal-Taix{\'e}, Cremers, and Van~Gool]{maninis2018video}
+K.-K. Maninis, S.~Caelles, Y.~Chen, J.~Pont-Tuset, L.~Leal-Taix{\'e},
+  D.~Cremers, and L.~Van~Gool.
+\newblock Video object segmentation without temporal information.
+\newblock \emph{IEEE transactions on PAMI}, 2018.
+
+\bibitem[Meister et~al.(2018)Meister, Hur, and Roth]{meister2018unflow}
+S.~Meister, J.~Hur, and S.~Roth.
+\newblock Unflow: Unsupervised learning of optical flow with a bidirectional
+  census loss.
+\newblock In \emph{AAAI}, 2018.
+
+\bibitem[Miao et~al.(2021)Miao, Bennamoun, Gao, and Mian]{miao2021self}
+B.~Miao, M.~Bennamoun, Y.~Gao, and A.~Mian.
+\newblock Self-supervised video object segmentation by motion-aware mask
+  propagation.
+\newblock \emph{arXiv preprint arXiv:2107.12569}, 2021.
+
+\bibitem[Muller et~al.(2018)Muller, Bibi, Giancola, Alsubaihi, and
+  Ghanem]{muller2018trackingnet}
+M.~Muller, A.~Bibi, S.~Giancola, S.~Alsubaihi, and B.~Ghanem.
+\newblock Trackingnet: A large-scale dataset and benchmark for object tracking
+  in the wild.
+\newblock In \emph{ECCV}, 2018.
+
 \bibitem[Oh et~al.(2019)Oh, Lee, Xu, and Kim]{oh2019video}
 S.~W. Oh, J.-Y. Lee, N.~Xu, and S.~J. Kim.
 \newblock Video object segmentation using space-time memory networks.
 \newblock In \emph{ICCV}, 2019.
+
+\bibitem[Pont-Tuset et~al.(2017)Pont-Tuset, Perazzi, Caelles, Arbel{\'a}ez,
+  Sorkine-Hornung, and Van~Gool]{pont20172017}
+J.~Pont-Tuset, F.~Perazzi, S.~Caelles, P.~Arbel{\'a}ez, A.~Sorkine-Hornung, and
+  L.~Van~Gool.
+\newblock The 2017 davis challenge on video object segmentation.
+\newblock \emph{arXiv preprint arXiv:1704.00675}, 2017.
+
+\bibitem[Song et~al.(2017)Song, Wang, Van~Gool, and Hilliges]{song2017thin}
+J.~Song, L.~Wang, L.~Van~Gool, and O.~Hilliges.
+\newblock Thin-slicing network: A deep structured model for pose estimation in
+  videos.
+\newblock In \emph{CVPR}, 2017.
+
+\bibitem[Teed and Deng(2020)]{teed2020raft}
+Z.~Teed and J.~Deng.
+\newblock Raft: Recurrent all-pairs field transforms for optical flow.
+\newblock In \emph{ECCV}, 2020.
+
+\bibitem[Valmadre et~al.(2018)Valmadre, Bertinetto, Henriques, Tao, Vedaldi,
+  Smeulders, Torr, and Gavves]{valmadre2018long}
+J.~Valmadre, L.~Bertinetto, J.~F. Henriques, R.~Tao, A.~Vedaldi, A.~W.
+  Smeulders, P.~H. Torr, and E.~Gavves.
+\newblock Long-term tracking in the wild: A benchmark.
+\newblock In \emph{ECCV}, 2018.
+
+\bibitem[Van~den Oord et~al.(2018)Van~den Oord, Li, and
+  Vinyals]{van2018representation}
+A.~Van~den Oord, Y.~Li, and O.~Vinyals.
+\newblock Representation learning with contrastive predictive coding.
+\newblock \emph{arXiv e-prints}, pages arXiv--1807, 2018.
+
+\bibitem[Voigtlaender and Leibe(2017)]{voigtlaender2017online}
+P.~Voigtlaender and B.~Leibe.
+\newblock Online adaptation of convolutional neural networks for video object
+  segmentation.
+\newblock \emph{arXiv preprint arXiv:1706.09364}, 2017.
+
+\bibitem[Vondrick et~al.(2018)Vondrick, Shrivastava, Fathi, Guadarrama, and
+  Murphy]{vondrick2018tracking}
+C.~Vondrick, A.~Shrivastava, A.~Fathi, S.~Guadarrama, and K.~Murphy.
+\newblock Tracking emerges by colorizing videos.
+\newblock In \emph{ECCV}, 2018.
 
 \bibitem[Wang et~al.(2020)Wang, Zhou, and Li]{wang2020contrastive}
 N.~Wang, W.~Zhou, and H.~Li.
@@ -65,16 +238,35 @@ N.~Wang, W.~Zhou, and H.~Li.
   learning.
 \newblock In \emph{AAAI}, 2020.
 
-\bibitem[Wang et~al.(2019)Wang, Jabri, and Efros]{wang2019learning}
+\bibitem[Wang et~al.(2019{\natexlab{a}})Wang, Zhang, Bertinetto, Hu, and
+  Torr]{wang2019fast}
+Q.~Wang, L.~Zhang, L.~Bertinetto, W.~Hu, and P.~H. Torr.
+\newblock Fast online object tracking and segmentation: A unifying approach.
+\newblock In \emph{CVPR}, 2019{\natexlab{a}}.
+
+\bibitem[Wang et~al.(2019{\natexlab{b}})Wang, Jabri, and
+  Efros]{wang2019learning}
 X.~Wang, A.~Jabri, and A.~A. Efros.
 \newblock Learning correspondence from the cycle-consistency of time.
-\newblock In \emph{CVPR}, 2019.
+\newblock In \emph{CVPR}, 2019{\natexlab{b}}.
 
-\bibitem[Wang et~al.(2021)Wang, Zhao, Li, Wang, Torr, and
+\bibitem[Wang et~al.(2021{\natexlab{a}})Wang, Zhang, Shen, Kong, and
+  Li]{wang2021dense}
+X.~Wang, R.~Zhang, C.~Shen, T.~Kong, and L.~Li.
+\newblock Dense contrastive learning for self-supervised visual pre-training.
+\newblock In \emph{CVPR}, 2021{\natexlab{a}}.
+
+\bibitem[Wang et~al.(2021{\natexlab{b}})Wang, Zhao, Li, Wang, Torr, and
   Bertinetto]{wang2021different}
 Z.~Wang, H.~Zhao, Y.-L. Li, S.~Wang, P.~Torr, and L.~Bertinetto.
 \newblock Do different tracking tasks require different appearance models?
-\newblock In \emph{NeurIPS}, 2021.
+\newblock In \emph{NeurIPS}, 2021{\natexlab{b}}.
+
+\bibitem[Wu et~al.(2018)Wu, Xiong, Yu, and Lin]{wu2018unsupervised}
+Z.~Wu, Y.~Xiong, S.~X. Yu, and D.~Lin.
+\newblock Unsupervised feature learning via non-parametric instance
+  discrimination.
+\newblock In \emph{CVPR}, 2018.
 
 \bibitem[Xie et~al.(2021)Xie, Ding, Wang, Zhan, Xu, Sun, Li, and
   Luo]{xie2021detco}
@@ -98,5 +290,33 @@ J.~Xu and X.~Wang.
 N.~Xu, L.~Yang, Y.~Fan, D.~Yue, Y.~Liang, J.~Yang, and T.~Huang.
 \newblock Youtube-vos: A large-scale video object segmentation benchmark.
 \newblock \emph{arXiv preprint arXiv:1809.03327}, 2018.
+
+\bibitem[Yang et~al.(2021)Yang, Wu, Zhou, and Lin]{yang2021instance}
+C.~Yang, Z.~Wu, B.~Zhou, and S.~Lin.
+\newblock Instance localization for self-supervised detection pretraining.
+\newblock In \emph{CVPR}, 2021.
+
+\bibitem[Yang and Ramanan(2012)]{yang2012articulated}
+Y.~Yang and D.~Ramanan.
+\newblock Articulated human detection with flexible mixtures of parts.
+\newblock \emph{IEEE transactions on PAMI}, 2012.
+
+\bibitem[Yao et~al.(2021)Yao, Zhang, Qiu, Pan, and Mei]{yao2021seco}
+T.~Yao, Y.~Zhang, Z.~Qiu, Y.~Pan, and T.~Mei.
+\newblock Seco: Exploring sequence supervision for unsupervised representation
+  learning.
+\newblock In \emph{AAAI}, 2021.
+
+\bibitem[Zhao et~al.(2021)Zhao, Jin, and Heng]{zhao2021modelling}
+Z.~Zhao, Y.~Jin, and P.-A. Heng.
+\newblock Modelling neighbor relation in joint space-time graph for video
+  correspondence learning.
+\newblock In \emph{ICCV}, 2021.
+
+\bibitem[Zhou et~al.(2018)Zhou, Liang, Gong, and Lin]{zhou2018adaptive}
+Q.~Zhou, X.~Liang, K.~Gong, and L.~Lin.
+\newblock Adaptive temporal encoding network for video instance-level human
+  parsing.
+\newblock In \emph{ACM MM}, 2018.
 
 \end{thebibliography}
