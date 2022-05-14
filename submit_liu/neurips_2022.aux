@@ -25,8 +25,6 @@
 \citation{jabri2020space}
 \citation{wang2019learning}
 \@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}}
-\citation{deng2009large}
-\citation{deng2009large}
 \citation{wang2020contrastive}
 \citation{xu2021rethinking}
 \citation{wang2021different}
@@ -47,9 +45,9 @@
 \citation{xu2021rethinking}
 \citation{araslanov2021dense}
 \citation{wang2020contrastive}
-\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces \relax \fontsize  {9}{10}\selectfont  \abovedisplayskip 6\p@ plus1.5\p@ minus4\p@ \abovedisplayshortskip \z@ plus2\p@ \belowdisplayskip \abovedisplayskip \belowdisplayshortskip 3\p@ plus2\p@ minus2\p@ \textbf  {Illustration of the main idea.} In (a), we first train a contrastive model on ImageNet\nobreakspace  {}\cite  {deng2009large} and fixed it as teacher. Then the distillation on global correlation map is proposed to maintain the ability to capture object appearance. In (b), the distillation is performed between local correlation maps at different pyramid levels to facilitate fine-grained matching. The local correlation map computed at lower pyramid level is regarded as pseudo labels.\relax }}{2}{figure.caption.2}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces \relax \fontsize  {9}{10}\selectfont  \abovedisplayskip 6\p@ plus1.5\p@ minus4\p@ \abovedisplayshortskip \z@ plus2\p@ \belowdisplayskip \abovedisplayskip \belowdisplayshortskip 3\p@ plus2\p@ minus2\p@ \textbf  {Illustration of the main idea.} In (a), we first train a contrastive model on still image data and fixed it as teacher. Then the distillation on global correlation maps is proposed to retain the ability to capture object appearance. In (b), the distillation is performed between local correlation maps at different pyramid levels to facilitate fine-grained matching. The local correlation map computed at lower pyramid level is regarded as pseudo labels.\relax }}{2}{figure.caption.2}}
 \providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
-\newlabel{fig:tissor}{{1}{2}{\small \textbf {Illustration of the main idea.} In (a), we first train a contrastive model on ImageNet~\cite {deng2009large} and fixed it as teacher. Then the distillation on global correlation map is proposed to maintain the ability to capture object appearance. In (b), the distillation is performed between local correlation maps at different pyramid levels to facilitate fine-grained matching. The local correlation map computed at lower pyramid level is regarded as pseudo labels.\relax }{figure.caption.2}{}}
+\newlabel{fig:tissor}{{1}{2}{\small \textbf {Illustration of the main idea.} In (a), we first train a contrastive model on still image data and fixed it as teacher. Then the distillation on global correlation maps is proposed to retain the ability to capture object appearance. In (b), the distillation is performed between local correlation maps at different pyramid levels to facilitate fine-grained matching. The local correlation map computed at lower pyramid level is regarded as pseudo labels.\relax }{figure.caption.2}{}}
 \citation{wu2018unsupervised}
 \citation{he2020momentum}
 \citation{caron2020unsupervised}
@@ -77,21 +75,22 @@
 \citation{li2017learning}
 \citation{lai2020mast}
 \citation{vondrick2018tracking}
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces \relax \fontsize  {9}{10}\selectfont  \abovedisplayskip 6\p@ plus1.5\p@ minus4\p@ \abovedisplayshortskip \z@ plus2\p@ \belowdisplayskip \abovedisplayskip \belowdisplayshortskip 3\p@ plus2\p@ minus2\p@ \textbf  {Overview of the second step in our pretext task. The fixed encoder was trained in the first step (not shown).} Our method decouples video correspondence learning into two separate processes, including spatial feature learning and temporal feature learning. Specifically, the spatial feature learning first exploits the contrastive loss, which is analogous to that of instance discrimination, to learn the object appearance with image data. Then we perform the self-supervised training with video data in the next step. To maintain the ability to capture object appearance, we fix the pre-trained network as teacher and a global correlation distillation is devised. For temporal feature learning, we propose a pyramid learning framework where the frame reconstruction is devised at each pyramid level of the network. At the same time, we introduce a novel loss named local correlation distillation loss that supports explicitly learning of the correlation map in the region with high uncertainty, which is achieved by taking the finest local correlation map as pseudo labels.\relax }}{4}{figure.caption.3}}
-\newlabel{fig:framework}{{2}{4}{\small \textbf {Overview of the second step in our pretext task. The fixed encoder was trained in the first step (not shown).} Our method decouples video correspondence learning into two separate processes, including spatial feature learning and temporal feature learning. Specifically, the spatial feature learning first exploits the contrastive loss, which is analogous to that of instance discrimination, to learn the object appearance with image data. Then we perform the self-supervised training with video data in the next step. To maintain the ability to capture object appearance, we fix the pre-trained network as teacher and a global correlation distillation is devised. For temporal feature learning, we propose a pyramid learning framework where the frame reconstruction is devised at each pyramid level of the network. At the same time, we introduce a novel loss named local correlation distillation loss that supports explicitly learning of the correlation map in the region with high uncertainty, which is achieved by taking the finest local correlation map as pseudo labels.\relax }{figure.caption.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces \relax \fontsize  {9}{10}\selectfont  \abovedisplayskip 6\p@ plus1.5\p@ minus4\p@ \abovedisplayshortskip \z@ plus2\p@ \belowdisplayskip \abovedisplayskip \belowdisplayshortskip 3\p@ plus2\p@ minus2\p@ \textbf  {Overview of the second step in our pretext task. The fixed encoder was trained in the first step (not shown).} We first exploits the contrastive loss to learn the appearance sensitive features with still image data (not shown). Then we perform the temporal feature learning with video data in the second step. To retain the appearance sensitivity, we fix the pre-trained network as teacher and a global correlation distillation loss is devised between global correlation maps. To address the issue of temporal discontinuity, we first apply frame reconstruction at each pyramid level of the network. Then the distillation is conducted between local correlation maps computed at different pyramid levels, which learns better motion sensitive features by taking fine-grained local correlation maps as pseudo labels. \relax }}{4}{figure.caption.3}}
+\newlabel{fig:framework}{{2}{4}{\small \textbf {Overview of the second step in our pretext task. The fixed encoder was trained in the first step (not shown).} We first exploits the contrastive loss to learn the appearance sensitive features with still image data (not shown). Then we perform the temporal feature learning with video data in the second step. To retain the appearance sensitivity, we fix the pre-trained network as teacher and a global correlation distillation loss is devised between global correlation maps. To address the issue of temporal discontinuity, we first apply frame reconstruction at each pyramid level of the network. Then the distillation is conducted between local correlation maps computed at different pyramid levels, which learns better motion sensitive features by taking fine-grained local correlation maps as pseudo labels. \relax }{figure.caption.3}{}}
 \newlabel{eq:nce}{{1}{4}{Spatial Feature Learning}{equation.3.1}{}}
 \newlabel{eq:global_correlation}{{2}{4}{Spatial Feature Learning}{equation.3.2}{}}
 \newlabel{eq:global_correlation_loss}{{3}{4}{Spatial Feature Learning}{equation.3.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Temporal Feature Learning}{4}{subsection.3.2}}
+\newlabel{temporal_feature_learning}{{3.2}{4}{Temporal Feature Learning}{subsection.3.2}{}}
 \citation{lai2020mast}
 \citation{lai2020mast}
 \citation{teed2020raft}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Temporal Feature Learning}{5}{subsection.3.2}}
-\newlabel{temporal_feature_learning}{{3.2}{5}{Temporal Feature Learning}{subsection.3.2}{}}
 \newlabel{eq:local_correlation}{{4}{5}{Temporal Feature Learning}{equation.3.4}{}}
 \newlabel{eq:reconstruction}{{5}{5}{Temporal Feature Learning}{equation.3.5}{}}
 \newlabel{eq:reconstruction loss}{{6}{5}{Temporal Feature Learning}{equation.3.6}{}}
 \newlabel{eq:pyramid reconstruction loss}{{7}{5}{Temporal Feature Learning}{equation.3.7}{}}
 \newlabel{eq:pyramid reconstruction loss}{{8}{5}{Temporal Feature Learning}{equation.3.8}{}}
+\newlabel{eq:reconstruction loss}{{9}{5}{Temporal Feature Learning}{equation.3.9}{}}
 \citation{he2016deep}
 \citation{jabri2020space}
 \citation{lai2020mast}
@@ -110,35 +109,24 @@
 \citation{pont20172017}
 \citation{pont20172017}
 \citation{xu2018youtube}
-\newlabel{eq:reconstruction loss}{{9}{6}{Temporal Feature Learning}{equation.3.9}{}}
+\citation{li2017learning}
+\citation{deng2009large}
+\citation{xu2018youtube}
+\citation{deng2009large}
+\citation{xu2018youtube}
+\citation{jabri2020space}
+\citation{lai2020mast}
+\citation{xu2021rethinking}
+\citation{jabri2020space}
+\citation{lai2020mast}
+\citation{xu2021rethinking}
 \newlabel{eq:final loss}{{10}{6}{Temporal Feature Learning}{equation.3.10}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {4}Experiments}{6}{section.4}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Implementation Details}{6}{subsection.4.1}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Ablation Study}{6}{subsection.4.2}}
 \citation{li2017learning}
-\citation{deng2009large}
-\citation{xu2018youtube}
-\citation{deng2009large}
-\citation{xu2018youtube}
-\citation{jabri2020space}
-\citation{lai2020mast}
-\citation{xu2021rethinking}
-\citation{jabri2020space}
-\citation{lai2020mast}
-\citation{xu2021rethinking}
-\citation{li2017learning}
 \citation{li2017learning}
 \citation{xie2021detco}
-\newlabel{table:ablation2}{{1a}{7}{Subtable 1a}{subtable.1.1}{}}
-\newlabel{sub@table:ablation2}{{(a)}{a}{Subtable 1a\relax }{subtable.1.1}{}}
-\newlabel{table:ablation2}{{1b}{7}{Subtable 1b}{subtable.1.2}{}}
-\newlabel{sub@table:ablation2}{{(b)}{b}{Subtable 1b\relax }{subtable.1.2}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces \textbf  {Ablation study for each component in our framework}. The "$p$" and "$e$" in (a) correspond to pyramid frame reconstruction and entropy-based selection. Models in (b) are all pre-trained on ImageNet with contrastive loss and models with "w" are subsequently trained on YouTube-VOS using different methods. I: ImageNet\nobreakspace  {}\cite  {deng2009large}. YTV: YouTube-VOS\nobreakspace  {}\cite  {xu2018youtube}.\relax }}{7}{table.caption.4}}
-\newlabel{tab:ablations}{{1}{7}{\textbf {Ablation study for each component in our framework}. The "$p$" and "$e$" in (a) correspond to pyramid frame reconstruction and entropy-based selection. Models in (b) are all pre-trained on ImageNet with contrastive loss and models with "w" are subsequently trained on YouTube-VOS using different methods. I: ImageNet~\cite {deng2009large}. YTV: YouTube-VOS~\cite {xu2018youtube}.\relax }{table.caption.4}{}}
-\@writefile{lot}{\contentsline {subtable}{\numberline{(a)}{\ignorespaces {{Ablation study of each component.} }}}{7}{subtable.1.1}}
-\@writefile{lot}{\contentsline {subtable}{\numberline{(b)}{\ignorespaces {{Ablation study of $\mathcal {L}_{\mathrm {gc}}$.} }}}{7}{subtable.1.2}}
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces \relax \fontsize  {9}{10}\selectfont  \abovedisplayskip 6\p@ plus1.5\p@ minus4\p@ \abovedisplayshortskip \z@ plus2\p@ \belowdisplayskip \abovedisplayskip \belowdisplayshortskip 3\p@ plus2\p@ minus2\p@ \textbf  {Visualization of the ablation study.} Given a query point randomly sampled in the target frame, we visualize the result of computing the local correlation and global correlation map w.r.t. reference frame. The dashed line in red represents the range of computing correlation map w.r.t. query point. The reference frame is randomly sampled in the memory bank of inference strategy\nobreakspace  {}\cite  {jabri2020space}\cite  {lai2020mast}\cite  {xu2021rethinking}. \relax }}{7}{figure.caption.5}}
-\newlabel{fig:ablations}{{3}{7}{\small \textbf {Visualization of the ablation study.} Given a query point randomly sampled in the target frame, we visualize the result of computing the local correlation and global correlation map w.r.t. reference frame. The dashed line in red represents the range of computing correlation map w.r.t. query point. The reference frame is randomly sampled in the memory bank of inference strategy~\cite {jabri2020space}\cite {lai2020mast}\cite {xu2021rethinking}. \relax }{figure.caption.5}{}}
 \citation{he2020momentum}
 \citation{chen2021exploring}
 \citation{vondrick2018tracking}
@@ -195,10 +183,25 @@
 \citation{he2016deep}
 \citation{zhou2018adaptive}
 \citation{song2017thin}
+\newlabel{table:ablation2}{{1a}{7}{Subtable 1a}{subtable.1.1}{}}
+\newlabel{sub@table:ablation2}{{(a)}{a}{Subtable 1a\relax }{subtable.1.1}{}}
+\newlabel{table:ablation2}{{1b}{7}{Subtable 1b}{subtable.1.2}{}}
+\newlabel{sub@table:ablation2}{{(b)}{b}{Subtable 1b\relax }{subtable.1.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces \textbf  {Ablation study for each component in our framework}. The "$p$" and "$e$" in (a) correspond to pyramid frame reconstruction and entropy-based selection. Models in (b) are all pre-trained on ImageNet with contrastive loss and models with "w" are subsequently trained on YouTube-VOS using different methods. I: ImageNet\nobreakspace  {}\cite  {deng2009large}. YTV: YouTube-VOS\nobreakspace  {}\cite  {xu2018youtube}.\relax }}{7}{table.caption.4}}
+\newlabel{tab:ablations}{{1}{7}{\textbf {Ablation study for each component in our framework}. The "$p$" and "$e$" in (a) correspond to pyramid frame reconstruction and entropy-based selection. Models in (b) are all pre-trained on ImageNet with contrastive loss and models with "w" are subsequently trained on YouTube-VOS using different methods. I: ImageNet~\cite {deng2009large}. YTV: YouTube-VOS~\cite {xu2018youtube}.\relax }{table.caption.4}{}}
+\@writefile{lot}{\contentsline {subtable}{\numberline{(a)}{\ignorespaces {{Ablation study of each component.} }}}{7}{subtable.1.1}}
+\@writefile{lot}{\contentsline {subtable}{\numberline{(b)}{\ignorespaces {{Ablation study of $\mathcal {L}_{\mathrm {gc}}$.} }}}{7}{subtable.1.2}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces \relax \fontsize  {9}{10}\selectfont  \abovedisplayskip 6\p@ plus1.5\p@ minus4\p@ \abovedisplayshortskip \z@ plus2\p@ \belowdisplayskip \abovedisplayskip \belowdisplayshortskip 3\p@ plus2\p@ minus2\p@ \textbf  {Visualization of the ablation study.} Given a query point randomly sampled in the target frame, we visualize the result of computing the local correlation and global correlation map w.r.t. reference frame. The dashed line in red represents the range of computing correlation map w.r.t. query point. The reference frame is randomly sampled in the memory bank of inference strategy\nobreakspace  {}\cite  {jabri2020space}\cite  {lai2020mast}\cite  {xu2021rethinking}. \relax }}{7}{figure.caption.5}}
+\newlabel{fig:ablations}{{3}{7}{\small \textbf {Visualization of the ablation study.} Given a query point randomly sampled in the target frame, we visualize the result of computing the local correlation and global correlation map w.r.t. reference frame. The dashed line in red represents the range of computing correlation map w.r.t. query point. The reference frame is randomly sampled in the memory bank of inference strategy~\cite {jabri2020space}\cite {lai2020mast}\cite {xu2021rethinking}. \relax }{figure.caption.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Comparison with State-of-the-art}{7}{subsection.4.3}}
+\citation{xu2021rethinking}
+\citation{jabri2020space}
+\citation{li2019joint}
+\citation{wang2020contrastive}
+\citation{xu2021rethinking}
+\citation{zhao2021modelling}
 \citation{carreira2017quo}
 \citation{muller2018trackingnet}
-\citation{xu2018youtube}
-\citation{xu2021rethinking}
 \citation{maninis2018video}
 \citation{voigtlaender2017online}
 \citation{voigtlaender2019feelvos}
@@ -209,7 +212,6 @@
 \citation{zhou2018adaptive}
 \@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces \textbf  {Quantitative results for video object segmentation on validation set of DAVIS-2017}\nobreakspace  {}\cite  {pont20172017}. We show results of state-of-the-art self-supervised methods and some supervised methods for comparison. We report the data size for self-supervised methods\nobreakspace  {}(\nobreakspace  {}total number/duration of image/video dataset\nobreakspace  {}). \nobreakspace  {}I:ImageNet\nobreakspace  {}\cite  {deng2009large}\nobreakspace  {}(1.28m). \nobreakspace  {}C:COCO\nobreakspace  {}\cite  {lin2014microsoft}\nobreakspace  {}(30k). \nobreakspace  {}O:OxUvA\nobreakspace  {}\cite  {valmadre2018long}\nobreakspace  {}(14h). \nobreakspace  {}T:TrackingNet\nobreakspace  {}\cite  {muller2018trackingnet}\nobreakspace  {}(300h). \nobreakspace  {}K:Kinetics\nobreakspace  {}\cite  {carreira2017quo}\nobreakspace  {}(800h). \nobreakspace  {}V:VLOG\nobreakspace  {}\cite  {fouhey2018lifestyle}\nobreakspace  {}(344h). \nobreakspace  {}YTV:YouTube-VOS\nobreakspace  {}\cite  {xu2018youtube}\nobreakspace  {}(5h). \nobreakspace  {}D:DAVIS-2017\nobreakspace  {}\cite  {pont20172017}\nobreakspace  {}(-). \nobreakspace  {}P:PASCAL-VOC\nobreakspace  {}\cite  {everingham2015pascal}\nobreakspace  {}(-).\relax }}{8}{table.caption.6}}
 \newlabel{table:sota}{{2}{8}{\textbf {Quantitative results for video object segmentation on validation set of DAVIS-2017}~\cite {pont20172017}. We show results of state-of-the-art self-supervised methods and some supervised methods for comparison. We report the data size for self-supervised methods~(~total number/duration of image/video dataset~). ~I:ImageNet~\cite {deng2009large}~(1.28m). ~C:COCO~\cite {lin2014microsoft}~(30k). ~O:OxUvA~\cite {valmadre2018long}~(14h). ~T:TrackingNet~\cite {muller2018trackingnet}~(300h). ~K:Kinetics~\cite {carreira2017quo}~(800h). ~V:VLOG~\cite {fouhey2018lifestyle}~(344h). ~YTV:YouTube-VOS~\cite {xu2018youtube}~(5h). ~D:DAVIS-2017~\cite {pont20172017}~(-). ~P:PASCAL-VOC~\cite {everingham2015pascal}~(-).\relax }{table.caption.6}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Comparison with State-of-the-art}{8}{subsection.4.3}}
 \@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces \textbf  {Quantitative results for human part propagation and human pose tracking.} We show results of state-of-the-art self-supervised methods and some supervised methods for comparison.\relax }}{8}{table.caption.7}}
 \newlabel{table:vip}{{3}{8}{\textbf {Quantitative results for human part propagation and human pose tracking.} We show results of state-of-the-art self-supervised methods and some supervised methods for comparison.\relax }{table.caption.7}{}}
 \citation{jhuang2013towards}
