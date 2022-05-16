@@ -45,9 +45,10 @@
 \citation{xu2021rethinking}
 \citation{araslanov2021dense}
 \citation{wang2020contrastive}
-\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces \relax \fontsize  {9}{10}\selectfont  \abovedisplayskip 6\p@ plus1.5\p@ minus4\p@ \abovedisplayshortskip \z@ plus2\p@ \belowdisplayskip \abovedisplayskip \belowdisplayshortskip 3\p@ plus2\p@ minus2\p@ \textbf  {Illustration of the main idea.} In (a), we first train a contrastive model on still image data and fixed it as teacher. Then the distillation on global correlation maps is proposed to retain the ability to capture object appearance. In (b), the distillation is performed between local correlation maps at different pyramid levels to facilitate fine-grained matching. The local correlation map computed at lower pyramid level is regarded as pseudo labels.\relax }}{2}{figure.caption.2}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces \relax \fontsize  {9}{10}\selectfont  \abovedisplayskip 6\p@ plus1.5\p@ minus4\p@ \abovedisplayshortskip \z@ plus2\p@ \belowdisplayskip \abovedisplayskip \belowdisplayshortskip 3\p@ plus2\p@ minus2\p@ \textbf  {Illustration of the main idea.} In (a), we first train a contrastive model on image data and fix it as teacher. Then the distillation on global correlation maps is proposed to retain appearance sensitivity. In (b), the distillation is performed between local correlation maps at different pyramid levels to facilitate fine-grained matching. The local correlation map computed at lower pyramid level is regarded as pseudo labels.\relax }}{2}{figure.caption.2}}
 \providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
-\newlabel{fig:tissor}{{1}{2}{\small \textbf {Illustration of the main idea.} In (a), we first train a contrastive model on still image data and fixed it as teacher. Then the distillation on global correlation maps is proposed to retain the ability to capture object appearance. In (b), the distillation is performed between local correlation maps at different pyramid levels to facilitate fine-grained matching. The local correlation map computed at lower pyramid level is regarded as pseudo labels.\relax }{figure.caption.2}{}}
+\newlabel{fig:tissor}{{1}{2}{\small \textbf {Illustration of the main idea.} In (a), we first train a contrastive model on image data and fix it as teacher. Then the distillation on global correlation maps is proposed to retain appearance sensitivity. In (b), the distillation is performed between local correlation maps at different pyramid levels to facilitate fine-grained matching. The local correlation map computed at lower pyramid level is regarded as pseudo labels.\relax }{figure.caption.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {2}Related Work}{2}{section.2}}
 \citation{wu2018unsupervised}
 \citation{he2020momentum}
 \citation{caron2020unsupervised}
@@ -64,20 +65,19 @@
 \citation{liu2020learning}
 \citation{liu2019ddflow}
 \citation{van2018representation}
-\@writefile{toc}{\contentsline {section}{\numberline {2}Related Work}{3}{section.2}}
+\citation{he2020momentum}
+\citation{xie2021detco}
+\citation{he2020momentum}
+\citation{xie2021detco}
 \@writefile{toc}{\contentsline {section}{\numberline {3}Approach}{3}{section.3}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Spatial Feature Learning}{3}{subsection.3.1}}
 \newlabel{spatial_feature_learning}{{3.1}{3}{Spatial Feature Learning}{subsection.3.1}{}}
-\citation{he2020momentum}
-\citation{xie2021detco}
-\citation{he2020momentum}
-\citation{xie2021detco}
+\newlabel{eq:nce}{{1}{3}{Spatial Feature Learning}{equation.3.1}{}}
 \citation{li2017learning}
 \citation{lai2020mast}
 \citation{vondrick2018tracking}
 \@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces \relax \fontsize  {9}{10}\selectfont  \abovedisplayskip 6\p@ plus1.5\p@ minus4\p@ \abovedisplayshortskip \z@ plus2\p@ \belowdisplayskip \abovedisplayskip \belowdisplayshortskip 3\p@ plus2\p@ minus2\p@ \textbf  {Overview of the second step in our pretext task. The fixed encoder was trained in the first step (not shown).} We first exploits the contrastive loss to learn the appearance sensitive features with still image data (not shown). Then we perform the temporal feature learning with video data in the second step. To retain the appearance sensitivity, we fix the pre-trained network as teacher and a global correlation distillation loss is devised between global correlation maps. To address the issue of temporal discontinuity, we first apply frame reconstruction at each pyramid level of the network. Then the distillation is conducted between local correlation maps computed at different pyramid levels, which learns better motion sensitive features by taking fine-grained local correlation maps as pseudo labels. \relax }}{4}{figure.caption.3}}
 \newlabel{fig:framework}{{2}{4}{\small \textbf {Overview of the second step in our pretext task. The fixed encoder was trained in the first step (not shown).} We first exploits the contrastive loss to learn the appearance sensitive features with still image data (not shown). Then we perform the temporal feature learning with video data in the second step. To retain the appearance sensitivity, we fix the pre-trained network as teacher and a global correlation distillation loss is devised between global correlation maps. To address the issue of temporal discontinuity, we first apply frame reconstruction at each pyramid level of the network. Then the distillation is conducted between local correlation maps computed at different pyramid levels, which learns better motion sensitive features by taking fine-grained local correlation maps as pseudo labels. \relax }{figure.caption.3}{}}
-\newlabel{eq:nce}{{1}{4}{Spatial Feature Learning}{equation.3.1}{}}
 \newlabel{eq:global_correlation}{{2}{4}{Spatial Feature Learning}{equation.3.2}{}}
 \newlabel{eq:global_correlation_loss}{{3}{4}{Spatial Feature Learning}{equation.3.3}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Temporal Feature Learning}{4}{subsection.3.2}}
@@ -91,6 +91,7 @@
 \newlabel{eq:pyramid reconstruction loss}{{7}{5}{Temporal Feature Learning}{equation.3.7}{}}
 \newlabel{eq:pyramid reconstruction loss}{{8}{5}{Temporal Feature Learning}{equation.3.8}{}}
 \newlabel{eq:reconstruction loss}{{9}{5}{Temporal Feature Learning}{equation.3.9}{}}
+\newlabel{eq:final loss}{{10}{5}{Temporal Feature Learning}{equation.3.10}{}}
 \citation{he2016deep}
 \citation{jabri2020space}
 \citation{lai2020mast}
@@ -120,13 +121,12 @@
 \citation{jabri2020space}
 \citation{lai2020mast}
 \citation{xu2021rethinking}
-\newlabel{eq:final loss}{{10}{6}{Temporal Feature Learning}{equation.3.10}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {4}Experiments}{6}{section.4}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Implementation Details}{6}{subsection.4.1}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Ablation Study}{6}{subsection.4.2}}
 \citation{li2017learning}
 \citation{li2017learning}
 \citation{xie2021detco}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Experiments}{6}{section.4}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Implementation Details}{6}{subsection.4.1}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Ablation Study}{6}{subsection.4.2}}
 \citation{he2020momentum}
 \citation{chen2021exploring}
 \citation{vondrick2018tracking}
@@ -210,26 +210,26 @@
 \citation{zhou2018adaptive}
 \citation{wang2019learning}
 \citation{zhou2018adaptive}
-\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces \textbf  {Quantitative results for video object segmentation on validation set of DAVIS-2017}\nobreakspace  {}\cite  {pont20172017}. We show results of state-of-the-art self-supervised methods and some supervised methods for comparison. We report the data size for self-supervised methods\nobreakspace  {}(\nobreakspace  {}total number/duration of image/video dataset\nobreakspace  {}). \nobreakspace  {}I:ImageNet\nobreakspace  {}\cite  {deng2009large}\nobreakspace  {}(1.28m). \nobreakspace  {}C:COCO\nobreakspace  {}\cite  {lin2014microsoft}\nobreakspace  {}(30k). \nobreakspace  {}O:OxUvA\nobreakspace  {}\cite  {valmadre2018long}\nobreakspace  {}(14h). \nobreakspace  {}T:TrackingNet\nobreakspace  {}\cite  {muller2018trackingnet}\nobreakspace  {}(300h). \nobreakspace  {}K:Kinetics\nobreakspace  {}\cite  {carreira2017quo}\nobreakspace  {}(800h). \nobreakspace  {}V:VLOG\nobreakspace  {}\cite  {fouhey2018lifestyle}\nobreakspace  {}(344h). \nobreakspace  {}YTV:YouTube-VOS\nobreakspace  {}\cite  {xu2018youtube}\nobreakspace  {}(5h). \nobreakspace  {}D:DAVIS-2017\nobreakspace  {}\cite  {pont20172017}\nobreakspace  {}(-). \nobreakspace  {}P:PASCAL-VOC\nobreakspace  {}\cite  {everingham2015pascal}\nobreakspace  {}(-).\relax }}{8}{table.caption.6}}
-\newlabel{table:sota}{{2}{8}{\textbf {Quantitative results for video object segmentation on validation set of DAVIS-2017}~\cite {pont20172017}. We show results of state-of-the-art self-supervised methods and some supervised methods for comparison. We report the data size for self-supervised methods~(~total number/duration of image/video dataset~). ~I:ImageNet~\cite {deng2009large}~(1.28m). ~C:COCO~\cite {lin2014microsoft}~(30k). ~O:OxUvA~\cite {valmadre2018long}~(14h). ~T:TrackingNet~\cite {muller2018trackingnet}~(300h). ~K:Kinetics~\cite {carreira2017quo}~(800h). ~V:VLOG~\cite {fouhey2018lifestyle}~(344h). ~YTV:YouTube-VOS~\cite {xu2018youtube}~(5h). ~D:DAVIS-2017~\cite {pont20172017}~(-). ~P:PASCAL-VOC~\cite {everingham2015pascal}~(-).\relax }{table.caption.6}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces \textbf  {Quantitative results for human part propagation and human pose tracking.} We show results of state-of-the-art self-supervised methods and some supervised methods for comparison.\relax }}{8}{table.caption.7}}
-\newlabel{table:vip}{{3}{8}{\textbf {Quantitative results for human part propagation and human pose tracking.} We show results of state-of-the-art self-supervised methods and some supervised methods for comparison.\relax }{table.caption.7}{}}
 \citation{jhuang2013towards}
 \citation{yang2012articulated}
 \citation{jabri2020space}
 \citation{li2019joint}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces \textbf  {Quantitative results for video object segmentation on validation set of DAVIS-2017}\nobreakspace  {}\cite  {pont20172017}. We show results of state-of-the-art self-supervised methods and some supervised methods for comparison. We report the data size for self-supervised methods\nobreakspace  {}(\nobreakspace  {}total number/duration of image/video dataset\nobreakspace  {}). \nobreakspace  {}I:ImageNet\nobreakspace  {}\cite  {deng2009large}\nobreakspace  {}(1.28m). \nobreakspace  {}C:COCO\nobreakspace  {}\cite  {lin2014microsoft}\nobreakspace  {}(30k). \nobreakspace  {}O:OxUvA\nobreakspace  {}\cite  {valmadre2018long}\nobreakspace  {}(14h). \nobreakspace  {}T:TrackingNet\nobreakspace  {}\cite  {muller2018trackingnet}\nobreakspace  {}(300h). \nobreakspace  {}K:Kinetics\nobreakspace  {}\cite  {carreira2017quo}\nobreakspace  {}(800h). \nobreakspace  {}V:VLOG\nobreakspace  {}\cite  {fouhey2018lifestyle}\nobreakspace  {}(344h). \nobreakspace  {}YTV:YouTube-VOS\nobreakspace  {}\cite  {xu2018youtube}\nobreakspace  {}(5h). \nobreakspace  {}D:DAVIS-2017\nobreakspace  {}\cite  {pont20172017}\nobreakspace  {}(-). \nobreakspace  {}P:PASCAL-VOC\nobreakspace  {}\cite  {everingham2015pascal}\nobreakspace  {}(-).\relax }}{8}{table.caption.6}}
+\newlabel{table:sota}{{2}{8}{\textbf {Quantitative results for video object segmentation on validation set of DAVIS-2017}~\cite {pont20172017}. We show results of state-of-the-art self-supervised methods and some supervised methods for comparison. We report the data size for self-supervised methods~(~total number/duration of image/video dataset~). ~I:ImageNet~\cite {deng2009large}~(1.28m). ~C:COCO~\cite {lin2014microsoft}~(30k). ~O:OxUvA~\cite {valmadre2018long}~(14h). ~T:TrackingNet~\cite {muller2018trackingnet}~(300h). ~K:Kinetics~\cite {carreira2017quo}~(800h). ~V:VLOG~\cite {fouhey2018lifestyle}~(344h). ~YTV:YouTube-VOS~\cite {xu2018youtube}~(5h). ~D:DAVIS-2017~\cite {pont20172017}~(-). ~P:PASCAL-VOC~\cite {everingham2015pascal}~(-).\relax }{table.caption.6}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces \textbf  {Quantitative results for human part propagation and human pose tracking.} We show results of state-of-the-art self-supervised methods and some supervised methods for comparison.\relax }}{8}{table.caption.7}}
+\newlabel{table:vip}{{3}{8}{\textbf {Quantitative results for human part propagation and human pose tracking.} We show results of state-of-the-art self-supervised methods and some supervised methods for comparison.\relax }{table.caption.7}{}}
 \citation{pont20172017}
 \citation{zhou2018adaptive}
 \citation{jhuang2013towards}
 \citation{pont20172017}
 \citation{zhou2018adaptive}
 \citation{jhuang2013towards}
-\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces \relax \fontsize  {9}{10}\selectfont  \abovedisplayskip 6\p@ plus1.5\p@ minus4\p@ \abovedisplayshortskip \z@ plus2\p@ \belowdisplayskip \abovedisplayskip \belowdisplayshortskip 3\p@ plus2\p@ minus2\p@ Qualitative results for label propagation. Given the first frame with different annotations highlighted with a blue outline, we propagate it to the current frame without fine-tuning. (a) Video object segmentation on DAVIS-2017\nobreakspace  {}\cite  {pont20172017}. (b) Human part propagation on VIP\nobreakspace  {}\cite  {zhou2018adaptive}. (c) Pose keypoint tracking on JHMDB\nobreakspace  {}\cite  {jhuang2013towards}. \relax }}{9}{figure.caption.8}}
-\newlabel{fig:quan}{{4}{9}{\small Qualitative results for label propagation. Given the first frame with different annotations highlighted with a blue outline, we propagate it to the current frame without fine-tuning. (a) Video object segmentation on DAVIS-2017~\cite {pont20172017}. (b) Human part propagation on VIP~\cite {zhou2018adaptive}. (c) Pose keypoint tracking on JHMDB~\cite {jhuang2013towards}. \relax }{figure.caption.8}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {5}Conclusions}{9}{section.5}}
 \bibstyle{abbrvnat}
 \bibdata{neurips_2022}
 \bibcite{araslanov2021dense}{{1}{2021}{{Araslanov et~al.}}{{Araslanov, Schaub-Meyer, and Roth}}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces \relax \fontsize  {9}{10}\selectfont  \abovedisplayskip 6\p@ plus1.5\p@ minus4\p@ \abovedisplayshortskip \z@ plus2\p@ \belowdisplayskip \abovedisplayskip \belowdisplayshortskip 3\p@ plus2\p@ minus2\p@ Qualitative results for label propagation. Given the first frame with different annotations highlighted with a blue outline, we propagate it to the current frame without fine-tuning. (a) Video object segmentation on DAVIS-2017\nobreakspace  {}\cite  {pont20172017}. (b) Human part propagation on VIP\nobreakspace  {}\cite  {zhou2018adaptive}. (c) Pose keypoint tracking on JHMDB\nobreakspace  {}\cite  {jhuang2013towards}. \relax }}{9}{figure.caption.8}}
+\newlabel{fig:quan}{{4}{9}{\small Qualitative results for label propagation. Given the first frame with different annotations highlighted with a blue outline, we propagate it to the current frame without fine-tuning. (a) Video object segmentation on DAVIS-2017~\cite {pont20172017}. (b) Human part propagation on VIP~\cite {zhou2018adaptive}. (c) Pose keypoint tracking on JHMDB~\cite {jhuang2013towards}. \relax }{figure.caption.8}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Conclusions}{9}{section.5}}
 \bibcite{caelles2017one}{{2}{2017}{{Caelles et~al.}}{{Caelles, Maninis, Pont-Tuset, Leal-Taix{\'e}, Cremers, and Van~Gool}}}
 \bibcite{caron2020unsupervised}{{3}{2020}{{Caron et~al.}}{{Caron, Misra, Mairal, Goyal, Bojanowski, and Joulin}}}
 \bibcite{carreira2017quo}{{4}{2017}{{Carreira and Zisserman}}{{}}}

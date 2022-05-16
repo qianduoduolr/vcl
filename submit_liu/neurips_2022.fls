@@ -259,10 +259,10 @@ INPUT /usr/local/texlive/2018/texmf-dist/fonts/tfm/public/amsfonts/symbols/msbm5
 INPUT /usr/local/texlive/2018/texmf-dist/fonts/tfm/public/amsfonts/symbols/msbm5.tfm
 INPUT /usr/local/texlive/2018/texmf-dist/fonts/tfm/public/amsfonts/symbols/msbm5.tfm
 INPUT /usr/local/texlive/2018/texmf-dist/fonts/tfm/adobe/times/ptmr8t.tfm
-INPUT /usr/local/texlive/2018/texmf-dist/tex/latex/psnfss/omsptm.fd
-INPUT /usr/local/texlive/2018/texmf-dist/tex/latex/psnfss/omsptm.fd
 INPUT /usr/local/texlive/2018/texmf-dist/fonts/vf/adobe/times/ptmr8t.vf
 INPUT /usr/local/texlive/2018/texmf-dist/fonts/tfm/adobe/times/ptmr8r.tfm
+INPUT /usr/local/texlive/2018/texmf-dist/tex/latex/psnfss/omsptm.fd
+INPUT /usr/local/texlive/2018/texmf-dist/tex/latex/psnfss/omsptm.fd
 INPUT /usr/local/texlive/2018/texmf-dist/fonts/vf/adobe/times/ptmr8t.vf
 INPUT /usr/local/texlive/2018/texmf-dist/fonts/tfm/adobe/times/ptmr8r.tfm
 INPUT /Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/figure/abalations/ablataions.pdf
