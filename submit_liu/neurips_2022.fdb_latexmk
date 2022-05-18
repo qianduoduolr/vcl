@@ -1,14 +1,14 @@
 # Fdb version 3
-["bibtex neurips_2022"] 1652799891 "neurips_2022.aux" "neurips_2022.bbl" "neurips_2022" 1652800955
+["bibtex neurips_2022"] 1652877651 "neurips_2022.aux" "neurips_2022.bbl" "neurips_2022" 1652878497
   "./abbrvnat.bst" 1636482504 26473 fcc7980699444e5693f5239d9860b6de ""
-  "neurips_2022.aux" 1652800856 22578 ba252466442f83a4d045055f17665fb1 ""
-  "neurips_2022.bib" 1652793208 13700 452ecce3037f6576a4b422bc1add9b2e ""
+  "neurips_2022.aux" 1652877652 22327 2d468e3bec3d8bfedf54987035d48e1f ""
+  "neurips_2022.bib" 1652859007 13700 452ecce3037f6576a4b422bc1add9b2e ""
   (generated)
-  "neurips_2022.bbl"
   "neurips_2022.blg"
-["pdflatex"] 1652800855 "/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022.tex" "/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022.pdf" "neurips_2022" 1652800955
-  "/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022.aux" 1652800856 22578 ba252466442f83a4d045055f17665fb1 ""
-  "/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022.tex" 1652800954 53064 ddd7227da85721cd8b1aee6a78bd7745 ""
+  "neurips_2022.bbl"
+["pdflatex"] 1652877651 "/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022.tex" "/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022.pdf" "neurips_2022" 1652878497
+  "/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022.aux" 1652877652 22327 2d468e3bec3d8bfedf54987035d48e1f ""
+  "/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022.tex" 1652878494 52913 b5cc3dd5ed9ae7892237eaac7d835c6d ""
   "/usr/local/texlive/2018/texmf-dist/fonts/enc/dvips/base/8r.enc" 1480098666 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
   "/usr/local/texlive/2018/texmf-dist/fonts/map/fontname/texfonts.map" 1511824771 3332 103109f5612ad95229751940c61aada0 ""
   "/usr/local/texlive/2018/texmf-dist/fonts/tfm/adobe/courier/pcrr8r.tfm" 1480098688 1292 bd42be2f344128bff6d35d98474adfe3 ""
@@ -173,15 +173,15 @@
   "figure/framework/framework.pdf" 1652799757 135256 72dd139cc9eff36e80e17e3a40e575e1 ""
   "figure/quantitative_results/quan.pdf" 1651926592 594803 b216e469e0cda2d172461b014be30efa ""
   "figure/tissor/tissor.pdf" 1652680826 154187 4da08d01ded011c92bdce420076a673e ""
-  "neurips_2022.aux" 1652800856 22578 ba252466442f83a4d045055f17665fb1 ""
-  "neurips_2022.bbl" 1652799891 13547 15b4cb228463847f670e3261c2acf2a4 "bibtex neurips_2022"
-  "neurips_2022.out" 1652800856 592 fb1f3e50ac3a5951878355b06a9079d4 ""
+  "neurips_2022.aux" 1652877652 22327 2d468e3bec3d8bfedf54987035d48e1f ""
+  "neurips_2022.bbl" 1652877651 13547 15b4cb228463847f670e3261c2acf2a4 "bibtex neurips_2022"
+  "neurips_2022.out" 1652877652 592 fb1f3e50ac3a5951878355b06a9079d4 ""
   "neurips_2022.sty" 1650531964 11562 bed3b2b3dd41efa3f6cf9e27f533a20e ""
-  "neurips_2022.tex" 1652800954 53064 ddd7227da85721cd8b1aee6a78bd7745 ""
+  "neurips_2022.tex" 1652878494 52913 b5cc3dd5ed9ae7892237eaac7d835c6d ""
   (generated)
+  "neurips_2022.pdf"
+  "neurips_2022.out"
+  "/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022.pdf"
   "/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022.log"
   "neurips_2022.aux"
-  "neurips_2022.pdf"
   "neurips_2022.log"
-  "/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022.pdf"
-  "neurips_2022.out"

@@ -238,7 +238,7 @@ Eventually, our training loss of temporal feature learning is defined as: $\math
 \section{Experiments}
 We verify the merit of our method in a series of correspondence-related tasks, including semi-supervised video object segmentation, pose keypoints tracking, and human parts segmentation propagation. This section will first introduce our experiment settings, including implementation and evaluation details. Then detailed ablation studies are performed to explain how each component of our method works. Last but not least, we finally report the performance comparison with state-of-the-art methods to further verify the effectiveness of our method.
 \subsection{Implementation Details}
-\textbf{Backbone.} We exploit the encoder $\phi$ with both ResNet-18 and ResNet-50~\cite{he2016deep} for self-supervised training. Following prior works~\cite{jabri2020space}\cite{lai2020mast}\cite{xu2021rethinking}, we reduce the stride of convolutional layers in $\phi$ to increase the spatial resolution of feature maps on layer $res_4$  by a factor of 4 or 8 (i.e. downsampling rate 8 or 4).
+\textbf{Backbone.} We exploit the encoder $\phi$ with both ResNet-18 and ResNet-50~\cite{he2016deep} for self-supervised training. Following prior works~\cite{jabri2020space}\cite{lai2020mast}\cite{xu2021rethinking}, we reduce the stride of convolutional layers in $\phi$ to increase the spatial resolution of feature maps on layer $res_4$  by a factor of 4 or 8 (i.e. downsampling rate 8 or 4). We set the stride of layer $res_5$ to 4 to increase the receptive field for better modeling object-level appearance. 
 
 \textbf{Training.}
 We first train our model using contrastive loss for 200 epochs on ImageNet~\cite{deng2009imagenet} following most hyper-parameters settings of~\cite{he2020momentum}. Then we perform temporal feature learning on YouTube-VOS~\cite{xu2018youtube} training set which consists of 3.5k videos. In this stage, the video frame is resized into 256$\times$256, and channel-wise dropout in Lab color space~\cite{lai2019self}\cite{lai2020mast} is adopted as the information bottleneck. We train the encoder for 90k/45k iterations with a mini-batch of 128/64 for ResNet-18/ResNet-50,  using Adam as our optimizer. The initial learning rate is set to 1e-4 with a cosine (half-period) learning rate schedule. The frame reconstruction is applied on both $res_3$ and $res_4$ layer while we realize global correlation distillation on $res_5$ layer. 
@@ -250,7 +250,7 @@ We first train our model using contrastive loss for 200 epochs on ImageNet~\cite
  The ablation study is performed with semi-supervised video object segmentation~\cite{pont20172017} on DAVIS-2017 validation set. Following the official protocol~\cite{pont20172017}, we use the mean of region similarity $\mathcal{J}_m$, mean of contour accuracy $\mathcal{F}_m$ and their average $\mathcal{J} \& \mathcal{F}_m$ as the evaluation metrics. We conduct a series of experiments to prove the effectiveness of each component. The stride of the encoder is all set to 8 for training and evaluation.
  
  
- \textbf{Temporal feature learning.} We first examine how each design in temporal feature learning impacts the overall performance, which is shown in Table \ref{tab:ablations} (a). To have a clear look, we train the model from scratch on YouTube-VOS~\cite{xu2018youtube}. The baseline is to apply frame reconstruction $\mathcal{L}_{\mathrm{rec}}$. The $p$, $\mathcal{L}_{\mathrm{lc}}$ and $e$ represents pyramid frame reconstruction, local correlation distillation without and with entropy-based selection. From the table, we can see leveraging more supervision of frame reconstruction at each pyramid level leads to an improvement in the range of 0.8\%. With the guidance of a more fine-grained local correlation map, $\mathcal{L}_{\mathrm{lc}}$ boosts up the accuracy from 65.4\% to 68.1\%. Moreover, enforcing the local correlation distillation to focus on the region with higher entropy leads to a performance gain in the range of 0.9\%. By fusing the above components, the performance finally reaches 69.0\%.
+ \textbf{Temporal feature learning.} We first examine how each design in temporal feature learning impacts the overall performance, which is shown in rows 1 to 4 of Table \ref{tab:ablations}. To have a clear look, we train the model from scratch on YouTube-VOS~\cite{xu2018youtube}. The baseline is to apply frame reconstruction $\mathcal{L}_{\mathrm{rec}}$. The $p$, $\mathcal{L}_{\mathrm{lc}}$ and $e$ represents pyramid frame reconstruction, local correlation distillation without and with entropy-based selection. From the table, we can see leveraging more supervision of frame reconstruction at each pyramid level leads to an improvement in the range of 0.8\%. With the guidance of a more fine-grained local correlation map, $\mathcal{L}_{\mathrm{lc}}$ boosts up the accuracy from 65.4\% to 68.1\%. Moreover, enforcing the local correlation distillation to focus on the region with higher entropy leads to a performance gain in the range of 0.9\%. By fusing the above components, the performance finally reaches 69.0\%.
  
 \begin{table*}[t]
   \centering
@@ -258,69 +258,61 @@ We first train our model using contrastive loss for 200 epochs on ImageNet~\cite
     \hspace{0.1em}
     \small
     % \renewcommand\thetable{1}
-            \subfloat[{Ablation study of each component.} \label{table:ablation2}]{
-              \resizebox{0.6\textwidth}{!}{
-              %   \tablestyle{1pt}{1.1}
-            \begin{tabular}{cc|cccc|ccc}
-              \hline
-              $\mathcal{L}_{\mathrm{nce}}$ &
-              $\mathcal{L}_{\mathrm{gc}}$ &
-              $\mathcal{L}_{\mathrm{rec}}$ &
-              % $\mathcal{L}^{p}_{\mathrm{rec}}$ &
-              $p$ &
-              $\mathcal{L}_{\mathrm{lc}}$ &
-              % $\mathcal{L}^e_{\mathrm{lc}}$ &
-              $e$ &
-              Dataset &
-              Backbone &
-                $\mathcal{J} \& \mathcal{F}_m \uparrow$ \\ 
-              \hline
-              % 1&$\checkmark$& & &             &   &   & I&Res18&61.7 \\
-              % \hline
-              &&$\checkmark$ & &  &   &    YTV& Res18 &64.6 \\
-              && $\checkmark$ & $\checkmark$&  &  &    YTV& Res18 &65.4 \\
-              && $\checkmark$& $\checkmark$& $\checkmark$ &   &    YTV& Res18 &68.1 \\
-              && $\checkmark$& $\checkmark$& $\checkmark$ &  $\checkmark$ &   YTV& Res18 & 69.0 \\ 
-              \hline
-              $\checkmark$& &$\checkmark$& $\checkmark$& $\checkmark$ &  $\checkmark$ &   I + YTV & Res18 & 69.3 \\ 
-              $\checkmark$& $\checkmark$  &$\checkmark$& $\checkmark$& $\checkmark$ &  $\checkmark$ &   I + YTV & Res18 & \textbf{70.5} \\ 
-              \hline
-            \end{tabular}%
-              }
-            }
-            \subfloat[{Ablation study of $\mathcal{L}_{\mathrm{gc}}$.} \label{table:ablation2}]{
-            \resizebox{0.38\textwidth}{!}{
-            % \tablestyle{1pt}{1.1}
-            \begin{tabular}{@{}cccc@{}}
-            \hline
-            Method         & Dataset       & Backbone &$\mathcal{J} \& \mathcal{F}_m \uparrow$ \\ 
-            \hline
-            $\mathcal{L}_{\mathrm{nce}}$ & I         & Res50 &66.5          \\
-            \hline
-            w/ $\mathcal{L}_{\mathrm{t}}$    & I + YTV & Res50 &69.6          \\
-            % + EWC            & ImageNet & Res50 &68.9          \\
-            w/ $\mathcal{L}_{\mathrm{t}}$ + LwF~\cite{li2017learning}            & I + YTV & Res50 &69.9          \\
-            w/ $\mathcal{L}_{\mathrm{t}}$ + $\mathcal{L}_{\mathrm{gc}}$ & I + YTV & Res50 &\textbf{71.3} \\
-            \hline
-            \end{tabular}%
-            }
-          }
+      \resizebox{0.9\textwidth}{!}{
+      \setlength\tabcolsep{11.3pt}
+        %   \tablestyle{1pt}{1.1}
+      \begin{tabular}{cc|cccc|c|ccc}
+        \hline
+        $\mathcal{L}_{\mathrm{nce}}$ &
+        $\mathcal{L}_{\mathrm{gc}}$ &
+        $\mathcal{L}_{\mathrm{rec}}$ &
+        % $\mathcal{L}^{p}_{\mathrm{rec}}$ &
+        $p$ &
+        $\mathcal{L}_{\mathrm{lc}}$ &
+        % $\mathcal{L}^e_{\mathrm{lc}}$ &
+        $e$ &
+        LwF &
+        Training Dataset &
+        Backbone &
+          $\mathcal{J} \& \mathcal{F}_m \uparrow$ \\ 
+        \hline
+        % 1&$\checkmark$& & &             &   &   & I&ResNet-18&61.7 \\
+        % \hline
+        $\checkmark$&& & &  &   &   & I & ResNet-18 &61.7 \\
+        $\checkmark$&& & &  &   &   & I & ResNet-50 &66.5 \\
+        \hline
+        &&$\checkmark$ & &  &   &   & YTV & ResNet-18 &64.6 \\
+        && $\checkmark$ & $\checkmark$&  &  &   & YTV& ResNet-18 &65.4 \\
+        && $\checkmark$& $\checkmark$& $\checkmark$ &   &  &  YTV& ResNet-18 &68.1 \\
+        && $\checkmark$& $\checkmark$& $\checkmark$ &  $\checkmark$ &  & YTV& ResNet-18 & 69.0 \\ 
+        \hline
+        % $\checkmark$& && &  &   &  & I & ResNet-18 & 61.7 \\ 
+        $\checkmark$& &$\checkmark$& $\checkmark$& $\checkmark$ &  $\checkmark$ &  & I + YTV & ResNet-18 & 69.3 \\ 
+        $\checkmark$& $\checkmark$  &$\checkmark$& $\checkmark$& $\checkmark$ &  $\checkmark$ &  & I + YTV & ResNet-18 & \textbf{70.5} \\ 
+        \hline
+        % $\checkmark$& && &  &   & &  I & ResNet-50 & 66.5 \\ 
+        $\checkmark$& &$\checkmark$& $\checkmark$& $\checkmark$ &  $\checkmark$ &  & I + YTV & ResNet-50 & 69.6 \\ 
+        $\checkmark$& &$\checkmark$& $\checkmark$& $\checkmark$ &  $\checkmark$ & $\checkmark$ & I + YTV & ResNet-50 & 69.9\\ 
+        $\checkmark$& $\checkmark$  &$\checkmark$& $\checkmark$& $\checkmark$ &  $\checkmark$ &  & I + YTV & ResNet-50 & \textbf{71.3} \\ 
+        \hline
+      \end{tabular}%
+      }
     \captionsetup{font=small}
-    \caption{\textbf{Ablation study for each component in our framework}.  The "$p$" and "$e$" in (a) correspond to pyramid frame reconstruction and entropy-based selection. Models in (b) are all pre-trained on ImageNet with contrastive loss and  "w/" represents that models are subsequently trained on YouTube-VOS using different methods. I: ImageNet~\cite{deng2009imagenet}.  YTV: YouTube-VOS~\cite{xu2018youtube}.}
-    \label{tab:ablations}\vspace{-2mm}
+    \caption{\textbf{Ablation study for each component in our framework}.  The "$p$" and "$e$" correspond to pyramid frame reconstruction and entropy-based selection. We also compare with a general continual model LwF~\cite{li2017learning} based on knowledge distillation when fine-tuning on video dataset in the second step. I: ImageNet~\cite{deng2009imagenet}.  YTV: YouTube-VOS~\cite{xu2018youtube}.}
+    \label{tab:ablations}\vspace{-4mm}
 \end{table*}
 
 \begin{figure}[!tb]
   \centering
-  {\includegraphics[width=1.0\textwidth]{figure/abalations/ablataions.pdf}}
-  \caption{\small \textbf{Visualization of the ablation study.} Given a query point sampled in the target frame, we visualize the result of computing the local correlation  w.r.t. reference frame. The dashed line in red represents the range of computing correlation map w.r.t. query point. The reference frame is randomly sampled in the memory bank of inference strategy~\cite{jabri2020space}\cite{lai2020mast}\cite{xu2021rethinking}. }
+  {\includegraphics[width=0.9\textwidth]{figure/abalations/ablataions.pdf}}
+  \caption{\small \textbf{Visualization of the ablation study.} Given a query point sampled in the target frame, we visualize the result of computing the local correlation  w.r.t. reference frame. The dashed line in red represents the range of computing correlation map w.r.t. query point. The reference frame is randomly sampled in the memory bank of inference strategy~\cite{jabri2020space}\cite{lai2020mast}\cite{xu2021rethinking}. The $\mathcal{L}_{\mathrm{t}}$ refers to the loss for temporal feature learning introduced in Section~\ref{temporal_feature_learning}.}
   \label{fig:ablations}
   \vspace{-7mm}
 \end{figure}
 
-\textbf{Spatial feature learning.} We investigate the effect of training with each component in spatial feature learning. The results are shown in the last two rows of Table \ref{tab:ablations} (a). Note models are all first train on ImageNet and then switched to YouTube-VOS. With the help of the pre-training on ImageNet using contrastive loss, the performance of our method reaches 69.3\%. Moreover, the global correlation distillation loss $\mathcal{L}_{\mathrm{gc}}$ boosts up the performance from 69.3\% to 70.5\% by giving the ability of the model to capture object-level correspondence, which is closely related to object appearance modeling.
+\textbf{Spatial feature learning.} We investigate the effect of training with each component in spatial feature learning. The results are shown in rows 5 to 6 of Table \ref{tab:ablations}. Here models are all first train on ImageNet. With the help of the pre-training on ImageNet using contrastive loss, the performance of our method reaches 69.3\%  when directly fine-tuning on video dataset. Moreover, the global correlation distillation loss $\mathcal{L}_{\mathrm{gc}}$ boosts up the performance from 69.3\% to 70.5\% by giving the ability of the model to capture object-level correspondence, which is closely related to object appearance modeling.
  
-\textbf{Further exploitation of $\mathcal{L}_{\mathrm{gc}}$.}  Directly fine-tuning the model pre-trained with contrastive loss $\mathcal{L}_{\mathrm{nce}}$ will lead to a well-known phenomenon of catastrophic forgetting~\cite{li2017learning}, which is closely related to continual learning. To further verify the effectiveness of  $\mathcal{L}_{\mathrm{gc}}$, we exploit a general continual model LwF~\cite{li2017learning}  based on knowledge distillation apart from directly fine-tuning on video dataset. We modify the framework of LwF to adapt to the paradigm of self-supervised learning and adopt the framework of~\cite{xie2021detco} with ResNet-50 when training in the first step. The results are shown on Table \ref{tab:ablations} (b). All methods achieve better results attributed to the proposed temporal feature learning, while our method using $\mathcal{L}_{\mathrm{gc}}$ gets the best performance. 
+\textbf{Further exploitation of $\mathcal{L}_{\mathrm{gc}}$.}  Directly fine-tuning the model pre-trained with contrastive loss $\mathcal{L}_{\mathrm{nce}}$ will lead to a well-known phenomenon of catastrophic forgetting~\cite{li2017learning}, which is closely related to continual learning. To further verify the effectiveness of  $\mathcal{L}_{\mathrm{gc}}$, we exploit a general continual model LwF~\cite{li2017learning}  based on knowledge distillation apart from directly fine-tuning on video dataset. We modify the framework of LwF to adapt to the paradigm of self-supervised learning and adopt the framework of~\cite{xie2021detco} with ResNet-50 when training in the first step. The results are shown in the last four rows of Table \ref{tab:ablations}. All models achieve better results attributed to the proposed temporal feature learning, while our method using $\mathcal{L}_{\mathrm{gc}}$ gets the best performance. 
 
 \textbf{Further analysis.} 
 We give a further analysis here based on the above experiments. On the one hand, temporal feature learning helps to learn the fine-grained correspondence related to motion estimation between frames, which is unable to accomplish by training an appearance model. As you can see in the second row of Figure \ref{fig:ablations}, the appearance model trained with $\mathcal{L}_{\mathrm{nce}}$ is misled by two patches at different locations (i.e. two feats of the tiger) which has a similar appearance, while the model trained with $\mathcal{L}_{\mathrm{t}}$ tends to learn a better temporal representation for fine-grained correspondence. However, in the last two rows of Figure \ref{fig:ablations}, the model trained with $\mathcal{L}_{\mathrm{t}}$ fails to capture temporal correspondence with a local correlation when facing severe temporal discontinuity, e.g., occlusions, appearance changes, large motion,  while the model trained with $\mathcal{L}_{\mathrm{nce}}$ is able to correct the mistakes by tracking the points based on the object appearance (see with $\mathcal{L}_{\mathrm{nce}}$ and with all).

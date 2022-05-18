@@ -123,6 +123,7 @@
 \citation{li2017learning}
 \citation{deng2009imagenet}
 \citation{xu2018youtube}
+\citation{li2017learning}
 \citation{deng2009imagenet}
 \citation{xu2018youtube}
 \citation{jabri2020space}
@@ -137,16 +138,6 @@
 \@writefile{toc}{\contentsline {section}{\numberline {4}Experiments}{6}{section.4}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Implementation Details}{6}{subsection.4.1}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Ablation Study}{6}{subsection.4.2}}
-\newlabel{table:ablation2}{{1a}{7}{Subtable 1a}{subtable.1.1}{}}
-\newlabel{sub@table:ablation2}{{(a)}{a}{Subtable 1a\relax }{subtable.1.1}{}}
-\newlabel{table:ablation2}{{1b}{7}{Subtable 1b}{subtable.1.2}{}}
-\newlabel{sub@table:ablation2}{{(b)}{b}{Subtable 1b\relax }{subtable.1.2}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces \textbf  {Ablation study for each component in our framework}. The "$p$" and "$e$" in (a) correspond to pyramid frame reconstruction and entropy-based selection. Models in (b) are all pre-trained on ImageNet with contrastive loss and "w/" represents that models are subsequently trained on YouTube-VOS using different methods. I: ImageNet\nobreakspace  {}\cite  {deng2009imagenet}. YTV: YouTube-VOS\nobreakspace  {}\cite  {xu2018youtube}.\relax }}{7}{table.caption.4}}
-\newlabel{tab:ablations}{{1}{7}{\textbf {Ablation study for each component in our framework}. The "$p$" and "$e$" in (a) correspond to pyramid frame reconstruction and entropy-based selection. Models in (b) are all pre-trained on ImageNet with contrastive loss and "w/" represents that models are subsequently trained on YouTube-VOS using different methods. I: ImageNet~\cite {deng2009imagenet}. YTV: YouTube-VOS~\cite {xu2018youtube}.\relax }{table.caption.4}{}}
-\@writefile{lot}{\contentsline {subtable}{\numberline{(a)}{\ignorespaces {{Ablation study of each component.} }}}{7}{subtable.1.1}}
-\@writefile{lot}{\contentsline {subtable}{\numberline{(b)}{\ignorespaces {{Ablation study of $\mathcal {L}_{\mathrm {gc}}$.} }}}{7}{subtable.1.2}}
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces \relax \fontsize  {9}{10}\selectfont  \abovedisplayskip 6\p@ plus1.5\p@ minus4\p@ \abovedisplayshortskip \z@ plus2\p@ \belowdisplayskip \abovedisplayskip \belowdisplayshortskip 3\p@ plus2\p@ minus2\p@ \textbf  {Visualization of the ablation study.} Given a query point sampled in the target frame, we visualize the result of computing the local correlation w.r.t. reference frame. The dashed line in red represents the range of computing correlation map w.r.t. query point. The reference frame is randomly sampled in the memory bank of inference strategy\nobreakspace  {}\cite  {jabri2020space}\cite  {lai2020mast}\cite  {xu2021rethinking}. \relax }}{7}{figure.caption.5}}
-\newlabel{fig:ablations}{{3}{7}{\small \textbf {Visualization of the ablation study.} Given a query point sampled in the target frame, we visualize the result of computing the local correlation w.r.t. reference frame. The dashed line in red represents the range of computing correlation map w.r.t. query point. The reference frame is randomly sampled in the memory bank of inference strategy~\cite {jabri2020space}\cite {lai2020mast}\cite {xu2021rethinking}. \relax }{figure.caption.5}{}}
 \citation{he2020momentum}
 \citation{chen2021exploring}
 \citation{vondrick2018tracking}
@@ -191,6 +182,10 @@
 \citation{xu2018youtube}
 \citation{pont20172017}
 \citation{everingham2015pascal}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces \textbf  {Ablation study for each component in our framework}. The "$p$" and "$e$" correspond to pyramid frame reconstruction and entropy-based selection. We also compare with a general continual model LwF\nobreakspace  {}\cite  {li2017learning} based on knowledge distillation when fine-tuning on video dataset in the second step. I: ImageNet\nobreakspace  {}\cite  {deng2009imagenet}. YTV: YouTube-VOS\nobreakspace  {}\cite  {xu2018youtube}.\relax }}{7}{table.caption.4}}
+\newlabel{tab:ablations}{{1}{7}{\textbf {Ablation study for each component in our framework}. The "$p$" and "$e$" correspond to pyramid frame reconstruction and entropy-based selection. We also compare with a general continual model LwF~\cite {li2017learning} based on knowledge distillation when fine-tuning on video dataset in the second step. I: ImageNet~\cite {deng2009imagenet}. YTV: YouTube-VOS~\cite {xu2018youtube}.\relax }{table.caption.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces \relax \fontsize  {9}{10}\selectfont  \abovedisplayskip 6\p@ plus1.5\p@ minus4\p@ \abovedisplayshortskip \z@ plus2\p@ \belowdisplayskip \abovedisplayskip \belowdisplayshortskip 3\p@ plus2\p@ minus2\p@ \textbf  {Visualization of the ablation study.} Given a query point sampled in the target frame, we visualize the result of computing the local correlation w.r.t. reference frame. The dashed line in red represents the range of computing correlation map w.r.t. query point. The reference frame is randomly sampled in the memory bank of inference strategy\nobreakspace  {}\cite  {jabri2020space}\cite  {lai2020mast}\cite  {xu2021rethinking}. The $\mathcal  {L}_{\mathrm  {t}}$ refers to the loss for temporal feature learning introduced in Section\nobreakspace  {}\ref  {temporal_feature_learning}.\relax }}{7}{figure.caption.5}}
+\newlabel{fig:ablations}{{3}{7}{\small \textbf {Visualization of the ablation study.} Given a query point sampled in the target frame, we visualize the result of computing the local correlation w.r.t. reference frame. The dashed line in red represents the range of computing correlation map w.r.t. query point. The reference frame is randomly sampled in the memory bank of inference strategy~\cite {jabri2020space}\cite {lai2020mast}\cite {xu2021rethinking}. The $\mathcal {L}_{\mathrm {t}}$ refers to the loss for temporal feature learning introduced in Section~\ref {temporal_feature_learning}.\relax }{figure.caption.5}{}}
 \citation{wang2019learning}
 \citation{li2019joint}
 \citation{jabri2020space}
