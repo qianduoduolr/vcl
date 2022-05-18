@@ -1,10 +1,10 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.19 (TeX Live 2018) (preloaded format=pdflatex 2019.2.26)  17 MAY 2022 23:20
+This is pdfTeX, Version 3.14159265-2.6-1.40.19 (TeX Live 2018) (preloaded format=pdflatex 2019.2.26)  16 MAY 2022 21:14
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
  %&-line parsing enabled.
-**/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022.tex
-(/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022.tex
+**/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022_supp.tex
+(/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022_supp.tex
 LaTeX2e <2018-04-01> patch level 2
 Babel <3.18> and hyphenation patterns for 84 language(s) loaded.
 (/usr/local/texlive/2018/texmf-dist/tex/latex/base/article.cls
@@ -406,37 +406,24 @@ Package caption Info: wrapfig package is loaded.
 \c@lotdepth=\count137
 \sf@top=\skip60
 \sf@bottom=\skip61
-) (/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022.aux
+) (/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022_supp.aux)
+\openout1 = `neurips_2022_supp.aux'.
 
-LaTeX Warning: Label `eq:pyramid reconstruction loss' multiply defined.
-
-
-LaTeX Warning: Label `eq:reconstruction loss' multiply defined.
-
-
-LaTeX Warning: Label `table:ablation2' multiply defined.
-
-
-LaTeX Warning: Label `sub@table:ablation2' multiply defined.
-
-)
-\openout1 = `neurips_2022.aux'.
-
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 98.
-LaTeX Font Info:    ... okay on input line 98.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 98.
-LaTeX Font Info:    ... okay on input line 98.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 98.
-LaTeX Font Info:    ... okay on input line 98.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 98.
-LaTeX Font Info:    ... okay on input line 98.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 98.
-LaTeX Font Info:    ... okay on input line 98.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 98.
-LaTeX Font Info:    ... okay on input line 98.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 98.
-LaTeX Font Info:    ... okay on input line 98.
-LaTeX Font Info:    Try loading font information for T1+ptm on input line 98.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 99.
+LaTeX Font Info:    ... okay on input line 99.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 99.
+LaTeX Font Info:    ... okay on input line 99.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 99.
+LaTeX Font Info:    ... okay on input line 99.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 99.
+LaTeX Font Info:    ... okay on input line 99.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 99.
+LaTeX Font Info:    ... okay on input line 99.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 99.
+LaTeX Font Info:    ... okay on input line 99.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 99.
+LaTeX Font Info:    ... okay on input line 99.
+LaTeX Font Info:    Try loading font information for T1+ptm on input line 99.
  (/usr/local/texlive/2018/texmf-dist/tex/latex/psnfss/t1ptm.fd
 File: t1ptm.fd 2001/06/04 font definitions for T1/ptm.
 )
@@ -507,7 +494,7 @@ File: t1ptm.fd 2001/06/04 font definitions for T1/ptm.
 * (1in=72.27pt=25.4mm, 1cm=28.453pt)
 
 \AtBeginShipoutBox=\box32
-Package hyperref Info: Link coloring OFF on input line 98.
+Package hyperref Info: Link coloring OFF on input line 99.
 (/usr/local/texlive/2018/texmf-dist/tex/latex/hyperref/nameref.sty
 Package: nameref 2016/05/21 v2.44 Cross-referencing by name of section
  (/usr/local/texlive/2018/texmf-dist/tex/generic/oberdiek/gettitlestring.sty
@@ -515,12 +502,12 @@ Package: gettitlestring 2016/05/16 v1.5 Cleanup title references (HO)
 )
 \c@section@level=\count138
 )
-LaTeX Info: Redefining \ref on input line 98.
-LaTeX Info: Redefining \pageref on input line 98.
-LaTeX Info: Redefining \nameref on input line 98.
- (/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022.out) (/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022.out)
+LaTeX Info: Redefining \ref on input line 99.
+LaTeX Info: Redefining \pageref on input line 99.
+LaTeX Info: Redefining \nameref on input line 99.
+ (/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022_supp.out) (/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022_supp.out)
 \@outlinefile=\write3
-\openout3 = `neurips_2022.out'.
+\openout3 = `neurips_2022_supp.out'.
 
  (/usr/local/texlive/2018/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
 [Loading MPS to PDF converter (version 2006.09.02).]
@@ -547,7 +534,7 @@ Package grfext Info: Graphics extension search list:
  (/usr/local/texlive/2018/texmf-dist/tex/latex/latexconfig/epstopdf-sys.cfg
 File: epstopdf-sys.cfg 2010/07/13 v1.3 Configuration of (r)epstopdf for TeX Live
 ))
-LaTeX Info: Redefining \microtypecontext on input line 98.
+LaTeX Info: Redefining \microtypecontext on input line 99.
 Package microtype Info: Generating PDF output.
 Package microtype Info: Character protrusion enabled (level 2).
 Package microtype Info: Using default protrusion set `alltext'.
@@ -564,29 +551,29 @@ Package caption Info: Begin \AtBeginDocument code.
 Package caption Info: subfig package v1.3 is loaded.
 Package caption Info: End \AtBeginDocument code.
 LaTeX Font Info:    Font shape `T1/ptm/bx/n' in size <17.28> not available
-(Font)              Font shape `T1/ptm/b/n' tried instead on input line 102.
+(Font)              Font shape `T1/ptm/b/n' tried instead on input line 103.
  (/usr/local/texlive/2018/texmf-dist/tex/latex/microtype/mt-cmr.cfg
 File: mt-cmr.cfg 2013/05/19 v2.2 microtype config. file: Computer Modern Roman (RS)
 )
-LaTeX Font Info:    Try loading font information for U+msa on input line 102.
+LaTeX Font Info:    Try loading font information for U+msa on input line 103.
  (/usr/local/texlive/2018/texmf-dist/tex/latex/amsfonts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 ) (/usr/local/texlive/2018/texmf-dist/tex/latex/microtype/mt-msa.cfg
 File: mt-msa.cfg 2006/02/04 v1.1 microtype config. file: AMS symbols (a) (RS)
 )
-LaTeX Font Info:    Try loading font information for U+msb on input line 102.
+LaTeX Font Info:    Try loading font information for U+msb on input line 103.
  (/usr/local/texlive/2018/texmf-dist/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 ) (/usr/local/texlive/2018/texmf-dist/tex/latex/microtype/mt-msb.cfg
 File: mt-msb.cfg 2005/06/01 v1.0 microtype config. file: AMS symbols (b) (RS)
 )
-LaTeX Font Info:    Try loading font information for U+wasy on input line 102.
+LaTeX Font Info:    Try loading font information for U+wasy on input line 103.
  (/usr/local/texlive/2018/texmf-dist/tex/latex/wasysym/uwasy.fd
 File: uwasy.fd 2003/10/30 v2.0 Wasy-2 symbol font definitions
 )
 LaTeX Font Info:    Font shape `T1/ptm/bx/n' in size <10> not available
-(Font)              Font shape `T1/ptm/b/n' tried instead on input line 102.
-LaTeX Font Info:    Try loading font information for T1+pcr on input line 102.
+(Font)              Font shape `T1/ptm/b/n' tried instead on input line 103.
+LaTeX Font Info:    Try loading font information for T1+pcr on input line 103.
  (/usr/local/texlive/2018/texmf-dist/tex/latex/psnfss/t1pcr.fd
 File: t1pcr.fd 2001/06/04 font definitions for T1/pcr.
 )
@@ -594,9 +581,7 @@ Package microtype Info: Loading generic protrusion settings for font family
 (microtype)             `pcr' (encoding: T1).
 (microtype)             For optimal results, create family-specific settings.
 (microtype)             See the microtype manual for details.
-LaTeX Font Info:    Font shape `T1/ptm/bx/n' in size <12> not available
-(Font)              Font shape `T1/ptm/b/n' tried instead on input line 104.
-LaTeX Font Info:    Try loading font information for T1+phv on input line 106.
+LaTeX Font Info:    Try loading font information for T1+phv on input line 105.
  (/usr/local/texlive/2018/texmf-dist/tex/latex/psnfss/t1phv.fd
 File: t1phv.fd 2001/06/04 scalable font definitions for T1/phv.
 )
@@ -604,205 +589,44 @@ Package microtype Info: Loading generic protrusion settings for font family
 (microtype)             `phv' (encoding: T1).
 (microtype)             For optimal results, create family-specific settings.
 (microtype)             See the microtype manual for details.
- [1
-
-
-{/usr/local/texlive/2018/texmf-var/fonts/map/pdftex/updmap/pdftex.map}]
-
-pdfTeX warning: pdflatex (file /Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/figure/tissor/tissor.pdf): PDF inclusion: found PDF version <1.7>, but at most version <1.5> allowed
-<figure/tissor/tissor.pdf, id=84, 1573.43842pt x 423.7431pt>
-File: figure/tissor/tissor.pdf Graphic file (type pdf)
-<use figure/tissor/tissor.pdf>
-Package pdftex.def Info: figure/tissor/tissor.pdf  used on input line 118.
-(pdftex.def)             Requested size: 397.48499pt x 107.04762pt.
+LaTeX Font Info:    Font shape `T1/ptm/bx/n' in size <12> not available
+(Font)              Font shape `T1/ptm/b/n' tried instead on input line 106.
 LaTeX Font Info:    Font shape `T1/ptm/bx/n' in size <9> not available
-(Font)              Font shape `T1/ptm/b/n' tried instead on input line 119.
-[2 </Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/figure/tissor/tissor.pdf>]
-
-pdfTeX warning: pdflatex (file /Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/figure/framework/framework.pdf): PDF inclusion: found PDF version <1.7>, but at most version <1.5> allowed
-<figure/framework/framework.pdf, id=161, 1556.81625pt x 581.2917pt>
-File: figure/framework/framework.pdf Graphic file (type pdf)
-<use figure/framework/framework.pdf>
-Package pdftex.def Info: figure/framework/framework.pdf  used on input line 147.
-(pdftex.def)             Requested size: 397.48499pt x 148.40926pt.
-
-LaTeX Font Warning: Font shape `U/wasy/b/n' in size <7> not available
-(Font)              Font shape `U/wasy/m/n' tried instead on input line 155.
-
-
-LaTeX Font Warning: Font shape `U/wasy/b/n' in size <5> not available
-(Font)              Font shape `U/wasy/m/n' tried instead on input line 155.
-
-
-LaTeX Font Warning: Command \small invalid in math mode on input line 157.
-
-
-LaTeX Font Warning: Font shape `U/wasy/b/n' in size <9> not available
-(Font)              Font shape `U/wasy/m/n' tried instead on input line 159.
-
-
-LaTeX Font Warning: Font shape `U/wasy/b/n' in size <6> not available
-(Font)              Font shape `U/wasy/m/n' tried instead on input line 159.
-
-LaTeX Font Info:    Calculating math sizes for size <> on input line 161.
-
-LaTeX Font Warning: Font shape `OT1/cmr/m/n' in size <> not available
-(Font)              size <5> substituted on input line 161.
-
-
-LaTeX Font Warning: Font shape `OT1/cmr/m/n' in size <0.7> not available
-(Font)              size <5> substituted on input line 161.
-
-
-LaTeX Font Warning: Font shape `OT1/cmr/m/n' in size <0.5> not available
-(Font)              size <5> substituted on input line 161.
-
-
-LaTeX Font Warning: Font shape `OML/cmm/m/it' in size <> not available
-(Font)              size <5> substituted on input line 161.
-
-
-LaTeX Font Warning: Font shape `OML/cmm/m/it' in size <0.7> not available
-(Font)              size <5> substituted on input line 161.
-
-
-LaTeX Font Warning: Font shape `OML/cmm/m/it' in size <0.5> not available
-(Font)              size <5> substituted on input line 161.
-
-
-LaTeX Font Warning: Font shape `OMS/cmsy/m/n' in size <> not available
-(Font)              size <5> substituted on input line 161.
-
-
-LaTeX Font Warning: Font shape `OMS/cmsy/m/n' in size <0.7> not available
-(Font)              size <5> substituted on input line 161.
-
-
-LaTeX Font Warning: Font shape `OMS/cmsy/m/n' in size <0.5> not available
-(Font)              size <5> substituted on input line 161.
-
-
-LaTeX Font Warning: Font shape `U/wasy/m/n' in size <> not available
-(Font)              size <5> substituted on input line 161.
-
-
-LaTeX Font Warning: Font shape `U/wasy/m/n' in size <0.7> not available
-(Font)              size <5> substituted on input line 161.
-
-
-LaTeX Font Warning: Font shape `U/wasy/m/n' in size <0.5> not available
-(Font)              size <5> substituted on input line 161.
-
-[3]
-
-LaTeX Font Warning: Command \small invalid in math mode on input line 166.
-
-LaTeX Font Info:    Try loading font information for OMS+ptm on input line 171.
-(/usr/local/texlive/2018/texmf-dist/tex/latex/psnfss/omsptm.fd
-File: omsptm.fd 
-)
-LaTeX Font Info:    Font shape `OMS/ptm/m/n' in size <10> not available
-(Font)              Font shape `OMS/cmsy/m/n' tried instead on input line 171.
-
-
-LaTeX Font Warning: Command \small invalid in math mode on input line 173.
-
-
-LaTeX Font Warning: Command \small invalid in math mode on input line 183.
-
-[4 </Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/figure/framework/framework.pdf>]
-
-LaTeX Font Warning: Command \small invalid in math mode on input line 190.
-
-
-LaTeX Font Warning: Command \small invalid in math mode on input line 197.
-
-
-LaTeX Font Warning: Command \small invalid in math mode on input line 206.
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 213--214
-
- []
-
-
-LaTeX Font Warning: Command \small invalid in math mode on input line 217.
-
-
-LaTeX Font Warning: Command \small invalid in math mode on input line 224.
-
-
-LaTeX Font Warning: Command \small invalid in math mode on input line 231.
-
-[5]
-Overfull \hbox (1.06845pt too wide) in paragraph at lines 258--309
- [][][][] 
- []
-
-
-
-pdfTeX warning: pdflatex (file /Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/figure/abalations/ablataions.pdf): PDF inclusion: found PDF version <1.7>, but at most version <1.5> allowed
-<figure/abalations/ablataions.pdf, id=285, 811.35121pt x 559.00844pt>
-File: figure/abalations/ablataions.pdf Graphic file (type pdf)
-<use figure/abalations/ablataions.pdf>
-Package pdftex.def Info: figure/abalations/ablataions.pdf  used on input line 315.
-(pdftex.def)             Requested size: 397.48499pt x 273.85681pt.
-
-Underfull \vbox (badness 3168) has occurred while \output is active []
-
- [6] [7 </Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/figure/abalations/ablataions.pdf>]
-Underfull \hbox (badness 1622) in paragraph at lines 454--457
-\T1/ptm/m/n/10 (+20) our method reaches 73.1%, lead-ing
- []
-
-
-Underfull \hbox (badness 1622) in paragraph at lines 454--457
-\T1/ptm/m/n/10 (+20) ify the idea of our meth-ods. For
- []
-
-
-Underfull \vbox (badness 10000) has occurred while \output is active []
-
- [8]
-
-pdfTeX warning: pdflatex (file /Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/figure/quantitative_results/quan.pdf): PDF inclusion: found PDF version <1.7>, but at most version <1.5> allowed
-<figure/quantitative_results/quan.pdf, id=446, 1157.6449pt x 820.86674pt>
-File: figure/quantitative_results/quan.pdf Graphic file (type pdf)
-<use figure/quantitative_results/quan.pdf>
-Package pdftex.def Info: figure/quantitative_results/quan.pdf  used on input line 468.
-(pdftex.def)             Requested size: 397.48499pt x 281.84659pt.
-(/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022.bbl [9 </Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/figure/quantitative_results/quan.pdf>] [10] [11]) [12]
-Package atveryend Info: Empty hook `BeforeClearDocument' on input line 592.
- [13]
-Package atveryend Info: Empty hook `AfterLastShipout' on input line 592.
- (/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022.aux)
-Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 592.
-Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 592.
-Package rerunfilecheck Info: File `neurips_2022.out' has not changed.
-(rerunfilecheck)             Checksum: FB1F3E50AC3A5951878355B06A9079D4;592.
-
-
-LaTeX Font Warning: Size substitutions with differences
-(Font)              up to 4.5pt have occurred.
-
-
-LaTeX Warning: There were multiply-defined labels.
-
-Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 592.
+(Font)              Font shape `T1/ptm/b/n' tried instead on input line 129.
+
+
+pdfTeX warning: pdflatex (file /Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/figure/supp_entropy/supp_en.pdf): PDF inclusion: found PDF version <1.7>, but at most version <1.5> allowed
+<figure/supp_entropy/supp_en.pdf, id=18, 538.65242pt x 427.5975pt>
+File: figure/supp_entropy/supp_en.pdf Graphic file (type pdf)
+<use figure/supp_entropy/supp_en.pdf>
+Package pdftex.def Info: figure/supp_entropy/supp_en.pdf  used on input line 136.
+(pdftex.def)             Requested size: 238.49341pt x 189.32443pt.
+Package atveryend Info: Empty hook `BeforeClearDocument' on input line 165.
+[1
+
+
+{/usr/local/texlive/2018/texmf-var/fonts/map/pdftex/updmap/pdftex.map}] [2 </Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/figure/supp_entropy/supp_en.pdf>]
+Package atveryend Info: Empty hook `AfterLastShipout' on input line 165.
+ (/Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022_supp.aux)
+Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 165.
+Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 165.
+Package rerunfilecheck Info: File `neurips_2022_supp.out' has not changed.
+(rerunfilecheck)             Checksum: D91B5E7D4A4D904C820BC7B1F0C2C45A;247.
+Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 165.
  ) 
 Here is how much of TeX's memory you used:
- 11851 strings out of 492649
- 180789 string characters out of 6129622
- 332318 words of memory out of 5000000
- 15156 multiletter control sequences out of 15000+600000
- 61025 words of font info for 235 fonts, out of 8000000 for 9000
+ 11234 strings out of 492649
+ 170638 string characters out of 6129622
+ 305304 words of memory out of 5000000
+ 14852 multiletter control sequences out of 15000+600000
+ 38079 words of font info for 92 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 44i,17n,49p,1829b,582s stack positions out of 5000i,500n,10000p,200000b,80000s
-{/usr/local/texlive/2018/texmf-dist/fonts/enc/dvips/base/8r.enc}</usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmex9.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi5.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi9.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmmib10.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmmib9.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmr5.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy5.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/symbols/msam10.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/urw/courier/ucrr8a.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/urw/helvetic/uhvr8a.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on /Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022.pdf (13 pages, 1417363 bytes).
+ 44i,10n,42p,1122b,423s stack positions out of 5000i,500n,10000p,200000b,80000s
+{/usr/local/texlive/2018/texmf-dist/fonts/enc/dvips/base/8r.enc}</usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/urw/courier/ucrr8a.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/urw/helvetic/uhvr8a.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/local/texlive/2018/texmf-dist/fonts/type1/urw/times/utmr8a.pfb>
+Output written on /Users/lr/Desktop/projects/VCL_NIPS2022/paper/submit_liu/neurips_2022_supp.pdf (2 pages, 183969 bytes).
 PDF statistics:
- 669 PDF objects out of 1000 (max. 8388607)
- 511 compressed objects within 6 object streams
- 122 named destinations out of 1000 (max. 500000)
- 24677 words of extra memory for PDF output out of 24883 (max. 10000000)
+ 91 PDF objects out of 1000 (max. 8388607)
+ 64 compressed objects within 1 object stream
+ 9 named destinations out of 1000 (max. 500000)
+ 16926 words of extra memory for PDF output out of 17280 (max. 10000000)
 

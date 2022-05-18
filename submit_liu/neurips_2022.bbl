@@ -35,9 +35,10 @@ X.~Chen and K.~He.
 \newblock Exploring simple siamese representation learning.
 \newblock In \emph{CVPR}, 2021.
 
-\bibitem[Deng(2009)]{deng2009large}
-J.~Deng.
-\newblock A large-scale hierarchical image database.
+\bibitem[Deng et~al.(2009)Deng, Dong, Socher, Li, Li, and
+  Fei-Fei]{deng2009imagenet}
+J.~Deng, W.~Dong, R.~Socher, L.-J. Li, K.~Li, and L.~Fei-Fei.
+\newblock Imagenet: A large-scale hierarchical image database.
 \newblock In \emph{CVPR}, 2009.
 
 \bibitem[Dosovitskiy et~al.(2015)Dosovitskiy, Fischer, Ilg, Hausser, Hazirbas,
@@ -164,6 +165,14 @@ K.-K. Maninis, S.~Caelles, Y.~Chen, J.~Pont-Tuset, L.~Leal-Taix{\'e},
   D.~Cremers, and L.~Van~Gool.
 \newblock Video object segmentation without temporal information.
 \newblock \emph{IEEE transactions on PAMI}, 2018.
+
+\bibitem[Mayer et~al.(2016)Mayer, Ilg, Hausser, Fischer, Cremers, Dosovitskiy,
+  and Brox]{mayer2016large}
+N.~Mayer, E.~Ilg, P.~Hausser, P.~Fischer, D.~Cremers, A.~Dosovitskiy, and
+  T.~Brox.
+\newblock A large dataset to train convolutional networks for disparity,
+  optical flow, and scene flow estimation.
+\newblock In \emph{CVPR}, 2016.
 
 \bibitem[Meister et~al.(2018)Meister, Hur, and Roth]{meister2018unflow}
 S.~Meister, J.~Hur, and S.~Roth.
@@ -300,12 +309,6 @@ C.~Yang, Z.~Wu, B.~Zhou, and S.~Lin.
 Y.~Yang and D.~Ramanan.
 \newblock Articulated human detection with flexible mixtures of parts.
 \newblock \emph{IEEE transactions on PAMI}, 2012.
-
-\bibitem[Yao et~al.(2021)Yao, Zhang, Qiu, Pan, and Mei]{yao2021seco}
-T.~Yao, Y.~Zhang, Z.~Qiu, Y.~Pan, and T.~Mei.
-\newblock Seco: Exploring sequence supervision for unsupervised representation
-  learning.
-\newblock In \emph{AAAI}, 2021.
 
 \bibitem[Zhao et~al.(2021)Zhao, Jin, and Heng]{zhao2021modelling}
 Z.~Zhao, Y.~Jin, and P.-A. Heng.
