@@ -1,1 +1,1 @@
-train_dry_run
+moco_d4_res18_eval

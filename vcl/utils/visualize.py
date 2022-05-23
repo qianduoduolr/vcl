@@ -13,12 +13,13 @@ from matplotlib import cm
 plt.axis('off')
 
 class Correspondence_Visualizer(object):
-    def __init__(self, mode, show_mode='plt', flow_show_mode='rgb', nembed=2048, scale=32, radius=-1):
+    def __init__(self, mode, show_mode='plt', flow_show_mode='rgb', nembed=2048, scale=32, radius=-1, blend_color='bone'):
         
         self.mode = mode
         self.show_mode = show_mode
         self.flow_show_mode = flow_show_mode
         self.scale = scale
+        self.blend_color = blend_color
         
         if self.show_mode == 'plt':
             plt.rcParams['figure.dpi'] = 200
@@ -34,7 +35,7 @@ class Correspondence_Visualizer(object):
             self.mask = None
 
 
-    def vis_pairwise_attention(self, frames, fs, sample_idx):
+    def vis_pairwise_attention(self, frames, fs, sample_idx, return_all=False):
         
         att = affanity(fs[0], [fs[1]], flatten=False, softmax=True, mask=self.mask)
         scale = int(att.shape[-1] ** 0.5)
@@ -47,7 +48,7 @@ class Correspondence_Visualizer(object):
         querys_map = querys_map.astype(np.uint8)
         
         # return blend result
-        blend_out_result, blend_out_query = self.att_blend(att, querys_map, frames)
+        blend_out_result, blend_out_query = self.att_blend(att, querys_map, frames, color=self.blend_color)
         
         # show
         if self.show_mode == 'plt':
@@ -58,7 +59,11 @@ class Correspondence_Visualizer(object):
             plt.subplot(1,4,4), plt.axis('off'), plt.imshow(att)
         else:
             pass
-        return plt
+        
+        if return_all:
+            return plt, cv2.cvtColor(frames[0],cv2.COLOR_BGR2RGB), cv2.cvtColor(frames[1],cv2.COLOR_BGR2RGB), cv2.cvtColor(blend_out_result,cv2.COLOR_BGR2RGB), cv2.cvtColor(blend_out_query,cv2.COLOR_BGR2RGB)
+        else:
+            return plt
         
     def vis_vq(self, z1_q, z2_q, frame1, frame2, x_rec1=None, x_rec2=None):
             
@@ -145,26 +150,46 @@ class Correspondence_Visualizer(object):
         return att
 
     @staticmethod
-    def att_blend(att, querys_map, frames):
+    def att_blend(att, querys_map, frames, color):
         h, w = frames[-1].shape[0:2]
         
         att = cv2.resize(att, (h, w))
         querys_map = cv2.resize(querys_map, (h, w))
 
-        att_map = cv2.applyColorMap(att.astype(np.uint8), cv2.COLORMAP_BONE)
-        att_query_map = cv2.applyColorMap(querys_map, cv2.COLORMAP_BONE)
+        if color == 'bone':
+            att_map = cv2.applyColorMap(att.astype(np.uint8), cv2.COLORMAP_BONE)
+            att_query_map = cv2.applyColorMap(querys_map, cv2.COLORMAP_BONE)
+            att_map = cv2.cvtColor(att_map, cv2.COLOR_BGR2RGB)
+            att_query_map = cv2.cvtColor(att_query_map, cv2.COLOR_BGR2RGB)
 
+            tar = Image.fromarray(frames[0]).convert('RGBA')
+            query = Image.fromarray(att_query_map).convert('RGBA')
+            blend_out_query = Image.blend(tar, query, 0.7)
+            blend_out_query = np.array(blend_out_query)
 
-        tar = Image.fromarray(frames[0]).convert('RGBA')
-        query = Image.fromarray(att_query_map).convert('RGBA')
-        blend_out_query = Image.blend(tar, query, 0.7)
-        blend_out_query = np.array(blend_out_query)
-
-        ref = Image.fromarray(frames[1]).convert('RGBA')
-        result = Image.fromarray(att_map).convert('RGBA')
-        blend_out_result = Image.blend(ref, result, 0.7)
-        blend_out_result = np.array(blend_out_result)
+            ref = Image.fromarray(frames[1]).convert('RGBA')
+            result = Image.fromarray(att_map).convert('RGBA')
+            blend_out_result = Image.blend(ref, result, 0.7)
+            blend_out_result = np.array(blend_out_result)
+        else:
+            att_map = cv2.applyColorMap(att.astype(np.uint8), cv2.COLORMAP_JET)
+            att_query_map = cv2.applyColorMap(querys_map, cv2.COLORMAP_JET)
         
+            att_map = cv2.cvtColor(att_map, cv2.COLOR_BGR2RGB)
+            att_query_map = cv2.cvtColor(att_query_map, cv2.COLOR_BGR2RGB)
+            
+
+
+            tar = Image.fromarray(frames[0]).convert('RGBA')
+            query = Image.fromarray(att_query_map).convert('RGBA')
+            blend_out_query = Image.blend(tar, query, 0.6)
+            blend_out_query = np.array(blend_out_query)
+
+            ref = Image.fromarray(frames[1]).convert('RGBA')
+            result = Image.fromarray(att_map).convert('RGBA')
+            blend_out_result = Image.blend(ref, result, 0.6)
+            blend_out_result = np.array(blend_out_result)
+            
         return blend_out_result, blend_out_query
 
      
@@ -346,3 +371,9 @@ def show_cam_on_image(img, mask, norm=True):
     blend_out = np.array(blend_out)
 
     return blend_out
+
+def blend_image(x1, x2, ratio):
+    x1 = x1.convert('RGBA')
+    x2 = x2.convert('RGBA')
+    out = Image.blend(x1, x2, ratio)
+    return out
