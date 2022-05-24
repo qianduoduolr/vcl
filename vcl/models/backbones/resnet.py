@@ -11,7 +11,6 @@ from ...utils import get_root_logger
 from ..common import change_stride
 from ..registry import BACKBONES
 
-
 class BasicBlock(nn.Module):
     """Basic block for ResNet.
 

@@ -3,31 +3,27 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 from vcl.utils import *
 
-exp_name = 'mast_d4_l2_pyramid_3'
+exp_name = 'temp_res18_d4_l2_rec_pyramid_local_dist_cmp'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='Framework_V2',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 4), out_indices=(1, 2,), pool_type='none'),
-    backbone_t=None,
-    loss=dict(type='MSELoss',reduction='mean'),
-    feat_size=[64, 32],
+    type='Memory_Tracker_Custom_Pyramid_Cmp',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(1, 2, 3), pool_type='none'),
+    loss=dict(type='MSELoss',reduction='mean', loss_weight=1000),
     radius=[12, 6],
-    downsample_rate=[4, 8],
-    temperature=1.0,
-    temperature_t=0.07,
-    T=0.7,
-    momentum=-1,
-    detach=True,
-    loss_weight = dict(stage0_l1_loss=1, stage1_l1_loss=1, layer_dist_loss=1000, correlation_dist_loss=0),
-    pretrained=None
+    T=0.3,
+    downsample_rate=[4,8],
+    feat_size=[64,32],
+    cmp_loss=dict(type='Ce_Loss', loss_weight=0.1),
+    detach=True
 )
 
 model_test = dict(
     type='VanillaTracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
 )
+
 
 # model training and testing settings
 train_cfg = dict(syncbn=True)
@@ -47,6 +43,7 @@ test_cfg = dict(
 train_dataset_type = 'VOS_youtube_dataset_rgb'
 
 val_dataset_type = 'VOS_davis_dataset_test'
+
 test_dataset_type = 'VOS_davis_dataset_test'
 
 
@@ -117,14 +114,15 @@ data = dict(
             test_mode=True
             ),
 )
+
 # optimizer
 optimizers = dict(
-    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    type='Adam', lr=0.001, betas=(0.9, 0.999)
     )
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=1600
+max_epoch=3200
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,
@@ -142,7 +140,7 @@ log_config = dict(
     hooks=[
         dict(type='TextLoggerHook', by_epoch=False),
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
-        # dict(type='WandbLoggerHook', init_kwargs=dict(project='video_correspondence', name=f'{exp_name}'))
+        dict(type='WandbLoggerHook', init_kwargs=dict(project=f'{exp_name}')),
     ])
 
 visual_config = None
@@ -153,24 +151,20 @@ dist_params = dict(backend='nccl')
 log_level = 'INFO'
 work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
 
-
-evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True
-                  )
-
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
+                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth',
                 )
-
+evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=1600, by_epoch=True
+                  )
 
 load_from = None
 resume_from = None
-# ddp_shuffle = True
+ddp_shuffle = True
 workflow = [('train', 1)]
 find_unused_parameters = True
 
 
-
 if __name__ == '__main__':
-    make_pbs(exp_name, docker_name)
-    make_local_config(exp_name)
+
+    make_local_config_back(exp_name)

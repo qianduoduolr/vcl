@@ -97,6 +97,18 @@ def make_local_config(exp_name):
 
     with open(f'/home/lr/project/vcl/configs/train/ypb/{exp_name}.py',"w") as f:
         f.write(config_data)
+        
+def make_local_config_back(exp_name):
+    config_data = ""
+    with open(f'/home/lr/project/vcl/configs/train/ypb/{exp_name}.py', 'r') as f:
+        for line in f:
+            line = line.replace('/gdata/lirui', '/home/lr')
+            line = line.replace('/dev/shm', '/home/lr/dataset/YouTube-VOS')
+            # line = line.replace('/home/lr/dataset','/home/lr/dataset')
+            config_data += line
+
+    with open(f'/home/lr/project/vcl/configs/train/local/{exp_name}.py',"w") as f:
+        f.write(config_data)
 
 
 

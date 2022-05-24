@@ -4,3 +4,4 @@
 output
 .eval/
 **DS_Store
+wandb

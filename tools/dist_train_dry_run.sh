@@ -41,6 +41,10 @@ PORT=${PORT:-29500}
 CONFIGS=("none")
 COUNT=0
 DRY_RUN_FREQ=3
+TASK_NUM=$3
+TASK_FILE="/gdata/lirui/project/vcl/configs/train/ypb/task${TASK_NUM}.txt"
+""
+export WANDB_API_KEY='ffddb91f64606cb17216362faa7bc29540061a69'
 
 for variable in {1..1000000}
 do   
@@ -88,7 +92,7 @@ do
             fi
         fi
         COUNT=`expr $COUNT + 1`
-    done < /gdata/lirui/project/vcl/configs/train/ypb/task.txt
+    done < $TASK_FILE
 
     echo "end cycle"
 done
