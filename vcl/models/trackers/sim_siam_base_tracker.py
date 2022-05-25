@@ -4,7 +4,7 @@ from .. import builder
 from ..common import images2video, video2images
 from ..registry import MODELS
 from .vanilla_tracker import BaseTracker
-from ..vqvae.modules import Quantize
+from vcl.models.components import Quantize
 from torch import distributed
 import torch
 import torch.nn.functional as F

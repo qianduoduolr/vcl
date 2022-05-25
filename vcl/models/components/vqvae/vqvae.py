@@ -5,10 +5,10 @@ from mmcv.runner import auto_fp16, load_checkpoint
 from dall_e  import map_pixels, unmap_pixels, load_model
 from torch import distributed
 
-from ..base import BaseModel
-from ..components import *
-from ..builder import build_backbone, build_loss, build_components
-from ..registry import MODELS
+from ...base import BaseModel
+
+from ...builder import build_backbone, build_loss, build_components
+from ...registry import COMPONENTS
 from vcl.utils.helpers import *
 from vcl.models.common import *
 from .modules import *
@@ -19,7 +19,7 @@ import torch
 import torch.nn.functional as F
 from torchvision.ops import roi_align
 
-@MODELS.register_module()
+@COMPONENTS.register_module()
 class VQVAE(BaseModel):
     """
         Vector Quantized Variational Autoencoder. This networks includes a encoder which maps an
@@ -128,7 +128,7 @@ class VQVAE(BaseModel):
         return losses
 
 
-@MODELS.register_module()
+@COMPONENTS.register_module()
 class VQCL_v2(BaseModel):
     
     """Visual Quantilization base on Simsiam 
@@ -272,7 +272,7 @@ class VQCL_v2(BaseModel):
     
 
 
-@MODELS.register_module()
+@COMPONENTS.register_module()
 class VQCL_v5(VQCL_v2):
     """V2
     """
@@ -303,7 +303,7 @@ class VQCL_v5(VQCL_v2):
         return losses, diff.item()
     
     
-@MODELS.register_module()
+@COMPONENTS.register_module()
 class VQCL_v6(VQCL_v2):
     
     """same with VFS (ICCV2021)
@@ -393,7 +393,7 @@ class VQCL_v6(VQCL_v2):
     
 
 
-@MODELS.register_module()
+@COMPONENTS.register_module()
 class VQCL_v7(VQCL_v2):
 
 
@@ -419,7 +419,7 @@ class VQCL_v7(VQCL_v2):
 
 
 
-@MODELS.register_module()
+@COMPONENTS.register_module()
 class VQCL_v8(VQCL_v2):
     """V2
     """
@@ -453,7 +453,7 @@ class VQCL_v8(VQCL_v2):
 
 
 
-@MODELS.register_module()
+@COMPONENTS.register_module()
 class VQCL_v9(VQCL_v6):
 
 
@@ -501,7 +501,7 @@ class VQCL_v9(VQCL_v6):
     
     
 
-@MODELS.register_module()
+@COMPONENTS.register_module()
 class VQCL_v10(VQCL_v5):
     """Only for cluster
     """

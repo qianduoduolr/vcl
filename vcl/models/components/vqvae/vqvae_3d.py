@@ -9,10 +9,9 @@ import mmcv
 from mmcv.runner import auto_fp16, load_checkpoint
 from torch import distributed as dist
 
-from ..base import BaseModel
-from ..components import *
-from ..builder import build_backbone, build_loss, build_components
-from ..registry import MODELS
+from ...base import BaseModel
+from ...builder import build_backbone, build_loss, build_components
+from ...registry import COMPONENTS
 from vcl.utils.helpers import *
 from vcl.utils import *
 
@@ -20,11 +19,11 @@ from vcl.utils import *
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
-from ..components import MultiHeadAttention
+from ..attention import MultiHeadAttention
 from vcl.models.common.utils import shift_dim
 
 
-@MODELS.register_module()
+@COMPONENTS.register_module()
 class VQVAE_3D(BaseModel):
     def __init__(self, 
                  embedding_dim=128, 

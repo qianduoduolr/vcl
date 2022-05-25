@@ -3,7 +3,6 @@ from torch import distributed
 
 from vcl.models.losses.losses import Soft_Ce_Loss
 
-from ..components import *
 from vcl.utils.helpers import *
 from vcl.utils import *
 
