@@ -165,6 +165,7 @@ eval_config= dict(
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
+find_unused_parameters = True
 
 
 
