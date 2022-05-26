@@ -85,9 +85,9 @@ def make_pbs(exp_name, docker_name):
     with open(f'/home/lr/project/vcl/configs/pbs/{exp_name}.pbs',"w") as f:
         f.write(pbs_data)
 
-def make_local_config(exp_name):
+def make_local_config(exp_name, file='motion_prediction'):
     config_data = ""
-    with open(f'/home/lr/project/vcl/configs/train/local/{exp_name}.py', 'r') as f:
+    with open(f'/home/lr/project/vcl/configs/train/local/{file}/{exp_name}.py', 'r') as f:
         for line in f:
             line = line.replace('/home/lr','/gdata/lirui')
             line = line.replace('/gdata/lirui/dataset/YouTube-VOS','/dev/shm')
@@ -95,19 +95,19 @@ def make_local_config(exp_name):
             # line = line.replace('/home/lr/dataset','/home/lr/dataset')
             config_data += line
 
-    with open(f'/home/lr/project/vcl/configs/train/ypb/{exp_name}.py',"w") as f:
+    with open(f'/home/lr/project/vcl/configs/train/ypb/motion_prediction/{file}/{exp_name}.py',"w") as f:
         f.write(config_data)
         
-def make_local_config_back(exp_name):
+def make_local_config_back(exp_name, file='motion_prediction'):
     config_data = ""
-    with open(f'/home/lr/project/vcl/configs/train/ypb/{exp_name}.py', 'r') as f:
+    with open(f'/home/lr/project/vcl/configs/train/ypb/{file}/{exp_name}.py', 'r') as f:
         for line in f:
             line = line.replace('/gdata/lirui', '/home/lr')
             line = line.replace('/dev/shm', '/home/lr/dataset/YouTube-VOS')
             # line = line.replace('/home/lr/dataset','/home/lr/dataset')
             config_data += line
 
-    with open(f'/home/lr/project/vcl/configs/train/local/{exp_name}.py',"w") as f:
+    with open(f'/home/lr/project/vcl/configs/train/local/{file}/{exp_name}.py',"w") as f:
         f.write(config_data)
 
 

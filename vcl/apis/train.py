@@ -243,7 +243,7 @@ def _dist_train(model,
         runner.load_checkpoint(cfg.load_from)
 
     if cfg.runner_type is 'iter':
-        runner.run(data_loaders, cfg.workflow, cfg.total_iters)
+        runner.run(data_loaders, cfg.workflow, cfg.max_iter)
     else:
         runner.run(data_loaders, cfg.workflow, cfg.max_epoch)
 

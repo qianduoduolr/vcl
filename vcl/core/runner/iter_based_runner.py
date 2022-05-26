@@ -49,6 +49,10 @@ class IterBasedRunner_Custom(BaseRunner):
 
     This runner train models iteration by iteration.
     """
+    
+    def __init__(self, model, model_test, *args, **kwargs):
+        super().__init__(model=model, *args, **kwargs)
+        self.model_test = model_test
 
     def train(self, data_loader, **kwargs):
         self.model.train()
@@ -57,6 +61,8 @@ class IterBasedRunner_Custom(BaseRunner):
         self._epoch = data_loader.epoch
         data_batch = next(data_loader)
         self.call_hook('before_train_iter')
+        self.progress_ratio = self._iter / self._max_iters
+        kwargs = {**kwargs, 'progress_ratio':self.progress_ratio}
         outputs = self.model.train_step(data_batch, self.optimizer, **kwargs)
         if not isinstance(outputs, dict):
             raise TypeError('model.train_step() must return a dict')
@@ -107,10 +113,6 @@ class IterBasedRunner_Custom(BaseRunner):
 
         work_dir = self.work_dir if self.work_dir is not None else 'NONE'
         self.logger.info('Start running, work_dir: %s', work_dir)
-        self.logger.info('Hooks will be executed in the following order:\n%s',
-                         self.get_hook_info())
-        self.logger.info('workflow: %s, max: %d iters', workflow,
-                         self._max_iters)
         self.call_hook('before_run')
 
         iter_loaders = [IterLoader(x) for x in data_loaders]

@@ -64,7 +64,7 @@ do
                 # main training (dry run)
                 PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
                 python -m torch.distributed.launch --nproc_per_node=$GPUS --master_port=$PORT \
-                $(dirname "$0")/train_dry_run.py --config $CONFIG --launcher pytorch ${@:3}
+                $(dirname "$0")/train_dry_run.py --config $CONFIG --launcher pytorch ${@:4}
             fi
 
         else
@@ -73,16 +73,16 @@ do
             # main training
             PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
             python -m torch.distributed.launch --nproc_per_node=$GPUS --master_port=$PORT \
-            $(dirname "$0")/train_dry_run.py --config $TASK --launcher pytorch ${@:3}
+            $(dirname "$0")/train_dry_run.py --config $TASK --launcher pytorch ${@:4}
 
             # main test
             PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
             python -m torch.distributed.launch --nproc_per_node=$GPUS --master_port=$PORT \
-            $(dirname "$0")/test_prop_dry_run.py --config $TASK --out-indices 2 --launcher pytorch ${@:3}
+            $(dirname "$0")/test_prop_dry_run.py --config $TASK --out-indices 2 --launcher pytorch ${@:4}
 
             PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
             python -m torch.distributed.launch --nproc_per_node=$GPUS --master_port=$PORT \
-            $(dirname "$0")/test_prop_dry_run.py --config $TASK --out-indices 3 --launcher pytorch ${@:3}
+            $(dirname "$0")/test_prop_dry_run.py --config $TASK --out-indices 3 --launcher pytorch ${@:4}
 
             if [ $TASK = $CONFIG ]
             then
