@@ -1,22 +1,24 @@
 import os
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'temp_res18_d4_l2_rec_pyramid_local_dist_cmp_iter'
+exp_name = 'temp_res18_d4_l2_rec_concentration'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
+# model settings
 model = dict(
-    type='Memory_Tracker_Custom_Pyramid_Cmp',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(1, 2, 3), pool_type='none'),
-    loss=dict(type='MSELoss',reduction='mean', loss_weight=1000),
-    radius=[12, 6],
-    T=0.3,
-    downsample_rate=[4,8],
-    feat_size=[64,32],
-    cmp_loss=dict(type='Ce_Loss', loss_weight=0.1),
-    detach=True
+    type='Memory_Tracker_Custom',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 4), out_indices=(2,), pool_type='none'),
+    conc_loss=dict(type='ConcentrationSwitchLoss', win_len=4, stride=4, F_size=(8, 2, 32, 32), temp=1, loss_weight=100),
+    loss_weight=dict(l1_loss=1),
+    downsample_rate=[8,],
+    radius=[6,],
+    temperature=1,
+    feat_size=[32,],
+    per_ref=False,
+    pretrained=None,
 )
 
 model_test = dict(
@@ -32,6 +34,7 @@ test_cfg = dict(
     precede_frames=20,
     topk=10,
     temperature=0.07,
+    dilations=(1,1,2,4),
     strides=(1, 2, 2, 1),
     out_indices=(3, ),
     neighbor_range=24,
@@ -58,6 +61,7 @@ train_pipeline = [
     dict(type='RGB2LAB', output_keys='images_lab'),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Normalize', **img_norm_cfg_lab, keys='images_lab'),
+    # dict(type='ColorDropout', keys='jitter_imgs', drop_rate=0.8),
     dict(type='FormatShape', input_format='NPTCHW'),
     dict(type='FormatShape', input_format='NPTCHW', keys='images_lab'),
     dict(type='Collect', keys=['imgs', 'images_lab'], meta_keys=[]),
@@ -80,7 +84,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=4, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=8, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -121,11 +125,14 @@ data = dict(
 
 # optimizer
 optimizers = dict(
+    backbone=dict(
     type='Adam', lr=0.001, betas=(0.9, 0.999)
     )
+)
 # learning policy
-runner_type='iter'
-max_iter=50000
+# total_iters = 200000
+runner_type='epoch'
+max_epoch=160
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,
@@ -135,7 +142,7 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=max_iter//2, save_optimizer=True, by_epoch=False)
+checkpoint_config = dict(interval=max_epoch, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
@@ -143,7 +150,7 @@ log_config = dict(
     hooks=[
         dict(type='TextLoggerHook', by_epoch=False),
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
-        dict(type='WandbLoggerHook', init_kwargs=dict(project='video_correspondence', name=exp_name, config=model)),
+        # dict(type='WandbLoggerHook', init_kwargs=dict(project='video_correspondence_cmp', name=exp_name, config=model)),
     ])
 
 visual_config = None
@@ -152,21 +159,22 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}'
+work_dir = f'/home/lr/expdir/VCL/group_stsl/{exp_name}'
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/home/lr/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_iter}.pth',
+                  checkpoint_path=f'/home/lr/expdir/VCL/group_stsl/{exp_name}/epoch_{max_epoch}.pth',
                 )
-evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=max_iter//2, by_epoch=False
+evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=max_epoch//2, by_epoch=True
                   )
 
 load_from = None
 resume_from = None
+ddp_shuffle = True
 workflow = [('train', 1)]
 find_unused_parameters = True
 
 
 if __name__ == '__main__':
 
-    make_local_config_back(exp_name)
+    make_local_config(exp_name, file='stsl')

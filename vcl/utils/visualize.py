@@ -13,13 +13,14 @@ from matplotlib import cm
 plt.axis('off')
 
 class Correspondence_Visualizer(object):
-    def __init__(self, mode, show_mode='plt', flow_show_mode='rgb', nembed=2048, scale=32, radius=-1, blend_color='bone'):
+    def __init__(self, mode, show_mode='plt', flow_show_mode='rgb', nembed=2048, scale=32, radius=-1, blend_color='bone', temperature=0.1):
         
         self.mode = mode
         self.show_mode = show_mode
         self.flow_show_mode = flow_show_mode
         self.scale = scale
         self.blend_color = blend_color
+        self.temperature = temperature
         
         if self.show_mode == 'plt':
             plt.rcParams['figure.dpi'] = 200
@@ -37,7 +38,7 @@ class Correspondence_Visualizer(object):
 
     def vis_pairwise_attention(self, frames, fs, sample_idx, return_all=False):
         
-        att = affanity(fs[0], [fs[1]], flatten=False, softmax=True, mask=self.mask)
+        att = affanity(fs[0], [fs[1]], flatten=False, softmax=True, mask=self.mask, temprature=self.temperature)
         scale = int(att.shape[-1] ** 0.5)
         att = att[0, 0, sample_idx].reshape(scale,scale).detach().cpu().numpy() * 255
         att = self.att_norm(att)
@@ -241,7 +242,7 @@ def compute_flow(corr):
 def compute_flow_v2(corr):
     # assume batched affinity, shape N x H * W x W x H
     h = w = int(corr.shape[-1] ** 0.5)
-    
+
     yv, xv = torch.meshgrid([torch.arange(h),torch.arange(w)])
     grid = torch.stack((yv, xv), 2).view((32, 32, 2)).float().cuda()
     

@@ -44,7 +44,9 @@ DRY_RUN_FREQ=3
 TASK_NUM=$3
 TASK_FILE="/gdata/lirui/project/vcl/configs/train/ypb/task${TASK_NUM}.txt"
 ""
-export WANDB_API_KEY='ffddb91f64606cb17216362faa7bc29540061a69'
+# export WANDB_API_KEY='ffddb91f64606cb17216362faa7bc29540061a69'
+# export WANDB_CONFIG_DIR='/gdata/lirui/'
+# export WANDB_CACHE_DIR='/gdata/lirui/'
 
 for variable in {1..1000000}
 do   

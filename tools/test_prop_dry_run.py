@@ -1,4 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+from pickle import FALSE
 import _init_paths
 import argparse
 import os
@@ -16,7 +17,7 @@ from vcl.models import build_model
 
 def parse_args():
     parser = argparse.ArgumentParser(description='mmediting tester')
-    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/train/local/vqvae_mlm_d4_nemd8_dyt_nl_l2_fc_orivq_motion.py')
+    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/train/local/stsl/vit_based/temp_swin_t_s32_d4_l2_rec.py')
     # parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_dyt_nl_l2_nofc_orivq/epoch_800.pth')
     parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='')
     parser.add_argument('--out-indices', nargs='+', type=int, default=[0])
@@ -29,7 +30,7 @@ def parse_args():
     parser.add_argument(
         '--eval',
         type=str,
-        default='davis',
+        default='J&F-Mean',
         nargs='+',
         help='evaluation metrics, which depends on the dataset, e.g.,'
         ' "top_k_accuracy", "mean_class_accuracy" for video dataset')
@@ -138,11 +139,20 @@ def main():
         head = cfg.model.get('head', None)
         eval_arc = cfg.get('eval_arc', 'VanillaTracker')
         model = mmcv.ConfigDict(type=eval_arc, backbone=cfg.model.backbone, head=head)
-        model.backbone.out_indices = args.out_indices
-        model.backbone.strides = cfg.test_cfg.strides
         
+        model.backbone.out_indices = args.out_indices
+        
+        # adapt to previous 
+        if cfg.test_cfg.get('strides', False):
+            model.backbone.strides = cfg.test_cfg.strides
+            
         if cfg.test_cfg.get('dilations', False):
             model.backbone.dilations = cfg.test_cfg.dilations
+               
+        if cfg.test_cfg.get('model_cfg', False):
+            model_cfg = cfg.test_cfg.model_cfg
+            for k,v in model_cfg.items():
+                model.backbone[k] = v
         
         if 'torchvision_pretrained' in eval_config:
             model.backbone.pretrained = eval_config['torchvision_pretrained']
@@ -175,10 +185,6 @@ def main():
         device_id = torch.cuda.current_device()
 
         if args.checkpoint:
-            # _ = load_checkpoint(
-            #     model,
-            #     args.checkpoint,
-            #     map_location=lambda storage, loc: storage.cuda(device_id))
             
             _ = load_checkpoint(
                 model,

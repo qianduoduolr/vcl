@@ -39,7 +39,6 @@ class BaseTracker(BaseModel):
         if head is not None:
             self.head = build_components(head)
             self.head_in = self.head.head_in
-            # self.post_in = post_convolution['in_c']
         else:
             self.head = None
 
@@ -52,7 +51,8 @@ class BaseTracker(BaseModel):
 
     def init_weights(self):
         """Initialize the model network weights."""
-        self.backbone.init_weights()
+        # self.backbone.init_weights()
+        pass
 
     @auto_fp16()
     def extract_feat(self, imgs):

@@ -56,6 +56,14 @@ def parse_args():
 
 
 def main():
+    # wandb env
+    os.environ["WANDB_API_KEY"] = 'ffddb91f64606cb17216362faa7bc29540061a69'
+    os.environ["WANDB_CONFIG_DIR"] = '/gdata/lirui/'
+    os.environ["WANDB_CACHE_DIR"] = '/gdata/lirui/'
+    os.environ["http_proxy"] = 'http://192.168.9.99:3128'
+    os.environ["https_proxy"] = 'http://192.168.9.99:3128'
+    os.environ['WANDB_MODE'] = 'offline'
+
     args = parse_args()
 
     cfg = Config.fromfile(args.config)
@@ -90,7 +98,7 @@ def main():
     # cp code to work_dir
     if distributed and cfg.get('cp_project', True):
         file_path = osp.dirname(osp.dirname(osp.abspath(__file__)))
-        os.system(f"rsync -a --exclude 'output' --exclude '.git' {file_path} {cfg.work_dir}/")
+        os.system(f"rsync -a --exclude 'output' --exclude '.git' --exclude 'wandb' {file_path} {cfg.work_dir}/")
 
     # init the logger before other steps
     timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
@@ -161,8 +169,7 @@ def main():
     if eval_config.get('dry_run', False):
         return
     else:
-        work_dir_local = osp.join('/home/lr','/'.join(cfg.work_dir.split('/')[3:-1]))
-        os.system(f"rsync -a  {cfg.work_dir} lirui@192.168.161.4:{work_dir_local}/")
+        pass
 
 if __name__ == '__main__':
     main()

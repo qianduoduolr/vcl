@@ -578,6 +578,8 @@ class RandomScaleCrop(object):
                  same_across_clip=False,
                  same_clip_indices=None,
                  same_frame_indices=None,
+                 center_crop=False,
+                 crop_size=64,
                  keys='imgs',
                  ):
         self.scale_range = scale_range
@@ -590,6 +592,8 @@ class RandomScaleCrop(object):
         if same_frame_indices is not None:
             assert isinstance(same_frame_indices, Sequence)
         self.same_frame_indices = same_frame_indices
+        self.center_crop = center_crop
+        self.crop_size = crop_size
         self.keys = keys
         self.identity = identity
     
@@ -612,8 +616,12 @@ class RandomScaleCrop(object):
 
         return i, j, new_h, new_w
     
-    def get_scale(self):
-        return random.uniform(self.scale_range[0], self.scale_range[1])
+    def get_scale(self, size=None):
+        if not self.center_crop:
+            return random.uniform(self.scale_range[0], self.scale_range[1])
+        else:
+            return (size - self.crop_size * 2) / size
+
     
     def __call__(self, results):
     
@@ -631,14 +639,19 @@ class RandomScaleCrop(object):
         masks_new = []
         
         # one crop for all
-        s = self.get_scale()
+        if not self.center_crop:
+            s = self.get_scale()
+            ii, jj, h, w = self.get_params(H, W, s)
+            # displacement of the centre
+            dy = ii + h / 2 - i2
+            dx = jj + w / 2 - j2
+        else:
+            s = self.get_scale(H)
+            dy = 0
+            dx = 0
 
-        ii, jj, h, w = self.get_params(H, W, s)
-
-        # displacement of the centre
-        dy = ii + h / 2 - i2
-        dx = jj + w / 2 - j2
-
+            ii = jj = self.crop_size
+            h = w = H - self.crop_size * 2
         
         for k, image in enumerate(results[self.keys]):
 

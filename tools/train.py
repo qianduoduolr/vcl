@@ -19,7 +19,7 @@ from vcl.utils import collect_env, get_root_logger
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train an editor')
-    parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/local/final_framework_v2_13.py')
+    parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/local/stsl/temp_res18_d4_l2_feat_rec.py')
     parser.add_argument('--work-dir', help='the dir to save logs and models')
     parser.add_argument(
         '--resume-from', help='the checkpoint file to resume from')
@@ -55,7 +55,7 @@ def parse_args():
     return args
 
 
-def main():
+def main():    
     args = parse_args()
 
     cfg = Config.fromfile(args.config)
@@ -154,9 +154,6 @@ def main():
         meta=meta,
         model_test=model_test)
 
-    work_dir_local = osp.join('/home/lr','/'.join(cfg.work_dir.split('/')[3:-1]))
-    os.system(f"rsync -a  {cfg.work_dir} lirui@192.168.161.4:{work_dir_local}/")
-    os.system(f'rm -rf {cfg.work_dir}/eval_output_val/*/blend') 
 
 if __name__ == '__main__':
     main()

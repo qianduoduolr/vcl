@@ -36,6 +36,13 @@ def tensor2img(tensor, out_type=np.uint8, min_max=(0, 1), norm_mode='0-1'):
             std=torch.tensor([58.395, 57.12, 57.375]).reshape(3,1,1)
             tensor = (tensor * std) + mean
             tensor = tensor.clamp(0,255)
+    elif norm_mode == 'mean-std-lab':
+        if n_dim != 2:
+            tensor = tensor.squeeze().float().cpu() # clamp
+            mean=torch.tensor([50,0,0]).reshape(3,1,1)
+            std=torch.tensor([50, 127, 127]).reshape(3,1,1)
+            tensor = (tensor * std) + mean
+            tensor = tensor.clamp(0,255)
     else:
         tensor = tensor.squeeze().float().cpu().clamp(0, 1)
         tensor = tensor * 255
@@ -95,7 +102,7 @@ def make_local_config(exp_name, file='motion_prediction'):
             # line = line.replace('/home/lr/dataset','/home/lr/dataset')
             config_data += line
 
-    with open(f'/home/lr/project/vcl/configs/train/ypb/motion_prediction/{file}/{exp_name}.py',"w") as f:
+    with open(f'/home/lr/project/vcl/configs/train/ypb/{file}/{exp_name}.py',"w") as f:
         f.write(config_data)
         
 def make_local_config_back(exp_name, file='motion_prediction'):

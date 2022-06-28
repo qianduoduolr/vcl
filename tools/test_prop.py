@@ -32,7 +32,7 @@ def parse_args():
     parser.add_argument(
         '--eval',
         type=str,
-        default='davis',
+        default='J&F-Mean',
         nargs='+',
         help='evaluation metrics, which depends on the dataset, e.g.,'
         ' "top_k_accuracy", "mean_class_accuracy" for video dataset')
@@ -136,22 +136,21 @@ def main():
         head = cfg.model.get('head', None)
         eval_arc = cfg.get('eval_arc', 'VanillaTracker')
         model = mmcv.ConfigDict(type=eval_arc, backbone=cfg.model.backbone, head=head)
-        model.backbone.out_indices = args.out_indices
-        model.backbone.strides = cfg.test_cfg.strides
+        
+        if cfg.test_cfg.get('strides', False):
+            model.backbone.out_indices = args.out_indices
+            model.backbone.strides = cfg.test_cfg.strides
+        
+        if cfg.test_cfg.get('img_size', False):
+            model.backbone.img_size = cfg.test_cfg.img_size
+            model.backbone.patch_size = cfg.test_cfg.patch_size
+        
         if cfg.test_cfg.get('dilations', False):
             model.backbone.dilations = cfg.test_cfg.dilations
         
         if 'torchvision_pretrained' in eval_config:
             model.backbone.pretrained = eval_config['torchvision_pretrained']
             eval_config.pop('torchvision_pretrained')
-        
-        if args.radius is not -1:
-            cfg.test_cfg.neighbor_range = args.radius
-            print(cfg.test_cfg.neighbor_range)
-    
-        if args.temperature is not -1:
-            cfg.test_cfg.temperature = args.temperature
-            print(cfg.test_cfg.temperature)
     else:
         model = mmcv.ConfigDict(type='Memory_Tracker', backbone=cfg.model.backbone)
         eval_config.pop('mast_prop')

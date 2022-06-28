@@ -1,26 +1,26 @@
 import os
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'mast_d4_l2_pyramid_3'
+exp_name = 'temp_res18_d4_l2_rec'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
     type='Framework_V2',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 4), out_indices=(1, 2,), pool_type='none'),
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 4), out_indices=(2,), pool_type='none'),
     backbone_t=None,
     loss=dict(type='MSELoss',reduction='mean'),
-    feat_size=[64, 32],
-    radius=[12, 6],
-    downsample_rate=[4, 8],
+    feat_size=[32,],
+    radius=[6,],
+    downsample_rate=[8,],
     temperature=1.0,
     temperature_t=0.07,
     T=-1,
     momentum=-1,
     detach=True,
-    loss_weight = dict(stage0_l1_loss=1, stage1_l1_loss=1, layer_dist_loss=0, correlation_dist_loss=0),
+    loss_weight = dict(stage0_l1_loss=0, stage1_l1_loss=1, layer_dist_loss=0, correlation_dist_loss=0),
     pretrained=None
 )
 
@@ -151,7 +151,7 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
+work_dir = f'/gdata/lirui/expdir/VCL/group_stsl/{exp_name}'
 
 
 evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True
@@ -159,7 +159,7 @@ evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epo
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
+                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_stsl/{exp_name}/epoch_{max_epoch}.pth'
                 )
 
 
@@ -172,5 +172,5 @@ find_unused_parameters = True
 
 
 if __name__ == '__main__':
-    make_pbs(exp_name, docker_name)
-    make_local_config(exp_name)
+
+    make_local_config_back(exp_name, file='stsl')

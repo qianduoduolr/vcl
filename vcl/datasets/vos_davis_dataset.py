@@ -217,9 +217,9 @@ class VOS_davis_dataset_test(Video_dataset_base):
 
         return eval_results
 
-    def evaluate(self, results, metrics='davis', output_dir=None, logger=None):
+    def evaluate(self, results, metrics='J&F-Mean', output_dir=None, logger=None):
         metrics = metrics if isinstance(metrics, (list, tuple)) else [metrics]
-        allowed_metrics = ['davis']
+        allowed_metrics = ['J&F-Mean', 'J-Mean', 'J-Recall', 'J-Decay', 'F-Mean', 'F-Recall', 'F-Decay']
         for metric in metrics:
             if metric not in allowed_metrics:
                 raise KeyError(f'metric {metric} is not supported')
@@ -244,11 +244,14 @@ class VOS_davis_dataset_test(Video_dataset_base):
             eval_results.update(
                 self.davis_evaluate(results, output_dir, logger))
         copypaste = []
+
+        final_results = {}
         for k, v in eval_results.items():
             if 'J&F' in k:
                 copypaste.append(f'{float(v)*100:.2f}')
+                final_results[k] = v
         print_log(f'Results copypaste  {",".join(copypaste)}', logger=logger)
-        return eval_results
+        return final_results
 
 
 @DATASETS.register_module()

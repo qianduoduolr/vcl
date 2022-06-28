@@ -572,6 +572,9 @@ class DistEvalHook_Custom(EvalHook):
                 iteration=runner.iter)
         else:
             copy_params(runner.model, runner.model_test)
+            # ckpt_dir = osp.join(runner.work_dir, f'epoch_{runner.epoch}.pth')
+            # runner.model_test.backbone.pretrained = ckpt_dir
+            # runner.model_test.backbone.init_weights()
             results = self.test_fn(
                 runner.model_test,
                 self.dataloader,

@@ -430,6 +430,8 @@ class ResNet(nn.Module):
         if fc:
             self.gpool = nn.AdaptiveAvgPool2d(1)
             self.fc = nn.Linear(self.feat_dim, num_classes)
+        
+        self.init_weights()
 
     def _make_stem_layer(self):
         """Construct the stem layers consists of a conv+norm+act module and a
@@ -557,7 +559,7 @@ class ResNet(nn.Module):
                 # ours
                 logger.info(f'Loading {self.pretrained} not as torchvision')
                 load_checkpoint(
-                    self, self.pretrained, strict=False, logger=logger)
+                    self, self.pretrained, map_location='cpu', strict=False, logger=logger, revise_keys=[(r'^module\.', ''), (r'^backbone\.', ''), (r'^encoder\.', '')])
         elif isinstance(self.pretrained, dict):
             logger = get_root_logger()
             if self.torchvision_pretrain:

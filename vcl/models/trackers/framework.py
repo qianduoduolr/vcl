@@ -91,12 +91,10 @@ class Framework_V2(BaseModel):
     
     def init_weights(self):
         
-        self.backbone.init_weights()
-        if self.backbone_t is not None:  
-            self.backbone_t.init_weights()
-        
         if self.pretrained is not None:
             _ = load_checkpoint(self, self.pretrained, map_location='cpu')
+        else:
+            pass
     
     def forward_train(self, imgs, images_lab=None):
             
@@ -108,7 +106,10 @@ class Framework_V2(BaseModel):
         
         # forward to get feature
         fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
-        fs = [f.reshape(bsz, t, *f.shape[-3:]) for f in fs]
+        if isinstance(fs, tuple):
+            fs = [f.reshape(bsz, t, *f.shape[-3:]) for f in fs]
+        else:
+            fs = [fs.reshape(bsz, t, *fs.shape[-3:])]
         
         tar_pyramid, refs_pyramid = [f[:, -1] for f in fs], [ f[:, :-1] for f in fs]
         
@@ -155,20 +156,21 @@ class Framework_V2(BaseModel):
         else:
             weight = None
         
-        # for layer distillation loss
-        if self.pool_type == 'mean':
-            att_ = atts[0].reshape(bsz, -1, *fs[0].shape[-2:])
-            att_ = F.avg_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1).reshape(bsz, -1, *fs[0].shape[-2:])
-            target = F.avg_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1)
-        elif self.pool_type == 'max':
-            att_ = atts[0].reshape(bsz, -1, *fs[0].shape[-2:])
-            att_ = F.max_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1).reshape(bsz, -1, *fs[0].shape[-2:])
-            target = F.max_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1)
-        
-        if not self.detach:
-            losses['layer_dist_loss'] = self.loss_weight['layer_dist_loss'] * self.loss(atts[-1][:,0], target, weight=weight)
-        else:
-            losses['layer_dist_loss'] = self.loss_weight['layer_dist_loss'] * self.loss(atts[-1][:,0], target.detach(), weight=weight)
+        if len(corrs) > 1:
+            # for layer distillation loss
+            if self.pool_type == 'mean':
+                att_ = atts[0].reshape(bsz, -1, *fs[0].shape[-2:])
+                att_ = F.avg_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1).reshape(bsz, -1, *fs[0].shape[-2:])
+                target = F.avg_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1)
+            elif self.pool_type == 'max':
+                att_ = atts[0].reshape(bsz, -1, *fs[0].shape[-2:])
+                att_ = F.max_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1).reshape(bsz, -1, *fs[0].shape[-2:])
+                target = F.max_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1)
+            
+            if not self.detach:
+                losses['layer_dist_loss'] = self.loss_weight['layer_dist_loss'] * self.loss(atts[-1][:,0], target, weight=weight)
+            else:
+                losses['layer_dist_loss'] = self.loss_weight['layer_dist_loss'] * self.loss(atts[-1][:,0], target.detach(), weight=weight)
             
         # for correlation distillation loss
         if self.backbone_t is not None:

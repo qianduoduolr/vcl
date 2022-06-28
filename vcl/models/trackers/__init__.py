@@ -7,6 +7,7 @@ from .memory_tracker import *
 from .rw_tracker import RW_Tracker
 from .modules import *
 from .sim_siam_base_tracker import *
-from .warp_tracker import *
 from .framework import *
 from .single_frame_tracker import *
+from .memory_tracker_moco import *
+from .memory_tracker_vq import *

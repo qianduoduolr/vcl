@@ -380,3 +380,46 @@ class DiscreteLoss(nn.Module):
         assert input.size(1) == self.nbins * 2
         loss = self.loss(input[:,:self.nbins,...], target[:,0,...]) + self.loss(input[:,self.nbins:,...], target[:,1,...])
         return loss * self.loss_weight
+
+
+
+
+@LOSSES.register_module()
+class Kl_Loss_Gaussion(nn.Module):
+    """kl div betweeen two gaussion (VAE)
+
+    Args:
+        loss_weight (float): Loss weight for MSE loss. Default: 1.0.
+        reduction (str): Specifies the reduction to apply to the output.
+            Supported choices are 'none' | 'mean' | 'sum'. Default: 'mean'.
+        sample_wise (bool): Whether calculate the loss sample-wise. This
+            argument only takes effect when `reduction` is 'mean' and `weight`
+            (argument of `forward()`) is not None. It will first reduces loss
+            with 'mean' per-sample, and then it means over all the samples.
+            Default: False.
+    """
+
+    def __init__(self, loss_weight=1.0, reduction='mean', sample_wise=False):
+        super().__init__()
+        if reduction not in ['none', 'mean', 'sum']:
+            raise ValueError(f'Unsupported reduction mode: {reduction}. '
+                             f'Supported ones are: {_reduction_modes}')
+
+        self.loss_weight = loss_weight
+        self.reduction = reduction
+        self.sample_wise = sample_wise
+
+    def forward(self, pred, target, weight=None, **kwargs):
+        mu_pred, var_pred = pred
+        mu_target, var_target = target
+        return self.kl_criterion(mu_pred, var_pred, mu_target, var_target)
+
+
+    def kl_criterion(self, mu1, logvar1, mu2, logvar2):
+        bsz = mu1.shape[0]
+        sigma1 = logvar1.mul(0.5).exp() 
+        sigma2 = logvar2.mul(0.5).exp() 
+
+        kld = torch.log(sigma2/(sigma1+1e-7)) + (torch.exp(logvar1) + (mu1 - mu2)**2)/(2*torch.exp(logvar2)) - 1/2
+
+        return kld.mean()

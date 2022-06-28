@@ -12,55 +12,16 @@ def build_norm1d(cfg, num_features):
 
 @COMPONENTS.register_module()
 class MlpHead(nn.Sequential):
-    def __init__(self, n_in, n_out):
+    def __init__(self, head_in, head_out, use_norm=False):
         super().__init__()
-        self.head_in = n_in
-        self.head_out = n_out
-        self.add_module("conv1", nn.Conv2d(n_in, n_in, 1, 1))
-        self.add_module("bn1", nn.BatchNorm2d(n_in))
+        self.head_in = head_in
+        self.head_out = head_out
+        self.add_module("conv1", nn.Conv2d(head_in, head_in, 1, 1))
+        if use_norm:
+            self.add_module("bn1", nn.BatchNorm2d(head_in))
         self.add_module("relu", nn.ReLU(True))
-        self.add_module("conv2", nn.Conv2d(n_in, n_out, 1, 1))
+        self.add_module("conv2", nn.Conv2d(head_in, head_out, 1, 1))
 
-
-@COMPONENTS.register_module()
-class DclHead(nn.Module):
-    def __init__(self,
-                 in_channels,
-                 hid_channels,
-                 out_channels,
-                 num_grid=None):
-        super(DenseCLNeck, self).__init__()
-
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.mlp = nn.Sequential(
-            nn.Linear(in_channels, hid_channels), nn.ReLU(inplace=True),
-            nn.Linear(hid_channels, out_channels))
-
-        self.with_pool = num_grid != None
-        if self.with_pool:
-            self.pool = nn.AdaptiveAvgPool2d((num_grid, num_grid))
-        self.mlp2 = nn.Sequential(
-            nn.Conv2d(in_channels, hid_channels, 1), nn.ReLU(inplace=True),
-            nn.Conv2d(hid_channels, out_channels, 1))
-        self.avgpool2 = nn.AdaptiveAvgPool2d((1, 1))
-
-    def init_weights(self, init_linear='normal'):
-        _init_weights(self, init_linear)
-
-    def forward(self, x):
-        assert len(x) == 1
-        x = x[0]
-
-        avgpooled_x = self.avgpool(x)
-        avgpooled_x = self.mlp(avgpooled_x.view(avgpooled_x.size(0), -1))
-
-        if self.with_pool:
-            x = self.pool(x) # sxs
-        x = self.mlp2(x) # sxs: bxdxsxs
-        avgpooled_x2 = self.avgpool2(x) # 1x1: bxdx1x1
-        x = x.view(x.size(0), x.size(1), -1) # bxdxs^2
-        avgpooled_x2 = avgpooled_x2.view(avgpooled_x2.size(0), -1) # bxd
-        return [avgpooled_x, x, avgpooled_x2]
 
 @COMPONENTS.register_module()
 class SimSiamHead(nn.Module):
