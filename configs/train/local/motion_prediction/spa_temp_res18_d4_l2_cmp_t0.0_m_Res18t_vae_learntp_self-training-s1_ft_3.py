@@ -3,23 +3,23 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'spa_temp_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_fr'
+exp_name = 'spa_temp_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_self-training-s1_ft_3'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
     type='Memory_Tracker_Custom_Cmp',
-    motion_estimator=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none', pretrained='/gdata/lirui/expdir/VCL/group_stsl_former/mast_d4_l2_pyramid_dis_18/epoch_3200.pth', torchvision_pretrain=False),
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, 3), pool_type='none', dilations=(1,1,2,4)),
+    motion_estimator=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none', pretrained='/home/lr/expdir/VCL/group_stsl_former/mast_d4_l2_pyramid_dis_18/epoch_3200.pth', torchvision_pretrain=False),
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(1, 2, 3), pool_type='none', dilations=(1,1,2,4), pretrained='/home/lr/expdir/VCL/group_stsl_former/mast_d4_l2_pyramid_dis_18/epoch_3200.pth', torchvision_pretrain=False),
     loss=dict(type='MSELoss',reduction='mean'),
-    radius=[6],
-    T=-1,
-    downsample_rate=[8],
-    feat_size=[32],
+    radius=[12, 6],
+    T=0.7,
+    downsample_rate=[4, 8],
+    feat_size=[64, 32],
     cmp_loss=dict(type='L1Loss'),
     output_dim=169*2,
     mode='vae_learnt_prior',
-    loss_weight=dict(l1_loss=1, cmp_loss=0, vae_rec_loss=1, vae_kl_loss=0.001, corr_loss=0),
+    loss_weight=dict(stage0_l1_loss=1, stage1_l1_loss=1, cmp_loss=0, vae_rec_loss=1, vae_kl_loss=0.001, local_corr_dist_loss=1000, corr_loss=0),
     detach=True
 )
 
@@ -86,7 +86,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=4, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -96,8 +96,8 @@ data = dict(
             type='RepeatDataset',
             dataset=dict(
                         type=train_dataset_type,
-                        root='/dev/shm',
-                        list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
+                        root='/home/lr/dataset/YouTube-VOS',
+                        list_path='/home/lr/dataset/YouTube-VOS/2018/train',
                         data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
                         clip_length=2,
                         pipeline=train_pipeline,
@@ -108,8 +108,8 @@ data = dict(
 
     test =  dict(
             type=test_dataset_type,
-            root='/gdata/lirui/dataset/DAVIS',
-            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
+            root='/home/lr/dataset/DAVIS',
+            list_path='/home/lr/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -117,8 +117,8 @@ data = dict(
     
     val =  dict(
             type=val_dataset_type,
-            root='/gdata/lirui/dataset/DAVIS',
-            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
+            root='/home/lr/dataset/DAVIS',
+            list_path='/home/lr/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -128,19 +128,19 @@ data = dict(
 # optimizer
 optimizers = dict(
     flow_decoder=dict(
-    type='Adam', lr=0.001, betas=(0.9, 0.999)
+    type='Adam', lr=0.0001, betas=(0.9, 0.999)
     ),
     flow_decoder_m=dict(
-    type='Adam', lr=0.001, betas=(0.9, 0.999)
+    type='Adam', lr=0.0001, betas=(0.9, 0.999)
     ),
     backbone=dict(
-    type='Adam', lr=0.001, betas=(0.9, 0.999)
+    type='Adam', lr=0.0001, betas=(0.9, 0.999)
     )
 )
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=160
+max_epoch=320
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,
@@ -150,7 +150,7 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
-work_dir = f'/gdata/lirui/expdir/VCL/group_motion_prediction/{exp_name}'
+work_dir = f'/home/lr/expdir/VCL/group_motion_prediction/{exp_name}'
 
 checkpoint_config = dict(interval=max_epoch//2, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
@@ -160,12 +160,12 @@ log_config = dict(
     hooks=[
         dict(type='TextLoggerHook', by_epoch=False),
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
-        dict(type='WandbLoggerHook', 
-            init_kwargs=dict(project='video_correspondence_cmp', 
-                            name=exp_name, 
-                            config=model, 
-                            dir=work_dir), 
-            log_artifact=False)
+        # dict(type='WandbLoggerHook', 
+        #     init_kwargs=dict(project='video_correspondence_cmp', 
+        #                     name=exp_name, 
+        #                     config=model, 
+        #                     dir=work_dir), 
+        #     log_artifact=False)
     ])
 
 visual_config = None
@@ -177,7 +177,7 @@ log_level = 'INFO'
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_motion_prediction/{exp_name}/epoch_{max_epoch}.pth',
+                  checkpoint_path=f'/home/lr/expdir/VCL/group_motion_prediction/{exp_name}/epoch_{max_epoch}.pth',
                 )
 evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=max_epoch//2, by_epoch=True
                   )

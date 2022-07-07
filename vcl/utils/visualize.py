@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from .util import *
 from .dim_reduction import *
 from matplotlib import cm
+from mmcv.ops import Correlation
 plt.axis('off')
 
 class Correspondence_Visualizer(object):
@@ -32,8 +33,10 @@ class Correspondence_Visualizer(object):
         
         if radius is not -1:
             self.mask = make_mask(scale, radius)
+            self.corr = Correlation(max_displacement=radius)
         else:
             self.mask = None
+
 
 
     def vis_pairwise_attention(self, frames, fs, sample_idx, return_all=False):
@@ -103,6 +106,7 @@ class Correspondence_Visualizer(object):
     def vis_pca(self, fs, frames):
         
         x = torch.cat(fs, 0)
+        # x = x[:,:,6:-6,6:-6]
         
         pca_ff = pca_feats(x)
         pca_ff = pca_ff.permute(0, 2, 3, 1)
@@ -119,6 +123,29 @@ class Correspondence_Visualizer(object):
         else:
             pass
         return plt
+
+    def vis_corr_pca(self, fs, frames):
+        corr = self.corr(fs[0], fs[1]).flatten(1,2).cpu()
+        corr = corr[:,:,6:-6,6:-6]
+        # att = affanity(fs[0], [fs[1]], flatten=False, softmax=True, mask=self.mask, temprature=self.temperature)
+        # att = att[:,0].permute(0,2,1).reshape(1, -1, 32, 32).cpu()
+
+        pca_ff = pca_feats(corr)
+        pca_ff = pca_ff.permute(0, 2, 3, 1)
+        
+        pca_ff1 = cv2.resize(pca_ff[0].numpy(), (frames[0].shape[0], frames[0].shape[1]))
+        pca_ff2 = cv2.resize(pca_ff[0].numpy(), (frames[1].shape[0], frames[1].shape[1]))
+        
+        if self.show_mode == 'plt':
+            plt.figure()
+            plt.subplot(1,4,1), plt.axis('off'), plt.imshow(frames[0])
+            plt.subplot(1,4,2), plt.axis('off'), plt.imshow(frames[1])
+            plt.subplot(1,4,3), plt.axis('off'), plt.imshow(pca_ff1)
+            plt.subplot(1,4,4), plt.axis('off'), plt.imshow(pca_ff2)
+        else:
+            pass
+        return plt
+
     
     def vis_flow(self, fs, xs, frames, gt=None):
         
@@ -142,9 +169,11 @@ class Correspondence_Visualizer(object):
             plt = self.vis_pca(*args, **kwargs)
         elif self.mode == 'flow':
             plt = self.vis_flow(*args, **kwargs)
+        elif self.mode == 'pca_corr':
+            plt = self.vis_corr_pca(*args, **kwargs)
+
         return plt
-            
-            
+               
     @staticmethod
     def att_norm(att, dim=None):
         att = ((att - att.min()) * 255 / (att.max() - att.min())).astype(np.uint8)

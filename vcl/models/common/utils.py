@@ -378,3 +378,13 @@ def make_mask(size, t_size, eq=True):
                 
             masks.append(mask.reshape(-1))
     return torch.stack(masks)
+
+def att2flow(h, w, target):
+    yv, xv = torch.meshgrid([torch.arange(h),torch.arange(w)])
+    grid = torch.stack((yv, xv), 2).view((h * w, 2)).float().cuda()
+        
+    # x1 -> x2
+    warp_grid = torch.einsum("bij,jd -> bid",[target, grid])
+
+    off = warp_grid - grid.unsqueeze(0)
+    return off

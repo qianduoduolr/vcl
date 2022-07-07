@@ -148,11 +148,6 @@ class Framework_V2(BaseModel):
             T = corr_sorted[:, idx:idx+1]
             sparse_mask = (corr_en > T).reshape(bsz, 1, *corr_feat.shape[-2:]).float().detach()
             weight = sparse_mask.flatten(-2).permute(0,2,1).repeat(1, 1, atts[-1].shape[-1])
-            
-            corr_sorted, _ = torch.sort(corr_en, dim=-1, descending=False)
-            idx = int(corr_en.shape[-1] * self.T) - 1
-            T = corr_sorted[:, idx:idx+1]
-            sparse_mask_ = (corr_en < T).reshape(bsz, 1, *corr_feat.shape[-2:]).float().detach()
         else:
             weight = None
         

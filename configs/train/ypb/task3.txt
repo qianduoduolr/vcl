@@ -1,1 +1,1 @@
-train_dry_run
+motion_prediction/spa_temp_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_self-training-s1_ft_5

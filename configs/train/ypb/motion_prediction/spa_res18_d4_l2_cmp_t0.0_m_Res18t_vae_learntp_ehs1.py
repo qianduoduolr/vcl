@@ -3,23 +3,23 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'spa_temp_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_fr'
+exp_name = 'spa_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_ehs1'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
     type='Memory_Tracker_Custom_Cmp',
-    motion_estimator=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none', pretrained='/gdata/lirui/expdir/VCL/group_stsl_former/mast_d4_l2_pyramid_dis_18/epoch_3200.pth', torchvision_pretrain=False),
+     motion_estimator=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none', pretrained='/gdata/lirui/expdir/VCL/group_stsl_former/mast_d4_l2_pyramid_dis_18/epoch_3200.pth', torchvision_pretrain=False),
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, 3), pool_type='none', dilations=(1,1,2,4)),
     loss=dict(type='MSELoss',reduction='mean'),
-    radius=[6],
-    T=-1,
-    downsample_rate=[8],
-    feat_size=[32],
-    cmp_loss=dict(type='L1Loss'),
+    radius=[6,],
+    T=0.7,
+    downsample_rate=[8,],
+    feat_size=[32,],
+    cmp_loss=dict(type='Ce_Loss'),
     output_dim=169*2,
     mode='vae_learnt_prior',
-    loss_weight=dict(l1_loss=1, cmp_loss=0, vae_rec_loss=1, vae_kl_loss=0.001, corr_loss=0),
+    loss_weight=dict(stage0_l1_loss=0, cmp_loss=0, vae_rec_loss=1, vae_kl_loss=0.001, corr_loss=0),
     detach=True
 )
 
@@ -152,7 +152,7 @@ lr_config = dict(
 
 work_dir = f'/gdata/lirui/expdir/VCL/group_motion_prediction/{exp_name}'
 
-checkpoint_config = dict(interval=max_epoch//2, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=max_epoch, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
@@ -168,7 +168,10 @@ log_config = dict(
             log_artifact=False)
     ])
 
-visual_config = None
+# visual_config = None
+visual_config = dict(
+    type='VisualizationHook_Custom', interval=100, res_name_list=['imgs', 'mask'], output_dir='vis'
+)
 
 
 # runtime settings

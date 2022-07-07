@@ -584,7 +584,7 @@ class ResNet(nn.Module):
         else:
             raise TypeError('pretrained must be a str or None')
 
-    def forward(self, x):
+    def forward(self, x, out_idx=None):
         """Defines the computation performed at every call.
 
         Args:
@@ -601,8 +601,12 @@ class ResNet(nn.Module):
         for i, layer_name in enumerate(self.res_layers):
             res_layer = getattr(self, layer_name)
             x = res_layer(x)
-            if i in self.out_indices:
-                outs.append(x)
+            if out_idx == None:
+                if i in self.out_indices:
+                    outs.append(x)
+            else:
+                if i in out_idx:
+                    outs.append(x)
         
         if hasattr(self, 'fc'):  
             assert outs[-1].shape[1] == self.feat_dim

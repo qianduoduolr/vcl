@@ -477,13 +477,14 @@ class Memory_Tracker_Custom_Cmp(Memory_Tracker_Custom):
                 pool_type='mean',
                 bilinear_downsample=True,
                 reverse=True,
-                T=0.2,
+                T=-1,
                 vae_var=1,
                 num_stage=2,
                 output_dim=-1,
                 detach=False,
                 rand_mask=False,
                 inpaint_only=False,
+                mp_only=False,
                 boundary_r=-1,
                 mode='classification',
                 *args,
@@ -511,6 +512,7 @@ class Memory_Tracker_Custom_Cmp(Memory_Tracker_Custom):
         self.T = T
         self.mode = mode
         self.vae_var = vae_var
+        self.mp_only = mp_only
         
         self.cmp_loss = build_loss(cmp_loss) if cmp_loss != None else None
         
@@ -564,16 +566,15 @@ class Memory_Tracker_Custom_Cmp(Memory_Tracker_Custom):
         with torch.no_grad():
             fs = self.motion_estimator(torch.stack(images_lab_gt,1).flatten(0,1))
             fs = fs.reshape(bsz, t, *fs.shape[-3:])
-            tar, refs = fs[:,-1], [fs[:, -2]]
             
-            if tar.shape[-1] > 32:
+            if fs.shape[-1] > 32:
                 # apply corr at higher resolution
                 corr_idx_t = 0
             else:
                 corr_idx_t = -1
             
-            _, att = non_local_attention(tar, refs, mask=self.mask[corr_idx_t], scaling=True)   
-            corr = self.corr[corr_idx_t](tar, refs[0])
+            _, att = non_local_attention(fs[:,-1], fs[:, :-1], mask=self.mask[corr_idx_t], scaling=True)   
+            corr = self.corr[corr_idx_t](fs[:,-1], fs[:, 0])
 
             if corr_idx_t == 0:
                 att = self.corr_downsample(att, bsz, mode='custom')
@@ -583,28 +584,24 @@ class Memory_Tracker_Custom_Cmp(Memory_Tracker_Custom):
             corrs.append(corr.detach())
 
         # forward to get feature
-        fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))[:-1]
         tar_cmp = self.backbone(images_lab_gt[-1])[-1] # to fix
-        if isinstance(fs, tuple):
-            fs = [f.reshape(bsz, t, *f.shape[-3:]) for i,f in enumerate(fs) if i < len(fs) - 1]
-        else:
-            fs =  [fs.reshape(bsz, t, *fs.shape[-3:])]
-        tar_pyramid, refs_pyramid = [f[:, -1] for f in fs], [ f[:, :-1] for f in fs]
-        
+
+        if isinstance(fs, tuple): fs = tuple(fs)
+
         ######################### Frame Reconstruction #############################
         # pyramid (optional) frame reconstruction
-        if self.loss_weight.get('stage0_l1_loss', 0) != 0:
-            # only support fr at res3 and res4
-            assert len(fs) < 3 
-            for idx, (tar, refs) in enumerate(zip(tar_pyramid, refs_pyramid)):
+        if not self.mp_only:
+            for idx, f in enumerate(fs):
+                f = f.reshape(bsz, t, *f.shape[-3:])
                 # get correlation attention map            
-                _, att = non_local_attention(tar, refs, mask=self.mask[idx], scaling=True)            
+                _, att = non_local_attention(f[:,-1], f[:,:-1], mask=self.mask[idx], scaling=True)            
                 # for mast l1_loss
                 outputs = self.frame_reconstruction(images_lab_gt, att, ch, self.feat_size[idx], self.downsample_rate[idx])   
                 losses[f'stage{idx}_l1_loss'] = self.loss_weight[f'stage{idx}_l1_loss'] * self.compute_lphoto(images_lab_gt, ch, outputs)[0]
 
                 if idx == len(self.mask) - 1:
-                    corr = self.corr[idx](tar, refs[0])
+                    corr = self.corr[idx](f[:,-1], f[:,0])
                     atts.append(att)
                     corrs.append(corr)
                 else:
@@ -618,8 +615,24 @@ class Memory_Tracker_Custom_Cmp(Memory_Tracker_Custom):
                 losses['corr_loss'] = self.loss_weight['corr_loss'] * build_loss(dict(type='L1Loss'))(corrs[-1], corrs[0])
 
         # local distillation loss
+        if self.T != -1:
+            corr_feat = corrs[-1].reshape(bsz, -1, self.feat_size[-1], self.feat_size[-1])
+            corr = corr_feat.softmax(1)
+            corr_en = (-torch.log(corr+1e-12)).sum(1).flatten(-2)
+            corr_sorted, _ = torch.sort(corr_en, dim=-1, descending=True)
+            idx = int(corr_en.shape[-1] * self.T) - 1
+            T = corr_sorted[:, idx:idx+1]
+            sparse_mask = (corr_en > T).reshape(bsz, 1, *corr_feat.shape[-2:]).float().detach()
+            weight = sparse_mask.flatten(-2).permute(0,2,1).repeat(1, 1, atts[-1].shape[-1])
+            weight_mp = sparse_mask.repeat(1, self.ouput_dim // 2, 1, 1)
+
+        else:
+            weight = None
+            sparse_mask = None
+            weight_mp = None
+
         if self.loss_weight.get('local_corr_dist_loss', 0) != 0 and len(self.mask) > 1:
-            losses['local_corr_dist_loss'] = self.loss_weight['local_corr_dist_loss'] * build_loss(dict(type='MSELoss'))(att[:,0], att_hr)
+            losses['local_corr_dist_loss'] = self.loss_weight['local_corr_dist_loss'] * build_loss(dict(type='MSELoss'))(att[:,0], att_hr, weight)
 
 
         #################### Motion Prediction #######################
@@ -628,77 +641,16 @@ class Memory_Tracker_Custom_Cmp(Memory_Tracker_Custom):
             corr_predict = self.flow_decoder(tar_cmp).flatten(-2)
         
         # for cmp loss target 
-        if self.mode.find('classification') != -1:
-            corr_predict = corr_predict.permute(0,2,1).reshape(-1, self.ouput_dim)
-            target = corrs[0].reshape(bsz, (2*self.radius[-1]+1) ** 2, -1).permute(0, 2, 1).reshape(-1, self.ouput_dim)
-
-            if self.mode.find('soft') == -1:
-                target = target.max(-1)[1].detach().reshape(-1, 1)
-            else:
-                target = target.detach()
-        
-            losses['cmp_loss'] = self.loss_weight['cmp_loss'] * self.cmp_loss(corr_predict, target)
-            
-        elif self.mode == 'rec':
-            ref_gt = self.prep(images_lab_gt[0][:,ch], self.downsample_rate[-1])
-            ref_gt = F.unfold(ref_gt, self.radius[-1] * 2 + 1, padding=self.radius[-1])
-            outputs = (corr_predict * ref_gt).sum(1).reshape(bsz, -1, *tar_cmp.shape[-2:])        
-            losses['cmp_loss'] = self.loss_weight['cmp_loss'] * self.compute_lphoto(images_lab_gt, ch, outputs, upsample=self.upsample)[0]
-            
-        elif self.mode == 'regression':
-            
-            h = w = self.feat_size[1]
-            target = atts[0]
-            yv, xv = torch.meshgrid([torch.arange(h),torch.arange(w)])
-            grid = torch.stack((yv, xv), 2).view((h * w, 2)).float().cuda()
-            
-            # x1 -> x2
-            warp_grid = torch.einsum("bij,jd -> bid",[target, grid])
-
-            off = warp_grid - grid.unsqueeze(0)
-            corr_predict = corr_predict.permute(0,2,1)
-            
-            losses['cmp_loss'] = self.loss_weight['cmp_loss'] * F.smooth_l1_loss(corr_predict, off, reduction='mean')
-
+        if self.mode == 'exp':
+            losses.update(self.forward_exp(corrs, corr_predict))
         elif self.mode.find('vae') != -1:
-            corr_predict = self.flow_decoder(tar_cmp)
-            # VAE prior loss
-            mu_pred = corr_predict[:,:self.ouput_dim // 2]
-            logvar_pred = corr_predict[:,self.ouput_dim // 2:]
+            losses.update(self.forward_vae(corrs, tar_cmp, images_lab_gt, ch, weight=weight_mp))
+        elif self.mode == 'regression':
+            losses.update(self.forward_regression(corr_predict, atts))
 
-            if self.mode.find('learnt_prior') != -1:
-                mu_tar = corrs[0].reshape(bsz, (2*self.radius[-1]+1) ** 2, *tar.shape[-2:])
-                sampled_corr = self.reparameterise(mu_pred, logvar_pred)
-
-                corr_predict = self.flow_decoder_m(sampled_corr)
-                
-            elif self.mode.find('fix_prior') != -1:
-                mu_tar = torch.zeros_like(mu_pred)
-                sampled_corr = self.reparameterise(mu_pred, logvar_pred)
-                corr_predict = self.flow_decoder_m(sampled_corr)
-
-                # additional exp loss
-                losses['cmp_loss'] = self.loss_weight['cmp_loss'] *  build_loss(dict(type='L1Loss'))(corr_predict.flatten(-2), corrs[0].reshape(bsz, (2*self.radius[0]+1) ** 2, -1))
-
-            ref_gt = self.prep(images_lab_gt[0][:,ch], self.downsample_rate[-1])
-            ref_gt = F.unfold(ref_gt, self.radius[-1] * 2 + 1, padding=self.radius[-1])
-            outputs = (corr_predict.flatten(-2) * ref_gt).sum(1).reshape(bsz, -1, *tar_cmp.shape[-2:]) 
-
-            logvar_tar = torch.log(torch.ones_like(logvar_pred) * self.vae_var) # var set to 1
-
-            losses['vae_kl_loss'] = self.loss_weight['vae_kl_loss'] * build_loss(dict(type='Kl_Loss_Gaussion'))([mu_pred, logvar_pred], [mu_tar, logvar_tar])
-
-            losses['vae_rec_loss'] = self.loss_weight['vae_rec_loss'] * self.compute_lphoto(images_lab_gt, ch, outputs, upsample=self.upsample)[0]
-
-        elif self.mode == 'exp':
-
-            target = corrs[0].reshape(bsz, (2*self.radius[-1]+1) ** 2, -1)
-            losses['cmp_loss'] = self.loss_weight['cmp_loss'] * self.cmp_loss(corr_predict, target, weight=self.boundary_mask)
-
-        vis_results = dict(mask=None, imgs=imgs[0,0])
+        vis_results = dict(mask=sparse_mask[0,0] if sparse_mask != None else None, imgs=imgs[0,0])
 
         return losses, vis_results
-
 
     def prep(self, image, downsample_rate):
         _,c,_,_ = image.size()
@@ -739,216 +691,72 @@ class Memory_Tracker_Custom_Cmp(Memory_Tracker_Custom):
         
         return corr_down
 
+    def forward_vae(self, corrs, tar_cmp, images_lab_gt, ch, weight):
 
-@MODELS.register_module()
-class Memory_Tracker_Custom_Cmp_Multi_Frame(Memory_Tracker_Custom_Cmp):
-
-    def __init__(self, num_frames, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.num_frames = num_frames
-
-        # flow decoder
-        l = (2 * self.radius[-1] + 1) ** 2
-        self.flow_decoder = MotionDecoderPlain(
-        input_dim=self.backbone.feat_dim + l * (self.num_frames-2),
-        output_dim=self.ouput_dim,
-        combo=[1,2,4])
-
-
-    def forward_train(self, imgs, images_lab=None):
-
-        bsz, num_clips, t, c, h, w = images_lab.shape
-        
-        assert t >= 3, logger.info("Input frames must bigger than 2")
+        bsz = tar_cmp.shape[0]
+        corr_predict = self.flow_decoder(tar_cmp)
+        # VAE prior loss
+        mu_pred = corr_predict[:,:self.ouput_dim // 2]
+        logvar_pred = corr_predict[:,self.ouput_dim // 2:]
 
         losses = {}
-        atts = []
-        corrs = []
-        
-        images_lab_gt = [images_lab[:,0,i,:].clone() for i in range(t)]
-        images_lab = [images_lab[:,0,i,:] for i in range(t)]
-        _, ch = self.dropout2d_lab(images_lab)
-        
-        # estimate motion
-        with torch.no_grad():
-            fs = self.motion_estimator(torch.stack(images_lab,1).flatten(0,1))
-            fs = fs.reshape(bsz, t, *fs.shape[-3:])
-            for i in range(t-1):
-                tar, refs = fs[:,i], [fs[:, i+1]]
-                _, att = non_local_attention(tar, refs, mask=self.mask[0], scaling=True)   
-                corr = self.corr[0](tar, refs[0])
-                corr = corr.reshape(bsz, (2*self.radius[0]+1) ** 2, -1)
-                atts.append(att.detach())
-                corrs.append(corr.detach())
-        
-        # forward to get feature
-        tar_cmp = self.backbone(images_lab_gt[-2])[-1]
-    
-        # for cmp loss        
-        concat_input = torch.cat([tar_cmp, torch.stack(corrs[:-1], 1).reshape(bsz, -1, *tar_cmp.shape[-2:])], 1)
-        corr_predict = self.flow_decoder(concat_input).flatten(-2)
-        
-        # for cmp loss target
-        if self.mode.find('classification') != -1:
-            corr_predict = corr_predict.permute(0,2,1).reshape(-1, self.ouput_dim)
-            target = corrs[-1].permute(0, 2, 1).reshape(-1, self.ouput_dim)
 
-            if self.mode.find('soft') == -1:
-                target = target.max(-1)[1].detach().reshape(-1, 1)
-            else:
-                target = target.detach()
-        
-            losses['cmp_loss'] = self.loss_weight['cmp_loss'] * self.cmp_loss(corr_predict, target)
+        if self.mode.find('learnt_prior') != -1:
+            mu_tar = corrs[0].reshape(bsz, (2*self.radius[-1]+1) ** 2, *tar_cmp.shape[-2:])
+            sampled_corr = self.reparameterise(mu_pred, logvar_pred)
+
+            corr_predict = self.flow_decoder_m(sampled_corr)
             
-        elif self.mode == 'rec':
-            ref_gt = self.prep(images_lab_gt[0][:,ch], self.downsample_rate[-1])
-            ref_gt = F.unfold(ref_gt, self.radius[-1] * 2 + 1, padding=self.radius[-1])
-            outputs = (corr_predict * ref_gt).sum(1).reshape(bsz, -1, *tar_cmp.shape[-2:])        
-            losses['cmp_loss'] = self.loss_weight['cmp_loss'] * self.compute_lphoto(images_lab_gt, ch, outputs, upsample=self.upsample)[0]
-            
-        elif self.mode == 'regression':
-            
-            h = w = self.feat_size[1]
-            target = atts[-1]
-            
-            yv, xv = torch.meshgrid([torch.arange(h),torch.arange(w)])
-            grid = torch.stack((yv, xv), 2).view((h * w, 2)).float().cuda()
-            
-            # x1 -> x2
-            warp_grid = torch.einsum("bij,jd -> bid",[target, grid])
+        elif self.mode.find('fix_prior') != -1:
+            mu_tar = torch.zeros_like(mu_pred)
+            sampled_corr = self.reparameterise(mu_pred, logvar_pred)
+            corr_predict = self.flow_decoder_m(sampled_corr)
 
-            off = warp_grid - grid.unsqueeze(0)
-            corr_predict = corr_predict.permute(0,2,1)
-            
-            losses['cmp_loss'] = self.loss_weight['cmp_loss'] * F.smooth_l1_loss(corr_predict, off, reduction='mean')
+            # additional exp loss
+            losses['cmp_loss'] = self.loss_weight['cmp_loss'] *  build_loss(dict(type='L1Loss'))(corr_predict.flatten(-2), corrs[0].reshape(bsz, (2*self.radius[0]+1) ** 2, -1))
 
-        elif self.mode == 'vae':
-            corr_predict = corr_predict.permute(0,2,1)
+        ref_gt = self.prep(images_lab_gt[0][:,ch], self.downsample_rate[-1])
+        ref_gt = F.unfold(ref_gt, self.radius[-1] * 2 + 1, padding=self.radius[-1])
+        outputs = (corr_predict.flatten(-2) * ref_gt).sum(1).reshape(bsz, -1, *tar_cmp.shape[-2:]) 
 
-            # VAE prior loss
-            mu_pred = corr_predict[:,:,:self.ouput_dim // 2]
-            logvar_pred = corr_predict[:,:,self.ouput_dim // 2:]
-            mu_tar = corrs[-1].permute(0, 2, 1)
-            logvar_tar = torch.zeros_like(mu_tar) # var set to 1
-            losses['kl_loss'] = build_loss(dict(type='Kl_Loss_Gaussion'))([mu_pred, logvar_pred], [mu_tar, logvar_tar])
+        logvar_tar = torch.log(torch.ones_like(logvar_pred) * self.vae_var) # var set to 1
 
-            # VAE rec loss
-            sampled_corr = self.reparameterise(mu_pred, logvar_pred).permute(0,2,1)
-            ref_gt = self.prep(images_lab_gt[0][:,ch], self.downsample_rate[-1])
-            ref_gt = F.unfold(ref_gt, self.radius[-1] * 2 + 1, padding=self.radius[-1])
-            outputs = (sampled_corr * ref_gt).sum(1).reshape(bsz, -1, *tar_cmp.shape[-2:])        
-            losses['rec_loss'] = self.compute_lphoto(images_lab_gt, ch, outputs, upsample=self.upsample)[0]
+        losses['vae_kl_loss'] = self.loss_weight['vae_kl_loss'] * build_loss(dict(type='Kl_Loss_Gaussion'))([mu_pred, logvar_pred], [mu_tar, logvar_tar], weight=weight)
 
-        elif self.mode == 'exp':
-            corr_predict = corr_predict.permute(0,2,1)
-            target = corrs[-1].permute(0, 2, 1)
-            losses['cmp_loss'] = self.loss_weight['cmp_loss'] * self.cmp_loss(corr_predict, target)
+        losses['vae_rec_loss'] = self.loss_weight['vae_rec_loss'] * self.compute_lphoto(images_lab_gt, ch, outputs, upsample=self.upsample)[0]
 
-        vis_results = dict(mask=None, imgs=imgs[0,0])
-
-        return losses, vis_results
+        return losses
 
 
-@MODELS.register_module()
-class Memory_Tracker_Custom_Cmp_Multi_Frame_V2(Memory_Tracker_Custom_Cmp_Multi_Frame):
+    def forward_classification(self, corr_predict, corrs):
+        bsz = corr_predict.shape[0]
+        corr_predict = corr_predict.permute(0,2,1).reshape(-1, self.ouput_dim)
+        target = corrs[0].reshape(bsz, (2*self.radius[-1]+1) ** 2, -1).permute(0, 2, 1).reshape(-1, self.ouput_dim)
 
-    def __init__(self, backbone_m, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # flow decoder
-        l = (2 * self.radius[-1] + 1) ** 2
-        if self.num_frames == 2:
-            self.flow_decoder = MotionDecoderPlain(
-            input_dim=self.backbone.feat_dim + l + 1,
-            output_dim=self.ouput_dim,
-            combo=[1,2,4])
+        losses = {}
+        if self.mode.find('soft') == -1:
+            target = target.max(-1)[1].detach().reshape(-1, 1)
         else:
-            self.flow_decoder = MotionDecoderPlain(
-            input_dim=self.backbone.feat_dim + l * (self.num_frames-2),
-            output_dim=self.ouput_dim,
-            combo=[1,2,4])
+            target = target.detach()
+    
+        losses['cmp_loss'] = self.loss_weight['cmp_loss'] * self.cmp_loss(corr_predict, target)
 
-        # backbone_m build
-        self.backbone_m = build_backbone(backbone_m)
+        return losses
 
-        self.init_weights_()
-
-    def init_weights_(self):
-        logger = get_root_logger()
-
-        if self.pretrained is not None:
-            ckpt = CheckpointLoader.load_checkpoint(
-                    self.pretrained, logger=logger, map_location='cpu')
-            if 'state_dict' in ckpt:
-                _state_dict = ckpt['state_dict']
-            elif 'model' in ckpt:
-                _state_dict = ckpt['model']
-            else:
-                _state_dict = ckpt
-
-            state_dict = {}
-            for k, v in _state_dict.items():                
-                if k.find('backbone.') != -1:
-                    state_dict[k.replace('backbone.', 'backbone_m.')] = v
-                else:
-                    state_dict[k] = v
-
-            # strip prefix of state_dict
-            if list(state_dict.keys())[0].startswith('module.'):
-                state_dict = {k[7:]: v for k, v in state_dict.items()}
-
-            # load state_dict
-            load_state_dict(self, state_dict, strict=False, logger=logger)
-
-    def forward_train(self, imgs, images_lab=None):
-
-        bsz, num_clips, t, c, h, w = images_lab.shape
-        
+    def forward_regression(self, corr_predict, atts):
         losses = {}
-        atts = []
-        corrs = []
+
+        h = w = self.feat_size[1]
+        target = atts[0]
+        off = att2flow(h, w, target)
+        corr_predict = corr_predict.permute(0,2,1)
         
-        images_lab_gt = [images_lab[:,0,i,:].clone() for i in range(t)]
-        images_lab = [images_lab[:,0,i,:] for i in range(t)]
-        _, ch = self.dropout2d_lab(images_lab)
-        
-        # estimate motion and generate psudule labels
-        with torch.no_grad():
-            if self.mode == 'exp_m':
-                if t > 2:
-                    fs = self.motion_estimator(torch.stack(images_lab,1).flatten(0,1))
-                    fs = fs.reshape(bsz, t, *fs.shape[-3:])
-                    for i in range(t-1):
-                        tar, refs = fs[:,i], [fs[:, i+1]]
-                        _, att = non_local_attention(tar, refs, mask=self.mask[0], scaling=True)   
-                        corr = self.corr[0](tar, refs[0])
-                        corr = corr.reshape(bsz, (2*self.radius[0]+1) ** 2, -1)
-                        atts.append(att.detach())
-                        corrs.append(corr.detach())
+        losses['cmp_loss'] = self.loss_weight['cmp_loss'] * F.smooth_l1_loss(corr_predict, off, reduction='mean')
+        return losses
 
-                # forward to get feature
-                tar_cmp = self.backbone_m(images_lab_gt[-2])[-1]
-
-                if self.num_frames == 2:
-                    concat_input = torch.cat([tar_cmp, torch.zeros((bsz, (2*self.radius[0]+1) ** 2+1, 32, 32)).cuda()], 1)
-                else:
-                    concat_input = torch.cat([tar_cmp, torch.stack(corrs[:-1], 1).reshape(bsz, -1, *tar_cmp.shape[-2:])], 1)
-                corr_gt = self.flow_decoder(concat_input).flatten(-2).detach()
-            else:
-                fs = self.motion_estimator(torch.stack(images_lab,1).flatten(0,1))
-                fs = fs.reshape(bsz, t, *fs.shape[-3:])
-                tar, refs = fs[:,0], [fs[:, 1]]
-                corr = self.corr[0](tar, refs[0])
-                corr_gt = corr.reshape(bsz, (2*self.radius[0]+1) ** 2, -1).detach()
-
-        # main traning
-        fs = self.backbone(torch.stack(images_lab[-2:],1).flatten(0,1))
-        fs = fs.reshape(bsz, 2, *fs.shape[-3:])
-        tar, refs = fs[:,0], [fs[:, 1]]
-        corr_predict = self.corr[0](tar, refs[0]).reshape(bsz, (2*self.radius[0]+1) ** 2, -1)
-
-        losses['exp_loss'] = self.loss_weight['exp_loss'] * self.loss(corr_predict, corr_gt)
-
-        vis_results = dict(mask=None, imgs=imgs[0,0])
-
-        return losses, vis_results
+    def forward_exp(self, corrs, corr_predict):
+        bsz = corrs.shape[0]
+        losses = {}
+        target = corrs[0].reshape(bsz, (2*self.radius[-1]+1) ** 2, -1)
+        losses['cmp_loss'] = self.loss_weight['cmp_loss'] * self.cmp_loss(corr_predict, target, weight=self.boundary_mask)
+        return losses

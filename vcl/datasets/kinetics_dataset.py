@@ -23,6 +23,7 @@ from .video_dataset import *
 from .registry import DATASETS
 
 from .pipelines import Compose
+from vcl.utils import *
 
 
 @DATASETS.register_module()
@@ -49,6 +50,10 @@ class Kinetics_dataset_rgb(Video_dataset_base):
                 if sample['num_frames'] < self.clip_length * self.step: continue
                 
                 self.samples.append(sample)
+        
+        # self.samples = self.samples[:32]
+        logger = get_root_logger()
+        logger.info(" Load dataset with {} videos ".format(len(self.samples)))
     
     
     def prepare_train_data(self, idx):

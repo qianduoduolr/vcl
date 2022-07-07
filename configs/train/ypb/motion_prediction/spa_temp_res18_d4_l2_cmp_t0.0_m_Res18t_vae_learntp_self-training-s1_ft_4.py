@@ -3,23 +3,23 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'spa_temp_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_fr'
+exp_name = 'spa_temp_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_self-training-s1_ft_4'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
     type='Memory_Tracker_Custom_Cmp',
     motion_estimator=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none', pretrained='/gdata/lirui/expdir/VCL/group_stsl_former/mast_d4_l2_pyramid_dis_18/epoch_3200.pth', torchvision_pretrain=False),
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, 3), pool_type='none', dilations=(1,1,2,4)),
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(1, 2, 3), pool_type='none', dilations=(1,1,2,4), pretrained='/gdata/lirui/expdir/VCL/group_stsl_former/mast_d4_l2_pyramid_dis_18/epoch_3200.pth', torchvision_pretrain=False),
     loss=dict(type='MSELoss',reduction='mean'),
-    radius=[6],
-    T=-1,
-    downsample_rate=[8],
-    feat_size=[32],
+    radius=[12, 6],
+    T=0.7,
+    downsample_rate=[4, 8],
+    feat_size=[64, 32],
     cmp_loss=dict(type='L1Loss'),
     output_dim=169*2,
     mode='vae_learnt_prior',
-    loss_weight=dict(l1_loss=1, cmp_loss=0, vae_rec_loss=1, vae_kl_loss=0.001, corr_loss=0),
+    loss_weight=dict(stage0_l1_loss=1, stage1_l1_loss=1, cmp_loss=0, vae_rec_loss=1, vae_kl_loss=0.001, local_corr_dist_loss=1000, corr_loss=0),
     detach=True
 )
 
@@ -86,7 +86,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=16, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -128,19 +128,19 @@ data = dict(
 # optimizer
 optimizers = dict(
     flow_decoder=dict(
-    type='Adam', lr=0.001, betas=(0.9, 0.999)
+    type='Adam', lr=0.0001, betas=(0.9, 0.999)
     ),
     flow_decoder_m=dict(
-    type='Adam', lr=0.001, betas=(0.9, 0.999)
+    type='Adam', lr=0.0001, betas=(0.9, 0.999)
     ),
     backbone=dict(
-    type='Adam', lr=0.001, betas=(0.9, 0.999)
+    type='Adam', lr=0.0001, betas=(0.9, 0.999)
     )
 )
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=160
+max_epoch=320
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,

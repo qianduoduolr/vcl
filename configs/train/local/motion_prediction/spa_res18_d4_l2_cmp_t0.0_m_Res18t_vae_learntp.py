@@ -13,15 +13,13 @@ model = dict(
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, 3), pool_type='none', dilations=(1,1,2,4)),
     loss=dict(type='MSELoss',reduction='mean'),
     radius=[6,],
-    T=0.0,
-    # vae_var=0.1,
-    # softmax=True,
+    T=0.3,
     downsample_rate=[8,],
     feat_size=[32,],
     cmp_loss=dict(type='Ce_Loss'),
     output_dim=169*2,
     mode='vae_learnt_prior',
-    loss_weight=dict(l1_loss=0, cmp_loss=0, vae_rec_loss=1, vae_kl_loss=0.001, corr_loss=0),
+    loss_weight=dict(stage0_l1_loss=0, cmp_loss=0, vae_rec_loss=1, vae_kl_loss=0.001, corr_loss=0),
     detach=True
 )
 
@@ -164,6 +162,9 @@ log_config = dict(
     ])
 
 visual_config = None
+visual_config = dict(
+    type='VisualizationHook_Custom', interval=100, res_name_list=['imgs', 'mask'], output_dir='vis'
+)
 
 
 # runtime settings
