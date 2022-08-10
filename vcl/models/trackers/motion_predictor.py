@@ -96,7 +96,6 @@ class Memory_Tracker_Custom_Cmp(Memory_Tracker_Custom):
             input_dim=self.ouput_dim // 2,
             output_dim=self.ouput_dim // 2,
             combo=[1,2,4])
-
         else:
             self.flow_decoder = MotionDecoderPlain(
             input_dim=self.backbone.feat_dim,
