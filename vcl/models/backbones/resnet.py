@@ -10,6 +10,8 @@ from torch.utils import checkpoint as cp
 from ...utils import get_root_logger
 from ..common import change_stride
 from ..registry import BACKBONES
+from ..registry import COMPONENTS
+
 
 class BasicBlock(nn.Module):
     """Basic block for ResNet.
@@ -110,7 +112,6 @@ class BasicBlock(nn.Module):
         out = self.relu(out)
 
         return out
-
 
 class Bottleneck(nn.Module):
     """Bottleneck block for ResNet.

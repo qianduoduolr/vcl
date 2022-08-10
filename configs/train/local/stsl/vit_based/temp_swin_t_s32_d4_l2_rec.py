@@ -9,7 +9,7 @@ docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 # model settings
 model = dict(
     type='Framework_V2',
-    backbone=dict(type='SwinTransformer', pretrain_img_size=192, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32), strides=(4, 2, 1, 1), window_size=6, out_indices=(2,), pretrained='/home/lr/models/ssl/image_based/simmim_pretrain__swin_base__img192_window6__800ep.pth'),
+    backbone=dict(type='SwinTransformer_Mmcv', pretrain_img_size=256, strides=(4, 2, 1, 1), out_indices=(2,)),
     backbone_t=None,
     loss=dict(type='MSELoss',reduction='mean'),
     feat_size=[32,],
@@ -26,7 +26,7 @@ model = dict(
 
 model_test = dict(
     type='VanillaTracker',
-    backbone=dict(type='SwinTransformer', pretrain_img_size=(480, 856), strides=(4, 2, 1, 1), out_indices=(3,)),
+    backbone=dict(type='SwinTransformer', pretrain_img_size=(480, 856), strides=(4, 2, 1, 1), out_indices=(2,)),
 )
 
 # model training and testing settings

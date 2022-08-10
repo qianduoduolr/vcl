@@ -33,7 +33,7 @@ test_cfg = dict(
     precede_frames=20,
     topk=10,
     temperature=0.07,
-    strides=(1, 2, 1, 1),
+    strides=(1, 2, 2, 1),
     out_indices=(3, ),
     neighbor_range=24,
     with_first=True,
@@ -156,8 +156,8 @@ evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epo
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=None,
-                  torchvision_pretrained='/home/lr/models/ssl/image_based/detco_200ep_AA.pth'
+                  checkpoint_path='/home/lr/expdir/VCL/group_stsl_former/mast_d4_l2_pyramid_dis_18/epoch_3200.pth',
+                  torchvision_pretrained=None
                 )
 
 

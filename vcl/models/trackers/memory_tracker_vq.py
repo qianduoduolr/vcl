@@ -44,6 +44,7 @@ class Memory_Tracker_Custom_Vq(Memory_Tracker_Custom):
         self.backbone_t = build_backbone(backbone_t) if backbone_t is not None else None
         self.head = build_components(head) if head is not None else None
 
+    
     def forward_train_corrspondence(self, images_lab, imgs=None):
         
         bsz, _, n, c, h, w = images_lab.shape
@@ -105,47 +106,49 @@ class Memory_Tracker_Custom_Vq(Memory_Tracker_Custom):
         bsz, _, n, c, h, w = images_lab.shape
         
         images_lab_gt = [images_lab[:,0,i].clone() for i in range(n)]
-        images = [imgs[:,0,i].clone() for i in range(n)]
-      
+        images_lab = [images_lab[:,0,i] for i in range(n)]
+        _, ch = self.dropout2d_lab(images_lab)
+        losses = {}
         
         ############ VQ Correlation Calculation ###############
         with torch.no_grad():
+            self.backbone.eval()
             # forward to get feature
-            fs = self.backbone(torch.stack(images,1).flatten(0,1))
+            fs = self.backbone(imgs.flatten(0,2))
             fs = fs.reshape(bsz, n, *fs.shape[-3:])
             tar, refs = fs[:, -1], fs[:, :-1]
             
             # get correlation attention map      
-            _, att = non_local_attention(tar, refs, mask=None, scaling=self.scaling, per_ref=self.per_ref, temprature=self.temperature)    
+            _, att = non_local_attention(tar, refs, mask=None, scaling=self.scaling, per_ref=self.per_ref, temprature=0.07)
+
+            # forward to get feature with lab inputs
+            fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+            fs = fs.reshape(bsz, n, *fs.shape[-3:])
+
 
         ############ VQ Correlation Calculation After Head ################
         fs_vq = self.head(fs.flatten(0,1))
         # for vq reconstruction and vq update
-        fs_quants, inds, diff = self.vq_enc(fs_vq)
-        fs_quants = fs_quants.reshape(bsz, n, *fs_quants.shape[-3:])
-        tar_quants, refs_quants = fs_quants[:, -1], fs_quants[:, :-1]
+        encs, fs_quants, inds, diff = self.vq_enc(fs_vq)
+        encs = encs.reshape(bsz, n, *encs.shape[-3:])
+        tar_encs, refs_encs = encs[:, -1], encs[:, :-1]
         # get correlation attention map      
-        _, att_vq_g = non_local_attention(tar_quants, refs_quants, mask=None, scaling=self.scaling, per_ref=self.per_ref, temprature=self.temperature) 
+        _, att_vq_g = non_local_attention(tar_encs, refs_encs, mask=None, scaling=self.scaling, per_ref=self.per_ref, temprature=self.temperature) 
 
-        _, att_vq_l = non_local_attention(tar_quants, refs_quants, mask=self.mask[0], scaling=self.scaling, per_ref=self.per_ref, temprature=self.temperature)
 
-        ############ Correlation Calculation Using Temporal Model ###############
-        with torch.no_grad():
-            # forward to get feature
-            fs = self.backbone_t(torch.stack(images_lab_gt,1).flatten(0,1))
-            fs = fs.reshape(bsz, n, *fs.shape[-3:])
-            tar, refs = fs[:, -1], fs[:, :-1]
-            
-            # get correlation attention map      
-            _, att_t = non_local_attention(tar, refs, mask=self.mask[0], scaling=self.scaling, per_ref=self.per_ref, temprature=self.temperature)    
+        ############ Frame Reconstruction ###############
+        # for mast l1_loss
+        _, att_l = non_local_attention(tar_encs, refs_encs, mask=self.mask[-1], scaling=self.scaling, per_ref=self.per_ref, temprature=self.temperature)    
+        outputs = self.frame_reconstruction(images_lab_gt, att_l, ch, feat_size=self.feat_size[0], downsample_rate=self.downsample_rate[0]) 
+        losses['l1_loss'] = self.loss_weight['l1_loss'] * self.compute_lphoto(images_lab_gt, ch, outputs, upsample=self.upsample)[0]
 
         ############# Self-Distillation ####################
-        losses = {}
         loss_func = build_loss(dict(type='MSELoss'))
-        losses['t_loss'] = self.loss_weight['t_loss'] * loss_func(att_vq_l, att_t.detach())
         losses['s_loss'] = self.loss_weight['s_loss'] * loss_func(att_vq_g, att.detach())
-        losses['diff_loss'] = self.loss_weight['diff_loss'] * diff
-
+        if self.loss_weight['diff_loss'] == 0:
+            losses['diff'] = diff
+        else:
+            losses['diff_loss'] = self.loss_weight['diff_loss'] * diff
 
         vis_results = dict(err=None, imgs=imgs[0,0])
 

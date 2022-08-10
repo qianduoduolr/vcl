@@ -13,6 +13,7 @@ import torchvision.transforms.functional as F
 from torchvision import transforms
 import numpy as np
 import cv2
+import csv
 from PIL import Image
 
 from mmcv import scandir
@@ -29,50 +30,73 @@ from vcl.utils import *
 @DATASETS.register_module()
 class Kinetics_dataset_rgb(Video_dataset_base):
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, rand_step=False, *args, **kwargs):
         super().__init__( *args, **kwargs)
         self.load_annotations()
+        self.rand_step = rand_step
 
     def load_annotations(self):
         
         self.samples = []
-        list_path = osp.join(self.list_path, f'{self.split}_list.txt')
+        list_path = osp.join(self.list_path, f'{self.split}_list.csv')
 
+        cols_name = ['duration_flow', 'duration_rgb', 'label', 'video_class',  'video_path',  'vname'] 
+        with open(list_path) as f:
+            f_csv = csv.DictReader(f, fieldnames=cols_name, delimiter=' ')
+            rows = list(f_csv)
+            for idx, sample in enumerate(rows):
+                if idx == 0: continue
 
-        with open(list_path, 'r') as f:
-            for idx, line in enumerate(f.readlines()):
-                sample = dict()
-                vname, num_frames, _ = line.strip('\n').split()
-        
-                sample['frames_path'] = sorted(glob.glob(osp.join(self.root, vname, '*.jpg')))
-                sample['num_frames'] = len(sample['frames_path'])
-                
-                if sample['num_frames'] < self.clip_length * self.step: continue
+                if self.data_backend == 'raw_video':
+                    video_path = os.path.join(self.root, sample['video_path'] + '.mp4')
+                    if os.path.exists(video_path): 
+                        sample['video_path'] = video_path
+                    else:
+                        continue
+                else:
+                    video_path = os.path.join(self.root, sample['video_path'])
+                    if not os.path.exists(osp.join(video_path,'split.txt')): 
+                        continue
+                    else:
+                        with open(osp.join(video_path, 'split.txt'), 'r') as f:
+                            num_frames = int(f.readline().strip('\n'))
+
+                        sample['frames_path'] = [os.path.join(video_path, self.filename_tmpl.format(i * 5)) for i in range(1,num_frames+1)]
+                        sample['num_frames'] = len(sample['frames_path'])
+                        if sample['num_frames'] <= self.clip_length * self.step: continue
                 
                 self.samples.append(sample)
         
-        # self.samples = self.samples[:32]
         logger = get_root_logger()
         logger.info(" Load dataset with {} videos ".format(len(self.samples)))
     
     
     def prepare_train_data(self, idx):
-
-        sample = self.samples[idx]
-        frames_path = sample['frames_path']
-        num_frames = sample['num_frames']
-
-        offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, self.step, mode=self.temporal_sampling_mode)
         
+        step = random.randint(1, self.step) if self.rand_step else self.step
+        sample = self.samples[idx]
+         
         # load frame
-        frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length, step=self.step)
+        if self.data_backend == 'raw_video':
+            data = {
+                'filename': sample['video_path'],
+                'start_index': self.start_index,
+                'modality': 'RGB',
+                'num_proposals':1
+            }
 
-        data = {
-            'imgs': frames,
-            'modality': 'RGB',
-            'num_clips': self.num_clips,
-            'num_proposals':1,
-            'clip_len': self.clip_length
-        } 
+        elif self.data_backend == 'lmdb':
+            frames_path = sample.get('frames_path', None)
+            num_frames = sample.get('num_frames', None)
+            offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, self.step, mode=self.temporal_sampling_mode)
+            frames = self._parser_rgb_lmdb_deprected(offsets, frames_path, self.clip_length, step=step, name_idx=-3)
+
+            data = {
+                'imgs': frames,
+                'modality': 'RGB',
+                'num_clips': self.num_clips,
+                'num_proposals':1,
+                'clip_len': self.clip_length
+            } 
 
         return self.pipeline(data)

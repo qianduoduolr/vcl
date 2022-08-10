@@ -426,3 +426,49 @@ class Kl_Loss_Gaussion(nn.Module):
             return  (kld * weight).sum() / weight.sum()
         else:
             return kld.mean()
+
+
+@LOSSES.register_module()
+class Kl_Loss_Laplace(nn.Module):
+    """kl div betweeen two Laplace (VAE)
+
+    Args:
+        loss_weight (float): Loss weight for MSE loss. Default: 1.0.
+        reduction (str): Specifies the reduction to apply to the output.
+            Supported choices are 'none' | 'mean' | 'sum'. Default: 'mean'.
+        sample_wise (bool): Whether calculate the loss sample-wise. This
+            argument only takes effect when `reduction` is 'mean' and `weight`
+            (argument of `forward()`) is not None. It will first reduces loss
+            with 'mean' per-sample, and then it means over all the samples.
+            Default: False.
+    """
+
+    def __init__(self, loss_weight=1.0, reduction='mean', sample_wise=False):
+        super().__init__()
+        if reduction not in ['none', 'mean', 'sum']:
+            raise ValueError(f'Unsupported reduction mode: {reduction}. '
+                             f'Supported ones are: {_reduction_modes}')
+
+        self.loss_weight = loss_weight
+        self.reduction = reduction
+        self.sample_wise = sample_wise
+
+    def forward(self, pred, target, weight=None, **kwargs):
+        mu_pred, var_pred = pred
+        mu_target, var_target = target
+        return self.kl_criterion(mu_pred, var_pred, mu_target, var_target, weight)
+
+
+    def kl_criterion(self, mu1, logvar1, mu2, logvar2, weight=None):
+        bsz = mu1.shape[0]
+
+        term1 = ( logvar1 * torch.exp(-(torch.abs(mu1-mu2))/logvar1) + torch.abs(mu1-mu2) ) / logvar2
+
+        term2 = torch.log(logvar2/(logvar1+1e-9)) - 1
+
+        kld = term1 + term2
+
+        if weight is not None:
+            return  (kld * weight).sum() / weight.sum()
+        else:
+            return kld.mean()

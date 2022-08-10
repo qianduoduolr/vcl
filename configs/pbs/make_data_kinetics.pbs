@@ -1,0 +1,18 @@
+#PBS -N make_data_kinetics
+#PBS -o /gdata1/lirui/pbs/pbs_out/make_data_kinetics.out
+#PBS -e /gdata1/lirui/pbs/pbs_out/make_data_kinetics.err
+#PBS -l nodes=1:gpus=1:G
+#PBS -r y
+
+cd $PBS_O_WORKDIR
+echo Time is 'date'
+echo Directory is $PWD
+
+echo This job runs on following nodes:
+cat $PBS_NODEFILE
+echo $PBS_NODEFILE
+
+echo $PBS_GPUFILE
+cat $PBS_GPUFILE
+
+startdocker -P /gdata1/lirui -D /gpub -u "--shm-size 64G" -c "bash /gdata1/lirui/project/vcl/tools/data/kinetics/make_data_kinetics.sh" bit:5000/lirui_torch1.8_cuda11.1_mmcv1.5.2

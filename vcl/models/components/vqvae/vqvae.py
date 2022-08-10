@@ -185,17 +185,17 @@ class VQ(BaseModel):
         # Encoding
         # Convolution before quantization and converting to B x H x W x C
         if self.quantize_conv is not None:
-            enc = self.quantize_conv(x).permute(0, 2, 3, 1)
+            enc = self.quantize_conv(x)
         else:
-            enc = x.permute(0, 2, 3, 1)
+            enc = x
 
         # Vector quantization
-        quant, diff, ind, embed = self.quantize(enc)
+        quant, diff, ind, embed = self.quantize(enc.permute(0, 2, 3, 1))
 
         # Converting back the quantized map to B x C x H x W
         quant = quant.permute(0, 3, 1, 2)
 
-        return quant, ind, diff
+        return enc, quant, ind, diff
 
     def decode(self, quant):
         """

@@ -1,4 +1,3 @@
-from .pixel_contrast import PixelContrast
 from .vanilla_tracker import *
 from .vqvae_tracker import *
 from .dist_tracker import *
@@ -11,3 +10,4 @@ from .framework import *
 from .single_frame_tracker import *
 from .memory_tracker_moco import *
 from .memory_tracker_vq import *
+from .motion_predictor import *

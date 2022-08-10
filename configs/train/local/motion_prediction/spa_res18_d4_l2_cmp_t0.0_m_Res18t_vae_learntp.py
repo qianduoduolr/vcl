@@ -9,18 +9,19 @@ docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 # model settings
 model = dict(
     type='Memory_Tracker_Custom_Cmp',
-     motion_estimator=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none', pretrained='/home/lr/expdir/VCL/group_stsl_former/mast_d4_l2_pyramid_dis_18/epoch_3200.pth', torchvision_pretrain=False),
+     motion_estimator=dict(type='ResNet',depth=18, strides=(1, 1, 1, 1), out_indices=(2, ), pool_type='mean', pretrained='/home/lr/mount/expdir/VCL/group_stsl_former/mast_d2_l2_base_2/epoch_1600.pth', torchvision_pretrain=False),
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, 3), pool_type='none', dilations=(1,1,2,4)),
     loss=dict(type='MSELoss',reduction='mean'),
     radius=[6,],
-    T=0.3,
+    T=-1,
     downsample_rate=[8,],
     feat_size=[32,],
     cmp_loss=dict(type='Ce_Loss'),
     output_dim=169*2,
     mode='vae_learnt_prior',
-    loss_weight=dict(stage0_l1_loss=0, cmp_loss=0, vae_rec_loss=1, vae_kl_loss=0.001, corr_loss=0),
-    detach=True
+    loss_weight=dict(l1_loss=0, cmp_loss=0, vae_rec_loss=1, vae_kl_loss=0.001, corr_loss=0),
+    detach=True,
+    mp_only=True
 )
 
 model_test = dict(
@@ -162,9 +163,9 @@ log_config = dict(
     ])
 
 visual_config = None
-visual_config = dict(
-    type='VisualizationHook_Custom', interval=100, res_name_list=['imgs', 'mask'], output_dir='vis'
-)
+# visual_config = dict(
+#     type='VisualizationHook_Custom', interval=100, res_name_list=['imgs', 'mask'], output_dir='vis'
+# )
 
 
 # runtime settings

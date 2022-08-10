@@ -17,10 +17,10 @@ from vcl.models import build_model
 
 def parse_args():
     parser = argparse.ArgumentParser(description='mmediting tester')
-    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/train/local/stsl/vit_based/temp_swin_t_s32_d4_l2_rec.py')
+    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/train/local/eval/res18_d4_fusion_eval.py')
     # parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_dyt_nl_l2_nofc_orivq/epoch_800.pth')
     parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='')
-    parser.add_argument('--out-indices', nargs='+', type=int, default=[0])
+    parser.add_argument('--out-indices', nargs='+', type=int, default=[2])
     parser.add_argument('--seed', type=int, default=None, help='random seed')
     parser.add_argument(
         '--deterministic',
@@ -137,8 +137,12 @@ def main():
     # build the model and load checkpoint
     if not eval_config.get('mast_prop', False):
         head = cfg.model.get('head', None)
+        backbone_ = cfg.test_cfg.get('backbone_', None)
         eval_arc = cfg.get('eval_arc', 'VanillaTracker')
-        model = mmcv.ConfigDict(type=eval_arc, backbone=cfg.model.backbone, head=head)
+        if backbone_ == None:
+            model = mmcv.ConfigDict(type=eval_arc, backbone=cfg.model.backbone, head=head)
+        else:
+            model = mmcv.ConfigDict(type=eval_arc, backbone=cfg.model.backbone, backbone_=backbone_, head=head)
         
         model.backbone.out_indices = args.out_indices
         

@@ -3,6 +3,8 @@ from ..builder import build_components, build_loss, build_drop_layer
 from mmcv.cnn import ConvModule, build_norm_layer, build_plugin_layer
 import torch
 import torch.nn as nn
+from torch.utils import checkpoint as cp
+
 
 def build_norm1d(cfg, num_features):
     if cfg['type'] == 'BN':
@@ -185,4 +187,115 @@ class SimSiamHead(nn.Module):
             p2, z1.detach()) * 0.5
         losses['loss_feat'] = loss_feat * weight
         return losses
+
+@COMPONENTS.register_module()
+class BasicBlock(nn.Module):
+    """Basic block for ResNet.
+
+    Args:
+        inplanes (int): Number of channels for the input in first conv2d layer.
+        planes (int): Number of channels produced by some norm/conv2d layers.
+        stride (int): Stride in the conv layer. Default: 1.
+        dilation (int): Spacing between kernel elements. Default: 1.
+        downsample (nn.Module): Downsample layer. Default: None.
+        style (str): `pytorch` or `caffe`. If set to "pytorch", the stride-two
+            layer is the 3x3 conv layer, otherwise the stride-two layer is
+            the first 1x1 conv layer. Default: 'pytorch'.
+        conv_cfg (dict): Config for norm layers. Default: dict(type='Conv').
+        norm_cfg (dict):
+            Config for norm layers. required keys are `type` and
+            `requires_grad`. Default: dict(type='BN2d', requires_grad=True).
+        act_cfg (dict): Config for activate layers.
+            Default: dict(type='ReLU', inplace=True).
+        with_cp (bool): Use checkpoint or not. Using checkpoint will save some
+            memory while slowing down the training speed. Default: False.
+    """
+    expansion = 1
+
+    def __init__(self,
+                 inplanes,
+                 planes,
+                 stride=1,
+                 dilation=1,
+                 style='pytorch',
+                 conv_cfg=dict(type='Conv'),
+                 norm_cfg=dict(type='BN', requires_grad=True),
+                 act_cfg=dict(type='ReLU', inplace=True),
+                 with_cp=False):
+        super().__init__()
+        assert style in ['pytorch', 'caffe']
+        self.conv1 = ConvModule(
+            inplanes,
+            planes,
+            kernel_size=3,
+            stride=stride,
+            padding=dilation,
+            dilation=dilation,
+            bias=False,
+            conv_cfg=conv_cfg,
+            norm_cfg=norm_cfg,
+            act_cfg=act_cfg)
+
+        self.conv2 = ConvModule(
+            planes,
+            planes,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            dilation=1,
+            bias=False,
+            conv_cfg=conv_cfg,
+            norm_cfg=norm_cfg,
+            act_cfg=None)
+
+        self.relu = nn.ReLU(inplace=True)
+        self.downsample =  ConvModule(
+            inplanes,
+            planes,
+            kernel_size=1,
+            stride=stride,
+            bias=False,
+            conv_cfg=conv_cfg,
+            norm_cfg=norm_cfg,
+            act_cfg=None)
+
+        self.style = style
+        self.stride = stride
+        self.dilation = dilation
+        self.norm_cfg = norm_cfg
+        self.with_cp = with_cp
+
+    def forward(self, x):
+        """Defines the computation performed at every call.
+
+        Args:
+            x (torch.Tensor): The input data.
+
+        Returns:
+            torch.Tensor: The output of the module.
+        """
+
+        def _inner_forward(x):
+            identity = x
+
+            out = self.conv1(x)
+            out = self.conv2(out)
+
+            if self.downsample is not None:
+                identity = self.downsample(x)
+
+            out += identity
+
+            return out
+
+        if self.with_cp and x.requires_grad:
+            out = cp.checkpoint(_inner_forward, x)
+        else:
+            out = _inner_forward(x)
+
+        out = self.relu(out)
+
+        return out
+
+
 

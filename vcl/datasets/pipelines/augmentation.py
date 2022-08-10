@@ -766,6 +766,12 @@ class Resize(object):
                         grid, (new_w, new_h), interpolation=self.interpolation)
                     for grid in results['grids']
                 ]
+            if 'flows' in results:
+                results['flows'] = [
+                    mmcv.imresize(
+                        flow, (new_w, new_h), interpolation=self.interpolation)
+                    for flow in results['flows']
+                ]
 
         else:
             lazyop = results['lazy']

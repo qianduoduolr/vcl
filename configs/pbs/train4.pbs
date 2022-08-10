@@ -15,4 +15,4 @@ echo $PBS_NODEFILE
 echo $PBS_GPUFILE
 cat $PBS_GPUFILE
 
-startdocker -P /gdata2/lirui -D /gdata/lirui -u "--shm-size 64G" -c "bash /gdata/lirui/project/vcl/tools/dist_train_dry_run.sh /gdata/lirui/project/vcl/configs/train/ypb/train_dry_run.py 4 4" bit:5000/lirui_torch1.8_cuda11.1_mmcv1.5.2
+startdocker -P /gdata1/lirui -D /gdata/lirui -u "--shm-size 64G" -c "bash /gdata/lirui/project/vcl/tools/dist_train_dry_run.sh /gdata/lirui/project/vcl/configs/train/ypb/train_dry_run.py 4 4" bit:5000/lirui_torch1.8_cuda11.1_mmcv1.5.2

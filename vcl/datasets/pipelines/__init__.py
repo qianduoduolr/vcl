@@ -1,6 +1,7 @@
 from .compose import Compose
 from .augmentation import *
 from .my_aug import *
+from .loading import *
 from .formating import *
 
 # __all__ = [

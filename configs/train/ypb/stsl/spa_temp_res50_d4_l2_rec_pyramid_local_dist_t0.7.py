@@ -1,9 +1,9 @@
 import os
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'final_framework_v2_33'
+exp_name = 'spa_temp_res50_d4_l2_rec_pyramid_local_dist_t0.7'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
@@ -170,5 +170,5 @@ workflow = [('train', 1)]
 
 
 if __name__ == '__main__':
-    make_pbs(exp_name, docker_name)
-    make_local_config(exp_name)
+    # make_pbs(exp_name, docker_name)
+    make_local_config_back(exp_name, file='stsl')

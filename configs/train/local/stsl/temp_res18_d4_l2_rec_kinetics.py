@@ -16,7 +16,6 @@ model = dict(
     radius=[6,],
     temperature=1,
     feat_size=[32,],
-    per_ref=False,
     pretrained=None,
 )
 
@@ -33,7 +32,6 @@ test_cfg = dict(
     precede_frames=20,
     topk=10,
     temperature=0.07,
-    dilations=(1,1,2,4),
     strides=(1, 2, 2, 1),
     out_indices=(3, ),
     neighbor_range=24,
@@ -47,7 +45,6 @@ train_dataset_type = 'Kinetics_dataset_rgb'
 val_dataset_type = 'VOS_davis_dataset_test'
 
 test_dataset_type = 'VOS_davis_dataset_test'
-
 
 # train_pipeline = None
 img_norm_cfg = dict(mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
@@ -67,8 +64,9 @@ train_pipeline = [
     dict(type='ToTensor', keys=['imgs', 'images_lab'])
 ]
 
+
 val_pipeline = [
-    dict(type='Resize', scale=(-1, 480), keep_ratio=True),
+    dict(type='Resize', scale=(-1, 240), keep_ratio=True),
     dict(type='Flip', flip_ratio=0),
     dict(type='RGB2LAB'),
     dict(type='Normalize', **img_norm_cfg_lab),
@@ -88,15 +86,16 @@ data = dict(
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
     # train
-    train=dict(
-                type=train_dataset_type,
-                root='/home/lr/dataset/Kinetics/Kinetics_t30_s256/data',
-                list_path='/home/lr/dataset/Kinetics/Kinetics_t30_s256',
-                clip_length=2,
-                pipeline=train_pipeline,
-                test_mode=False
-                ),
-
+    train=
+            dict(
+            type=train_dataset_type,
+            root='/home/lr/dataset/Kinetics/kinetics_s256_ns5_lmdb',
+            list_path='/home/lr/dataset/Kinetics/kinetics_s256_ns5_lmdb',
+            filename_tmpl='image_{:05d}.jpg',
+            clip_length=2,
+            pipeline=train_pipeline,
+            data_backend='lmdb',
+            test_mode=False),
 
     test =  dict(
             type=test_dataset_type,
@@ -106,6 +105,7 @@ data = dict(
             pipeline=val_pipeline,
             test_mode=True
             ),
+
     
     val =  dict(
             type=val_dataset_type,

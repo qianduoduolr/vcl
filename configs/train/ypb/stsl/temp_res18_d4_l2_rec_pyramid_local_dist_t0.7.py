@@ -1,9 +1,9 @@
 import os
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'mast_d4_l2_pyramid_3'
+exp_name = 'temp_res18_d4_l2_rec_pyramid_local_dist_t0.7'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
@@ -172,5 +172,4 @@ find_unused_parameters = True
 
 
 if __name__ == '__main__':
-    make_pbs(exp_name, docker_name)
-    make_local_config(exp_name)
+    make_local_config_back(exp_name, file='stsl')

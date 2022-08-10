@@ -6,3 +6,4 @@ from .builder import *
 from .kinetics_dataset import *
 from .jhmdb_dataset import *
 from .vip_dataset import *
+from .ucf_dataset import *

@@ -1,0 +1,2 @@
+cd /gdata1/lirui/project/vcl/tools/data/utils/
+python create_lmdb.py --root-path /gpub/Kinetics_raw_video/ --dst-path /gdata1/lirui/dataset/Kinetics/kinetics_s256_ns5_lmdb --num-steps 5 --num-workers 4

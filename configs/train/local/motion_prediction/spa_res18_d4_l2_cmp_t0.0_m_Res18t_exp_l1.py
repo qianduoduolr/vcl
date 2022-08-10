@@ -13,12 +13,13 @@ model = dict(
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, 3), pool_type='none', dilations=(1,1,2,4)),
     loss=dict(type='MSELoss',reduction='mean'),
     radius=[6,],
-    T=0.0,
+    T=-1,
     downsample_rate=[8,],
     feat_size=[32,],
     cmp_loss=dict(type='L1Loss'),
     mode='exp',
-    loss_weight=dict(l1_loss=0, corr_loss=0, cmp_loss=1),
+    loss_weight=dict(l1_loss=0, cmp_loss=1),
+    mp_only=True,
     detach=True
 )
 

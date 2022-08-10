@@ -8,7 +8,7 @@ import mmcv
 from mmcv.runner import auto_fp16, load_state_dict, load_checkpoint
 
 from ..base import BaseModel
-from ..builder import build_backbone, build_loss, build_model
+from ..builder import build_backbone, build_components, build_loss, build_model
 from ..registry import MODELS
 from vcl.utils.helpers import *
 from vcl.utils import *
@@ -27,6 +27,7 @@ class Framework_V2(BaseModel):
                  backbone_t,
                  momentum,
                  temperature,
+                 head=None,
                  pool_type='mean',
                  weight=20,
                  num_stage=2,
@@ -80,7 +81,8 @@ class Framework_V2(BaseModel):
         # build backbone
         self.backbone = build_backbone(backbone)
         self.backbone_t = build_backbone(backbone_t) if backbone_t != None else None
-        
+        self.head = build_components(head) if head != None else None
+
         # loss
         self.loss = build_loss(loss) if loss != None else None
         self.mask = [ make_mask(feat_size[i], radius[i]) for i in range(len(radius))]   
@@ -106,26 +108,32 @@ class Framework_V2(BaseModel):
         
         # forward to get feature
         fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
-        if isinstance(fs, tuple):
-            fs = [f.reshape(bsz, t, *f.shape[-3:]) for f in fs]
-        else:
-            fs = [fs.reshape(bsz, t, *fs.shape[-3:])]
+        if isinstance(fs, tuple): fs = tuple(fs)
+        else: fs = [fs]
+        # if isinstance(fs, tuple):
+        #     fs = [f.reshape(bsz, t, *f.shape[-3:]) for f in fs]
+        # else:
+        #     fs = [fs.reshape(bsz, t, *fs.shape[-3:])]
         
-        tar_pyramid, refs_pyramid = [f[:, -1] for f in fs], [ f[:, :-1] for f in fs]
+        # tar_pyramid, refs_pyramid = [f[:, -1] for f in fs], [ f[:, :-1] for f in fs]
         
         losses = {}
         
         atts = []
         corrs = []
-        for idx, (tar, refs) in enumerate(zip(tar_pyramid, refs_pyramid)):
+        # for idx, (tar, refs) in enumerate(zip(tar_pyramid, refs_pyramid)):
+        for idx, f in enumerate(fs):
+            if self.head is not None and idx == 0:
+                f = self.head(f)
+            f = f.reshape(bsz, t, *f.shape[-3:])
             
             # get correlation for distillation
             if idx == len(fs) - 1 and self.backbone_t != None:
-                _, att_g = non_local_attention(tar, refs, scaling=self.scaling)
+                _, att_g = non_local_attention(f[:,-1], f[:,:-1], scaling=self.scaling)
                 break
                         
             # get correlation attention map            
-            _, att = non_local_attention(tar, refs, mask=self.mask[idx], scaling=True)      
+            _, att = non_local_attention(f[:,-1], f[:,:-1], mask=self.mask[idx], scaling=True)      
                   
             # for mast l1_loss
             ref_gt = [self.prep(gt[:,ch], downsample_rate=self.downsample_rate[idx]) for gt in images_lab_gt[:-1]]
@@ -134,7 +142,7 @@ class Framework_V2(BaseModel):
             losses[f'stage{idx}_l1_loss'] = self.compute_lphoto(images_lab_gt, ch, outputs)[0] * self.loss_weight[f'stage{idx}_l1_loss']
             
             # save corr and att
-            corr = self.corr[idx](tar, refs[:,0])
+            corr = self.corr[idx](f[:,-1], f[:,0])
             corrs.append(corr)
             atts.append(att)
             

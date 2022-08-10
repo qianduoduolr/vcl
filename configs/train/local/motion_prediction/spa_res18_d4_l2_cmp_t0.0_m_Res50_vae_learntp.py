@@ -21,7 +21,7 @@ model = dict(
     output_dim=169*2,
     mode='vae_learnt_prior',
     loss_weight=dict(l1_loss=0, cmp_loss=1, vae_rec_loss=1, vae_kl_loss=0.001, corr_loss=0),
-    detach=True
+    detach=True,
 )
 
 model_test = dict(
