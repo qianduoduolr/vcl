@@ -114,6 +114,8 @@ class Memory_Tracker_Custom(BaseModel):
     def forward_train(self, images_lab, imgs=None):
             
         bsz, _, n, c, h, w = images_lab.shape
+
+        x = tensor2img(imgs[0,0], norm_mode='mean-std')
         
         images_lab_gt = [images_lab[:,0,i].clone() for i in range(n)]
         images_lab = [images_lab[:,0,i] for i in range(n)]

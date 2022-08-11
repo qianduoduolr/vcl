@@ -55,15 +55,15 @@ class Kinetics_dataset_rgb(Video_dataset_base):
                         continue
                 else:
                     video_path = os.path.join(self.root, sample['video_path'])
-                    if not os.path.exists(osp.join(video_path,'split.txt')): 
-                        continue
-                    else:
+                    try:
                         with open(osp.join(video_path, 'split.txt'), 'r') as f:
                             num_frames = int(f.readline().strip('\n'))
 
                         sample['frames_path'] = [os.path.join(video_path, self.filename_tmpl.format(i * 5)) for i in range(1,num_frames+1)]
                         sample['num_frames'] = len(sample['frames_path'])
                         if sample['num_frames'] <= self.clip_length * self.step: continue
+                    except Exception as e: 
+                        continue
                 
                 self.samples.append(sample)
         

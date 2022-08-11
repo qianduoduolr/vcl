@@ -8,21 +8,16 @@ docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='Framework_V2',
+    type='Memory_Tracker_Custom',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 4), out_indices=(2,), pool_type='none'),
-    backbone_t=None,
-    loss=dict(type='MSELoss',reduction='mean'),
-    feat_size=[32,],
-    radius=[6,],
+    loss_weight=dict(l1_loss=1),
     downsample_rate=[8,],
-    temperature=1.0,
-    temperature_t=0.07,
-    T=-1,
-    momentum=-1,
-    detach=True,
-    loss_weight = dict(stage0_l1_loss=0, stage1_l1_loss=1, layer_dist_loss=0, correlation_dist_loss=0),
-    pretrained=None
+    radius=[6,],
+    temperature=1,
+    feat_size=[32,],
+    pretrained=None,
 )
+
 
 model_test = dict(
     type='VanillaTracker',
@@ -56,6 +51,7 @@ img_norm_cfg_lab = dict(mean=[50, 0, 0], std=[50, 127, 127], to_bgr=False)
 
 train_pipeline = [
     dict(type='RandomResizedCrop', area_range=(0.6,1.0), aspect_ratio_range=(1.5, 2.0),),
+    dict(type='Resize', scale=(112, 112), keep_ratio=False),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
     dict(type='Flip', flip_ratio=0.5),
     dict(type='RGB2LAB', output_keys='images_lab'),
@@ -84,7 +80,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=64, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
