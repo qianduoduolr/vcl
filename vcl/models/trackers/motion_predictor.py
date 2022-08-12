@@ -435,12 +435,15 @@ class Memory_Tracker_Custom_Cmp_Flow(Memory_Tracker_Custom_Cmp):
 class Memory_Tracker_Custom_Cmp_Fusion(Memory_Tracker_Custom_Cmp):
     def __init__(self,
                 motion_estimator_s,
+                fusion_mode='concat',
+                fusion_gana=0.4,
                 *args,
                 **kwargs
                  ):
         super().__init__(*args, **kwargs)
 
         self.motion_estimator_s = build_backbone(motion_estimator_s)
+
 
     def forward_train(self, imgs, images_lab=None):
             
@@ -455,7 +458,8 @@ class Memory_Tracker_Custom_Cmp_Fusion(Memory_Tracker_Custom_Cmp):
         ################ Feature/Correlation Extraction #####################
         # estimate motion 
         with torch.no_grad():
-            fs = self.motion_estimator(torch.stack(images_lab_gt,1).flatten(0,1))
+            fs_t = self.motion_estimator(torch.stack(images_lab_gt,1).flatten(0,1))
+            fs_s = self.motion_estimator_s(torch.stack(images_lab_gt,1).flatten(0,1))
             fs = fs.reshape(bsz, t, *fs.shape[-3:])
             
             if fs.shape[-1] > self.feat_size[-1]:

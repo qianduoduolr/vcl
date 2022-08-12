@@ -20,11 +20,11 @@ model = dict(
     feat_size=[32,],
     cmp_loss=dict(type='Ce_Loss'),
     output_dim=169*2,
-    norm_t=True,
+    # norm_t=True,
     pre_softmax=True,
     # temperature_t=0.07,
     mode='vae_learnt_prior',
-    loss_weight=dict(l1_loss=0, cmp_loss=0, vae_rec_loss=1, vae_kl_loss=1000, corr_loss=0),
+    loss_weight=dict(l1_loss=0, cmp_loss=0, vae_rec_loss=1, vae_kl_loss=10, corr_loss=0),
     detach=True,
     mp_only=True
 )

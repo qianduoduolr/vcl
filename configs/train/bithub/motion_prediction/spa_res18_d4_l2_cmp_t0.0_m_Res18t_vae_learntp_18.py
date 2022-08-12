@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'spa_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_15'
+exp_name = 'spa_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_18'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
@@ -16,13 +16,13 @@ model = dict(
     T=-1,
     downsample_rate=[8,],
     feat_size=[32,],
+    feat_size=[32,],
     cmp_loss=dict(type='Ce_Loss'),
     output_dim=169*2,
     norm_t=True,
-    pre_softmax=True,
     # temperature_t=0.07,
     mode='vae_learnt_prior',
-    loss_weight=dict(l1_loss=0, cmp_loss=0, vae_rec_loss=1, vae_kl_loss=1000, corr_loss=0),
+    loss_weight=dict(l1_loss=0, cmp_loss=0, vae_rec_loss=1, vae_kl_loss=10, corr_loss=0),
     detach=True,
     mp_only=True
 )
