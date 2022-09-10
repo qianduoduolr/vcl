@@ -3,13 +3,14 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'res50_d4_eval'
+exp_name = 'res50_d4_eval_stcn'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
     type='Framework_V2',
     backbone=dict(type='ResNet',depth=50, strides=(1, 2, 1, 1), out_indices=(2,)),
+    head=dict(in_c=1024, out_c=64),
     backbone_t=None,
     loss=dict(type='MSELoss',reduction='mean'),
     feat_size=[32,],
@@ -37,7 +38,9 @@ test_cfg = dict(
     out_indices=(3, ),
     neighbor_range=24,
     with_first=True,
+    with_norm=False,
     with_first_neighbor=True,
+    sim_mode='l2-distance',
     output_dir='eval_results')
 
 # dataset settings
@@ -139,7 +142,6 @@ log_config = dict(
     hooks=[
         dict(type='TextLoggerHook', by_epoch=False),
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
-        # dict(type='WandbLoggerHook', init_kwargs=dict(project='video_correspondence', name=f'{exp_name}'))
     ])
 
 visual_config = None
@@ -156,8 +158,8 @@ evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epo
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=None,
-                  torchvision_pretrained='/gdata/lirui/models/ssl/image_based/detco_200ep_AA.pth'
+                  checkpoint_path='/gdata/lirui/models/vos/stcn_revised_keys_whead.pth',
+                  torchvision_pretrained=None
                 )
 
 

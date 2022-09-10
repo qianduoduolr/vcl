@@ -89,14 +89,7 @@ class Framework_V2(BaseModel):
         self.corr = [Correlation(max_displacement=R) for R in radius ]
         
         self.weight = weight
-        self.init_weights()
     
-    def init_weights(self):
-        
-        if self.pretrained is not None:
-            _ = load_checkpoint(self, self.pretrained, map_location='cpu')
-        else:
-            pass
     
     def forward_train(self, imgs, images_lab=None):
             
@@ -110,12 +103,6 @@ class Framework_V2(BaseModel):
         fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
         if isinstance(fs, tuple): fs = tuple(fs)
         else: fs = [fs]
-        # if isinstance(fs, tuple):
-        #     fs = [f.reshape(bsz, t, *f.shape[-3:]) for f in fs]
-        # else:
-        #     fs = [fs.reshape(bsz, t, *fs.shape[-3:])]
-        
-        # tar_pyramid, refs_pyramid = [f[:, -1] for f in fs], [ f[:, :-1] for f in fs]
         
         losses = {}
         

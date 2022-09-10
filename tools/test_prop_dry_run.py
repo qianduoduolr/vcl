@@ -17,8 +17,7 @@ from vcl.models import build_model
 
 def parse_args():
     parser = argparse.ArgumentParser(description='mmediting tester')
-    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/train/local/eval/res18_d4_fusion_eval.py')
-    # parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='/home/lr/expdir/VCL/group_vqvae_tracker/vqvae_mlm_d4_nemd2048_dyt_nl_l2_nofc_orivq/epoch_800.pth')
+    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/train/local/eval/res50_d4_eval.py')
     parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='')
     parser.add_argument('--out-indices', nargs='+', type=int, default=[2])
     parser.add_argument('--seed', type=int, default=None, help='random seed')
@@ -102,6 +101,9 @@ def main():
         eval_config.pop('checkpoint_path')
     else:
         eval_config.pop('checkpoint_path')
+    
+    if 'torchvision_pretrained' in eval_config: # bug
+        eval_config.pop('torchvision_pretrained')
         
 
     # init distributed env first, since logger depends on the dist info.
@@ -128,6 +130,7 @@ def main():
             samples_per_gpu=1,
             drop_last=False,
             shuffle=False,
+            pin_memory=False,
             dist=distributed),
         **cfg.data.get('test_dataloader', {})
     }
@@ -157,15 +160,13 @@ def main():
             model_cfg = cfg.test_cfg.model_cfg
             for k,v in model_cfg.items():
                 model.backbone[k] = v
-        
-        if 'torchvision_pretrained' in eval_config:
-            model.backbone.pretrained = eval_config['torchvision_pretrained']
-            eval_config.pop('torchvision_pretrained')
+
     else:
         model = mmcv.ConfigDict(type='Memory_Tracker', backbone=cfg.model.backbone)
         eval_config.pop('mast_prop')
 
     model = build_model(model, train_cfg=None, test_cfg=cfg.test_cfg)
+    model.init_weights()
 
     args.save_image = args.save_path is not None
     empty_cache = cfg.get('empty_cache', False)

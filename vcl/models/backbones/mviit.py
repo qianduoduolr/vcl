@@ -9,6 +9,7 @@ from functools import partial
 import torch
 import torch.nn as nn
 from torch.nn.init import trunc_normal_
+from mmcv.runner import BaseModule
 
 from ..registry import BACKBONES
 
@@ -56,7 +57,7 @@ def attention_pool(x, pool, norm=None):
     return x
 
 
-class MultiScaleAttention(nn.Module):
+class MultiScaleAttention(BaseModule):
     """Multiscale Multi-head Attention block."""
 
     def __init__(
@@ -81,7 +82,7 @@ class MultiScaleAttention(nn.Module):
             dim_out (int): Number of output channels.
             num_heads (int): Number of attention heads.
             qkv_bias (bool:  If True, add a learnable bias to query, key, value.
-            norm_layer (nn.Module): Normalization layer.
+            norm_layer (BaseModule): Normalization layer.
             pool_kernel (tuple): kernel size for qkv pooling layers.
             stride_q (int): stride size for q pooling layer.
             stride_kv (int): stride size for kv pooling layer.
@@ -200,7 +201,7 @@ class MultiScaleAttention(nn.Module):
         return x
 
 
-class MultiScaleBlock(nn.Module):
+class MultiScaleBlock(BaseModule):
     """Multiscale Transformer blocks"""
 
     def __init__(
@@ -230,8 +231,8 @@ class MultiScaleBlock(nn.Module):
             mlp_ratio (float): Ratio of mlp hidden dim to embedding dim.
             qkv_bias (bool): If True, add a learnable bias to query, key, value.
             drop_path (float): Stochastic depth rate.
-            norm_layer (nn.Module): Normalization layer.
-            act_layer (nn.Module): Activation layer.
+            norm_layer (BaseModule): Normalization layer.
+            act_layer (BaseModule): Activation layer.
             qkv_pool_kernel (tuple): kernel size for qkv pooling layers.
             stride_q (int): stride size for q pooling layer.
             stride_kv (int): stride size for kv pooling layer.
@@ -292,7 +293,7 @@ class MultiScaleBlock(nn.Module):
         return x
 
 @BACKBONES.register_module()
-class MViT(nn.Module):
+class MViT(BaseModule):
     """
     This module implements Multiscale Vision Transformer (MViT) backbone in :paper:'mvitv2'.
     """
@@ -344,8 +345,8 @@ class MViT(nn.Module):
             mlp_ratio (float): Ratio of mlp hidden dim to embedding dim.
             qkv_bias (bool): If True, add a learnable bias to query, key, value.
             drop_path_rate (float): Stochastic depth rate.
-            norm_layer (nn.Module): Normalization layer.
-            act_layer (nn.Module): Activation layer.
+            norm_layer (BaseModule): Normalization layer.
+            act_layer (BaseModule): Activation layer.
             use_abs_pos (bool): If True, use absolute positional embeddings.
             use_rel_pos (bool): If True, add relative postional embeddings to the attention map.
             rel_pos_zero_init (bool): If True, zero initialize relative positional parameters.
@@ -386,7 +387,7 @@ class MViT(nn.Module):
         stride = patch_stride[0]
         self._out_feature_strides = {}
         self._out_feature_channels = {}
-        self.blocks = nn.ModuleList()
+        self.blocks = BaseModuleList()
         for i in range(depth):
             # Multiply stride_kv by 2 if it's the last block of stage2 and stage3.
             if i == last_block_indexes[1] or i == last_block_indexes[2]:
@@ -440,16 +441,16 @@ class MViT(nn.Module):
         if self.pos_embed is not None:
             trunc_normal_(self.pos_embed, std=0.02)
 
-        self.apply(self._init_weights)
 
-    def _init_weights(self, m):
-        if isinstance(m, nn.Linear):
-            trunc_normal_(m.weight, std=0.02)
-            if isinstance(m, nn.Linear) and m.bias is not None:
+    def init_weights(self):
+        for name, m in self.named_modules():
+            if isinstance(m, nn.Linear):
+                trunc_normal_(m.weight, std=0.02)
+                if isinstance(m, nn.Linear) and m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.LayerNorm):
                 nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.LayerNorm):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
+                nn.init.constant_(m.weight, 1.0)
 
     def forward(self, x):
         x = self.patch_embed(x)

@@ -379,41 +379,27 @@ def make_mask(size, t_size, eq=True):
             masks.append(mask.reshape(-1))
     return torch.stack(masks)
 
-def att2flow(h, w, target):
-    yv, xv = torch.meshgrid([torch.arange(h),torch.arange(w)])
-    grid = torch.stack((yv, xv), 2).view((h * w, 2)).float().cuda()
-        
-    # x1 -> x2
-    warp_grid = torch.einsum("bij,jd -> bid",[target, grid])
 
-    off = warp_grid - grid.unsqueeze(0)
-    return off
+def pad_divide_by(in_img, d):
+    h, w = in_img.shape[-2:]
 
-class Mlp(nn.Module):
-    def __init__(
-        self,
-        in_features,
-        hidden_features=None,
-        out_features=None,
-        act_layer=nn.GELU,
-        drop_rate=0.0,
-    ):
-        super().__init__()
-        self.drop_rate = drop_rate
-        out_features = out_features or in_features
-        hidden_features = hidden_features or in_features
-        self.fc1 = nn.Linear(in_features, hidden_features)
-        self.act = act_layer()
-        self.fc2 = nn.Linear(hidden_features, out_features)
-        if self.drop_rate > 0.0:
-            self.drop = nn.Dropout(drop_rate)
+    if h % d > 0:
+        new_h = h + d - h % d
+    else:
+        new_h = h
+    if w % d > 0:
+        new_w = w + d - w % d
+    else:
+        new_w = w
+    lh, uh = int((new_h-h) / 2), int(new_h-h) - int((new_h-h) / 2)
+    lw, uw = int((new_w-w) / 2), int(new_w-w) - int((new_w-w) / 2)
+    pad_array = (int(lw), int(uw), int(lh), int(uh))
+    out = F.pad(in_img, pad_array)
+    return out, pad_array
 
-    def forward(self, x):
-        x = self.fc1(x)
-        x = self.act(x)
-        if self.drop_rate > 0.0:
-            x = self.drop(x)
-        x = self.fc2(x)
-        if self.drop_rate > 0.0:
-            x = self.drop(x)
-        return x
+def unpad(img, pad):
+    if pad[2]+pad[3] > 0:
+        img = img[:,:,pad[2]:-pad[3],:]
+    if pad[0]+pad[1] > 0:
+        img = img[:,:,:,pad[0]:-pad[1]]
+    return img

@@ -2,7 +2,7 @@ from functools import partial
 
 import numpy as np
 from mmcv.cnn import ConvModule, constant_init, kaiming_init
-from mmcv.runner import _load_checkpoint, load_checkpoint
+from mmcv.runner import _load_checkpoint, load_checkpoint, BaseModule
 from mmcv.utils import _BatchNorm
 from torch import nn as nn
 from torch.utils import checkpoint as cp
@@ -13,7 +13,7 @@ from ..registry import BACKBONES
 from ..registry import COMPONENTS
 
 
-class BasicBlock(nn.Module):
+class BasicBlock(BaseModule):
     """Basic block for ResNet.
 
     Args:
@@ -21,7 +21,7 @@ class BasicBlock(nn.Module):
         planes (int): Number of channels produced by some norm/conv2d layers.
         stride (int): Stride in the conv layer. Default: 1.
         dilation (int): Spacing between kernel elements. Default: 1.
-        downsample (nn.Module): Downsample layer. Default: None.
+        downsample (BaseModule): Downsample layer. Default: None.
         style (str): `pytorch` or `caffe`. If set to "pytorch", the stride-two
             layer is the 3x3 conv layer, otherwise the stride-two layer is
             the first 1x1 conv layer. Default: 'pytorch'.
@@ -113,7 +113,7 @@ class BasicBlock(nn.Module):
 
         return out
 
-class Bottleneck(nn.Module):
+class Bottleneck(BaseModule):
     """Bottleneck block for ResNet.
 
     Args:
@@ -123,7 +123,7 @@ class Bottleneck(nn.Module):
             Number of channels produced by some norm layes and conv layers
         stride (int): Spatial stride in the conv layer. Default: 1.
         dilation (int): Spacing between kernel elements. Default: 1.
-        downsample (nn.Module): Downsample layer. Default: None.
+        downsample (BaseModule): Downsample layer. Default: None.
         style (str): `pytorch` or `caffe`. If set to "pytorch", the stride-two
             layer is the 3x3 conv layer, otherwise the stride-two layer is
             the first 1x1 conv layer. Default: 'pytorch'.
@@ -246,7 +246,7 @@ def make_res_layer(block,
     """Build residual layer for ResNet.
 
     Args:
-        block: (nn.Module): Residual module to be built.
+        block: (BaseModule): Residual module to be built.
         inplanes (int): Number of channels for the input feature in each block.
         planes (int): Number of channels for the output feature in each block.
         blocks (int): Number of residual blocks.
@@ -262,7 +262,7 @@ def make_res_layer(block,
             memory while slowing down the training speed. Default: False.
 
     Returns:
-        nn.Module: A residual layer for the given config.
+        BaseModule: A residual layer for the given config.
     """
     downsample = None
     if stride != 1 or inplanes != planes * block.expansion:
@@ -307,7 +307,7 @@ def make_res_layer(block,
 
 
 @BACKBONES.register_module()
-class ResNet(nn.Module):
+class ResNet(BaseModule):
     """ResNet backbone.
 
     Args:
@@ -431,8 +431,6 @@ class ResNet(nn.Module):
         if fc:
             self.gpool = nn.AdaptiveAvgPool2d(1)
             self.fc = nn.Linear(self.feat_dim, num_classes)
-        
-        self.init_weights()
 
     def _make_stem_layer(self):
         """Construct the stem layers consists of a conv+norm+act module and a
@@ -459,7 +457,7 @@ class ResNet(nn.Module):
         """Load the conv parameters of resnet from torchvision.
 
         Args:
-            conv (nn.Module): The destination conv module.
+            conv (BaseModule): The destination conv module.
             state_dict_tv (OrderedDict): The state dict of pretrained
                 torchvision model.
             module_name_tv (str): The name of corresponding conv module in the
@@ -482,7 +480,7 @@ class ResNet(nn.Module):
         """Load the bn parameters of resnet from torchvision.
 
         Args:
-            bn (nn.Module): The destination bn module.
+            bn (BaseModule): The destination bn module.
             state_dict_tv (OrderedDict): The state dict of pretrained
                 torchvision model.
             module_name_tv (str): The name of corresponding bn module in the

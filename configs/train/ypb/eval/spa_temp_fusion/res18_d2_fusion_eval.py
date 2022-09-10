@@ -3,13 +3,13 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'res18_d4_fusion_eval_2'
+exp_name = 'res18_d2_fusion_eval_5'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
     type='Framework_V2',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2,), pool_type='none', dilations=(1,1,2,4)),
+    backbone=dict(type='ResNet',depth=18, strides=(1, 1, 1, 1), out_indices=(2,), pool_type='mean', dilations=(1,1,2,4), pretrained='/gdata/lirui/expdir/VCL/group_motion_prediction/spa_res18_d2_l2_cmp_t0.0_m_Res18t_vae_learntp/epoch_160.pth', torchvision_pretrain=False),
     backbone_t=None,
     loss=dict(type='MSELoss',reduction='mean'),
     feat_size=[32,],
@@ -32,19 +32,18 @@ train_cfg = dict(syncbn=True)
 test_cfg = dict(
     backbone_=dict(
                     type='ResNet',depth=18, 
-                    strides=(1, 2, 2, 1), out_indices=(2,), 
-                    pool_type=None, 
-                    pretrained='/gdata/lirui/expdir/VCL/group_stsl_former/mast_d4_l2_pyramid_dis_18/epoch_3200.pth', 
+                    strides=(1, 1, 1, 1), out_indices=(2,), 
+                    pool_type='mean', 
+                    pretrained='/gdata/lirui/expdir/VCL/group_stsl_former/mast_d2_l2_base_2/epoch_1600.pth', 
                     torchvision_pretrain=False
                     ),
-    fusion_gama=0.2,
-    fusion_mode='add',
+    fusion_gama=0.3,
     precede_frames=20,
     topk=10,
     temperature=0.07,
-    strides=(1, 2, 2, 1),
+    strides=(1, 1, 1, 1),
     out_indices=(2, ),
-    neighbor_range=24,
+    neighbor_range=48,
     with_first=True,
     with_first_neighbor=True,
     output_dir='eval_results')
@@ -77,15 +76,18 @@ train_pipeline = [
 val_pipeline = [
     dict(type='Resize', scale=(-1, 480), keep_ratio=True),
     dict(type='Flip', flip_ratio=0),
-    dict(type='RGB2LAB'),
-    dict(type='Normalize', **img_norm_cfg_lab),
+    dict(type='RGB2LAB', output_keys='imgs_lab'),
+    dict(type='Normalize', **img_norm_cfg),
+    dict(type='Normalize', **img_norm_cfg_lab, keys='imgs_lab'),
     dict(type='FormatShape', input_format='NCTHW'),
+    dict(type='FormatShape', input_format='NCTHW', keys='imgs_lab'),
     dict(
         type='Collect',
-        keys=['imgs', 'ref_seg_map'],
+        keys=['imgs', 'imgs_lab', 'ref_seg_map'],
         meta_keys=('video_path', 'original_shape')),
-    dict(type='ToTensor', keys=['imgs', 'ref_seg_map'])
+    dict(type='ToTensor', keys=['imgs', 'imgs_lab', 'ref_seg_map'])
 ]
+
 
 # demo_pipeline = None
 data = dict(
@@ -165,7 +167,7 @@ evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epo
 eval_arc = 'VanillaTracker_Fusion'
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path='/gdata/lirui/expdir/VCL/group_motion_prediction/spa_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_ignore_boundary/epoch_160.pth',
+                  checkpoint_path=None,
                   torchvision_pretrained=None
                 )
 

@@ -1,1 +1,1 @@
-train_dry_run
+eval/res50_d4_eval_2

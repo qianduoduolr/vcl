@@ -117,6 +117,7 @@ class VisualizationHook_Custom(Hook):
                  res_name_list=None,
                  interval=-1,
                  filename_tmpl='iter_{}_{}.jpg',
+                 norm_mode='mean-std',
                  rerange=True,
                  bgr2rgb=True,
                  nrow=1,
@@ -128,6 +129,7 @@ class VisualizationHook_Custom(Hook):
         self.interval = interval
         self.filename_tmpl = filename_tmpl
         self.bgr2rgb = bgr2rgb
+        self.norm_mode = norm_mode
         self.rerange = rerange
         self.nrow = nrow
         self.padding = padding
@@ -151,7 +153,7 @@ class VisualizationHook_Custom(Hook):
         out = []
         for k in self.res_name_list:
             v = results[k]
-            v = tensor2img(v, norm_mode='mean-std')
+            v = tensor2img(v.detach(), norm_mode=self.norm_mode)
             filename = self.filename_tmpl.format(runner.iter + 1, k)
             if v.shape[0] != self.size:
                 v = mmcv.impad(v, shape=(self.size,self.size))

@@ -81,6 +81,8 @@ class VOS_youtube_dataset_rgb(Video_dataset_base):
 
         offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, step, mode=self.temporal_sampling_mode)
 
+        offsets = [0]
+
         # load frame
         if self.data_backend == 'raw_frames':
             frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length, step=step)

@@ -156,6 +156,7 @@ def main():
         eval_config.pop('mast_prop')
 
     model = build_model(model, train_cfg=None, test_cfg=cfg.test_cfg)
+    model.init_weights()
 
     args.save_image = args.save_path is not None
     empty_cache = cfg.get('empty_cache', False)

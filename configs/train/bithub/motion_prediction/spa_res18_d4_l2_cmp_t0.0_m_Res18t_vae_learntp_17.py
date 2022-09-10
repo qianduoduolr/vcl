@@ -16,7 +16,6 @@ model = dict(
     T=-1,
     downsample_rate=[8,],
     feat_size=[32,],
-    feat_size=[32,],
     cmp_loss=dict(type='Ce_Loss'),
     output_dim=169*2,
     norm_t=True,

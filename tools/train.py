@@ -19,7 +19,7 @@ from vcl.utils import collect_env, get_root_logger
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train an editor')
-    parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/local/stsl/temp_res18_d4_l2_rec.py')
+    parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/local/motion_prediction/spa_res18_d4_l2_cmp_t0.0_m_Res50_vae_learntp_decoder.py')
     parser.add_argument('--work-dir', help='the dir to save logs and models')
     parser.add_argument(
         '--resume-from', help='the checkpoint file to resume from')
@@ -114,6 +114,8 @@ def main():
     # build model and test model
     model = build_model(
         cfg.model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
+    model.init_weights()
+
     if cfg.get('model_test', False) and cfg.get('evaluation', False):
         model_test = build_model(cfg.model_test, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
     else:

@@ -85,13 +85,8 @@ class Memory_Tracker_Custom(BaseModel):
         self.forward_backward_t = forward_backward_t
         self.conc_loss = build_loss(conc_loss) if conc_loss is not None else None
         
-        if len(radius) > 1:
-            self.mask = []
-            for idx, r in enumerate(radius):
-                self.mask.append(make_mask(feat_size[idx], r))
-        else:
-            self.mask = [ make_mask(feat_size[0], radius[0]) ]
-        
+
+        self.mask = [ make_mask(feat_size[idx], radius[idx]) for idx, r in enumerate(radius)]
         self.R = radius # radius in previous
         self.radius = radius 
         self.feat_size = feat_size
@@ -99,16 +94,7 @@ class Memory_Tracker_Custom(BaseModel):
         self.loss_weight = loss_weight
 
         assert len(self.feat_size) == len(self.radius) == len(self.downsample_rate) 
-        
-        self.init_weights()
 
-    def init_weights(self):
-
-        logger = get_root_logger()
-        if self.pretrained is not None:
-            _ = load_checkpoint(self, self.pretrained, logger=logger, map_location='cpu')
-        else:
-            pass
 
     
     def forward_train(self, images_lab, imgs=None):
@@ -210,10 +196,10 @@ class Memory_Tracker_Custom(BaseModel):
 
         return arr, drop_ch_ind # return channels not masked
     
-    def compute_lphoto(self, images_lab_gt, ch, outputs, upsample=True, mask=None):
+    def compute_lphoto(self, images_lab_gt, ch, outputs, upsample=True, mask=None, gt_idx=-1):
         b, c, h, w = images_lab_gt[0].size()
 
-        tar_y = images_lab_gt[-1][:,ch]  # y4
+        tar_y = images_lab_gt[gt_idx][:,ch]  # y4
 
         if upsample:
             outputs = F.interpolate(outputs, (h, w), mode='bilinear')
@@ -308,75 +294,6 @@ class Memory_Tracker_Custom_Feat_Rec(Memory_Tracker_Custom):
 
         return losses, vis_results
 
-@MODELS.register_module()
-class Memory_Tracker_Custom_Crop(Memory_Tracker_Custom):
-
-    def __init__(self, backbone_a, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.backbone_a = build_backbone(backbone_a)
-        self.corr = Correlation(max_displacement=self.radius[0])
-
-    
-    def forward_train(self, images_lab, images_lab_crop, affine_imgs_crop):
-            
-        losses = {}
-
-        # main branch
-        loss_main, corr_main = self.forward_frame_reconstruction(self.backbone_a, images_lab, 'main')
-        # crop branch
-        loss_crop, corr_crop = self.forward_frame_reconstruction(self.backbone, images_lab_crop, 'crop')
-
-        grid = F.affine_grid(affine_imgs_crop[:,0], corr_main.size())
-        corr_gt = F.grid_sample(corr_main, grid).flatten(-2).permute(0,2,1).reshape_as(corr_crop)
-        corr_gt = F.grid_sample(corr_gt, grid).flatten(-2).permute(0,2,1).reshape_as(corr_crop).detach()
-
-
-        losses['main_l1_loss'] = self.loss_weight['main_l1_loss'] * loss_main
-        losses['crop_l1_loss'] = self.loss_weight['crop_l1_loss'] * loss_crop
-        losses['reg_loss'] = self.loss_weight['reg_loss'] * build_loss(dict(type='MSELoss'))(corr_crop, corr_gt)
-
-        vis_results = dict(err=None, imgs=images_lab[0,0])
-
-        return losses, vis_results
-
-    def forward_frame_reconstruction(self, backbone, images_lab, mode='main'):
-
-        bsz, _, n, c, h, w = images_lab.shape
-
-        images_lab_gt = [images_lab[:,0,i].clone() for i in range(n)]
-        images_lab = [images_lab[:,0,i] for i in range(n)]
-        _, ch = self.dropout2d_lab(images_lab)
-
-        # forward to get feature
-        fs = backbone(torch.stack(images_lab,1).flatten(0,1))
-        if self.head is not None:
-            fs = self.head(fs)
-        
-        fs = fs.reshape(bsz, n, *fs.shape[-3:])
-
-        tar, refs = fs[:, -1], fs[:, :-1]
-        
-        # get correlation attention map      
-        _, att = non_local_attention(tar, refs, mask=self.mask[0], scaling=self.scaling, per_ref=self.per_ref, temprature=self.temperature)    
-
-        # corr = self.corr(tar, refs[0]).flatten(1,2)
-        
-        if self.forward_backward_t != -1:
-            m = self.forward_backward_check(att)
-        else:
-            m = None
-        
-        losses = {}
-        if self.conc_loss !=  None:
-            att_cos = non_local_attention(tar, refs, att_only=True)
-            losses['conc_loss'] = self.conc_loss(att_cos)
-        
-        # for mast l1_loss
-        outputs = self.frame_reconstruction(images_lab_gt, att, ch, feat_size=self.feat_size[0], downsample_rate=self.downsample_rate[0]) 
-        loss = self.compute_lphoto(images_lab_gt, ch, outputs, upsample=self.upsample, mask=m)[0]
-
-        return loss, att[:,0].permute(0,2,1).reshape(bsz, -1, *tar.shape[-2:])
 
 @MODELS.register_module()
 class Memory_Tracker_Custom_Pyramid(Memory_Tracker_Custom):
@@ -475,5 +392,128 @@ class Memory_Tracker_Custom_Pyramid(Memory_Tracker_Custom):
 
         return x
             
+
+
+@MODELS.register_module()
+class Memory_Tracker_Custom_V2(Memory_Tracker_Custom):
+    def __init__(self,
+                 *args, **kwargs
+                 ):
+        """ MAST  (CVPR2020) using MMCV Correlation Module
+
+        Args:
+            backbone ([type]): [description]
+            test_cfg ([type], optional): [description]. Defaults to None.
+            train_cfg ([type], optional): [description]. Defaults to None.
+        """
+        super().__init__(*args, **kwargs)
+        from mmcv.ops import Correlation
     
+        self.corr = [ Correlation(max_displacement=R) for R in self.R ]
+        
+    def forward_train(self, images_lab, imgs=None):
+            
+        bsz, _, n, c, h, w = images_lab.shape
+        
+        images_lab_gt = [images_lab[:,0,i].clone() for i in range(n)]
+        images_lab = [images_lab[:,0,i] for i in range(n)]
+        _, ch = self.dropout2d_lab(images_lab)
+        
+        # forward to get feature
+        fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        if self.head is not None:
+            fs = self.head(fs)
+        
+        fs = fs.reshape(bsz, n, *fs.shape[-3:])
+
+        tar, refs = fs[:, -1], fs[:, :-1]
+        
+        # get correlation attention map      
+        corr = self.corr[0](tar, refs[:,0]) 
+        if self.scaling:
+            corr = corr / torch.sqrt(torch.tensor(tar.shape[1]).float()) 
+        corr = corr.flatten(1,2).softmax(1)
+        
+        losses = {}
+        
+        # for mast l1_loss
+        ref_gt = self.prep(images_lab_gt[0][:,ch], self.downsample_rate[0])
+        ref_gt = F.unfold(ref_gt, self.R[0] * 2 + 1, padding=self.R[0])
+        
+        corr = corr.reshape(bsz, -1, tar.shape[-1]**2)
+        outputs = (corr * ref_gt).sum(1).reshape(bsz, -1, *fs.shape[-2:])        
+        losses['l1_loss'], err_map = self.compute_lphoto(images_lab_gt, ch, outputs, upsample=self.upsample)
+        
+        vis_results = dict(err=err_map[0], imgs=imgs[0,0])
+
+        return losses, vis_results
+
+
+
+@MODELS.register_module()
+class Memory_Tracker_Custom_Iterative(Memory_Tracker_Custom):
+
+    def forward_train(self, images_lab, imgs=None):
+            
+        bsz, _, n, c, h, w = images_lab.shape
+
+        assert n >= 3, "video frames must be larger than 3"
+        # x = tensor2img(imgs[0,0], norm_mode='mean-std')
+        
+        images_lab_gt = [images_lab[:,0,i].clone() for i in range(n)]
+        images_lab = [images_lab[:,0,i] for i in range(n)]
+        _, ch = self.dropout2d_lab(images_lab)
+        
+        # forward to get feature
+        fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        if self.head is not None:
+            fs = self.head(fs)
+        
+        fs = fs.reshape(bsz, n, *fs.shape[-3:])
+
+        pre_out = []
+        losses = {}
+
+        for i in range(n-1):
+
+            tar, refs = fs[:, i+1], fs[:, i:i+1]
+            # get correlation attention map      
+            _, att = non_local_attention(tar, refs, mask=self.mask[0], scaling=self.scaling, per_ref=self.per_ref, temprature=self.temperature)    
+
+            if self.forward_backward_t != -1:
+                att_ = non_local_attention(tar, refs, att_only=True, norm=True)    
+                m = self.forward_backward_check(att_)
+            else:
+                m = None
+            
+            if self.conc_loss !=  None:
+                att_cos = non_local_attention(tar, refs, att_only=True)
+                losses['conc_loss'] = self.conc_loss(att_cos)
+            
+            # for mast l1_loss
+            outputs = self.frame_reconstruction(images_lab_gt, att, ch, pre_out, feat_size=self.feat_size[0], downsample_rate=self.downsample_rate[0]) 
+            losses[f'frame{i}_l1_loss'] = self.loss_weight['l1_loss'] * self.compute_lphoto(images_lab_gt, ch, outputs, upsample=self.upsample, mask=m, gt_idx=i+1)[0]
+            pre_out.append(outputs)
+
+        vis_results = dict(err=None, imgs=imgs[0,0])
+
+        return losses, vis_results
+
+    def frame_reconstruction(self, gts, att, ch, pre_out=None, feat_size=32, downsample_rate=8):
+        bsz = att.shape[0]
+
+        # value are concat of gt and predict
+        if len(pre_out) > 0:
+            # refs = [self.prep(gts[0][:,ch],downsample_rate=downsample_rate)]
+            # refs.extend(pre_out)
+            refs = pre_out
+        else:
+            refs = [self.prep(gt[:,ch],downsample_rate=downsample_rate) for gt in gts[:1]]
+
+        outputs = frame_transform(att, refs, flatten=False, per_ref=self.per_ref)
+        if self.per_ref:
+            outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, feat_size, feat_size)     
+        else:
+            outputs = outputs.permute(0,2,1).reshape(bsz, -1, feat_size, feat_size)    
+        return outputs
 

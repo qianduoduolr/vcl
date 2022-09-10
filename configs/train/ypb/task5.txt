@@ -1,1 +1,1 @@
-stsl/temp_res18_d4_l2_rec_blur_2
+train_dry_run

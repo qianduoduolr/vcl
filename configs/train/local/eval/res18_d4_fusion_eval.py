@@ -167,7 +167,7 @@ evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epo
 eval_arc = 'VanillaTracker_Fusion'
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path='/home/lr/mount/expdir/VCL/group_motion_prediction/spa_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_ignore_boundary/epoch_160.pth',
+                  checkpoint_path=None,
                   torchvision_pretrained=None
                 )
 

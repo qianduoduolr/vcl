@@ -3,28 +3,22 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'spa_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_14'
+exp_name = 'spa_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_21'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
-
-# Change input to RGB
 
 # model settings
 model = dict(
     type='Memory_Tracker_Custom_Cmp',
-     motion_estimator=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none', pretrained='/home/lr/expdir/VCL/group_stsl_former/mast_d4_l2_pyramid_dis_18/epoch_3200.pth', torchvision_pretrain=False),
+     motion_estimator=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none', pretrained='/gdata/lirui/expdir/VCL/group_stsl_former/mast_d4_l2_pyramid_dis_18/epoch_3200.pth', torchvision_pretrain=False),
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, 3), pool_type='none', dilations=(1,1,2,4)),
     loss=dict(type='MSELoss',reduction='mean'),
     radius=[6,],
     T=-1,
     downsample_rate=[8,],
     feat_size=[32,],
-    cmp_loss=dict(type='Ce_Loss'),
-    output_dim=169*2,
-    # norm_t=True,
-    pre_softmax=True,
-    # temperature_t=0.07,
-    mode='vae_learnt_prior',
-    loss_weight=dict(l1_loss=0, cmp_loss=0, vae_rec_loss=1, vae_kl_loss=10, corr_loss=0),
+    cmp_loss=dict(type='L1Loss'),
+    mode='exp',
+    loss_weight=dict(l1_loss=0, cmp_loss=1, rec_loss=1),
     detach=True,
     mp_only=True
 )
@@ -92,7 +86,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=8, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -102,8 +96,8 @@ data = dict(
             type='RepeatDataset',
             dataset=dict(
                         type=train_dataset_type,
-                        root='/home/lr/dataset/YouTube-VOS',
-                        list_path='/home/lr/dataset/YouTube-VOS/2018/train',
+                        root='/dev/shm',
+                        list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
                         data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
                         clip_length=2,
                         pipeline=train_pipeline,
@@ -114,8 +108,8 @@ data = dict(
 
     test =  dict(
             type=test_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -123,8 +117,8 @@ data = dict(
     
     val =  dict(
             type=val_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -156,7 +150,7 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
-work_dir = f'/home/lr/expdir/VCL/group_motion_prediction/{exp_name}'
+work_dir = f'/gdata/lirui/expdir/VCL/group_motion_prediction/{exp_name}'
 
 checkpoint_config = dict(interval=max_epoch, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
@@ -166,12 +160,6 @@ log_config = dict(
     hooks=[
         dict(type='TextLoggerHook', by_epoch=False),
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
-        # dict(type='WandbLoggerHook', 
-        #     init_kwargs=dict(project='video_correspondence_cmp', 
-        #                     name=exp_name, 
-        #                     config=model, 
-        #                     dir=work_dir), 
-        #     log_artifact=False)
     ])
 
 visual_config = None
@@ -183,7 +171,7 @@ log_level = 'INFO'
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/home/lr/expdir/VCL/group_motion_prediction/{exp_name}/epoch_{max_epoch}.pth',
+                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_motion_prediction/{exp_name}/epoch_{max_epoch}.pth',
                 )
 evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=max_epoch//2, by_epoch=True
                   )
@@ -197,4 +185,4 @@ find_unused_parameters = True
 
 if __name__ == '__main__':
 
-    make_local_config_back(exp_name)
+    make_local_config(exp_name)

@@ -8,7 +8,7 @@ docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='Memory_Tracker_Custom',
+    type='Memory_Tracker_Custom_V2',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 4), out_indices=(2,), pool_type='none'),
     loss_weight=dict(l1_loss=1),
     downsample_rate=[8,],
@@ -53,7 +53,6 @@ train_pipeline = [
     dict(type='RandomResizedCrop', area_range=(0.6,1.0), aspect_ratio_range=(1.5, 2.0),),
     dict(type='Resize', scale=(256, 256), keep_ratio=False),
     dict(type='Flip', flip_ratio=0.5),
-    dict(type='RandomGaussianBlur',p=0.8,same_across_clip=True,same_on_clip=True),
     dict(type='RGB2LAB', output_keys='images_lab'),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Normalize', **img_norm_cfg_lab, keys='images_lab'),

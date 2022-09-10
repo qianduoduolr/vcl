@@ -8,8 +8,6 @@ from PIL import Image
 import tqdm
 
 
-
-
 def blend_for_jhmdb():
     data_root = '/home/lr/dataset/JHMDB/Rename_Images'
     input_dir = '/home/lr/expdir/VCL/group_vqvae_tracker/final_framework_v2_11/pose_eval_outputindices2/Rename_Images'

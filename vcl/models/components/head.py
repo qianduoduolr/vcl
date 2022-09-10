@@ -1,6 +1,7 @@
 from ..registry import COMPONENTS
 from ..builder import build_components, build_loss, build_drop_layer
 from mmcv.cnn import ConvModule, build_norm_layer, build_plugin_layer
+from mmcv.runner import BaseModule
 import torch
 import torch.nn as nn
 from torch.utils import checkpoint as cp
@@ -26,7 +27,7 @@ class MlpHead(nn.Sequential):
 
 
 @COMPONENTS.register_module()
-class SimSiamHead(nn.Module):
+class SimSiamHead(BaseModule):
     """Classification head for I3D.
 
     Args:
@@ -189,7 +190,7 @@ class SimSiamHead(nn.Module):
         return losses
 
 @COMPONENTS.register_module()
-class BasicBlock(nn.Module):
+class BasicBlock(BaseModule):
     """Basic block for ResNet.
 
     Args:
@@ -197,7 +198,7 @@ class BasicBlock(nn.Module):
         planes (int): Number of channels produced by some norm/conv2d layers.
         stride (int): Stride in the conv layer. Default: 1.
         dilation (int): Spacing between kernel elements. Default: 1.
-        downsample (nn.Module): Downsample layer. Default: None.
+        downsample (BaseModule): Downsample layer. Default: None.
         style (str): `pytorch` or `caffe`. If set to "pytorch", the stride-two
             layer is the 3x3 conv layer, otherwise the stride-two layer is
             the first 1x1 conv layer. Default: 'pytorch'.

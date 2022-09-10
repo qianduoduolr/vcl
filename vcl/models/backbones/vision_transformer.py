@@ -43,7 +43,7 @@ def drop_path(x, drop_prob: float = 0., training: bool = False):
     return output
 
 
-class DropPath(nn.Module):
+class DropPath(BaseModule):
     """Drop paths (Stochastic num_layers) per sample  (when applied in main path of residual blocks).
     """
     def __init__(self, drop_prob=None):
@@ -54,7 +54,7 @@ class DropPath(nn.Module):
         return drop_path(x, self.drop_prob, self.training)
 
 
-class Mlp(nn.Module):
+class Mlp(BaseModule):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
         super().__init__()
         out_features = out_features or in_features
@@ -73,7 +73,7 @@ class Mlp(nn.Module):
         return x
 
 
-class Attention(nn.Module):
+class Attention(BaseModule):
     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
         super().__init__()
         self.num_heads = num_heads
@@ -100,7 +100,7 @@ class Attention(nn.Module):
         return x, attn
 
 
-class Block(nn.Module):
+class Block(BaseModule):
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
         super().__init__()
@@ -121,7 +121,7 @@ class Block(nn.Module):
         return x
 
 
-class PatchEmbed(nn.Module):
+class PatchEmbed(BaseModule):
     """ Image to Patch Embedding
     """
     def __init__(self, img_size=(224, 224), patch_size=16, in_chans=3, embed_dim=768):
@@ -141,7 +141,7 @@ class PatchEmbed(nn.Module):
         return x, H_, W_
 
 @BACKBONES.register_module()
-class VisionTransformer(nn.Module):
+class VisionTransformer(BaseModule):
     """ Vision Transformer """
     arch_zoo = {
         **dict.fromkeys(
@@ -251,7 +251,7 @@ class VisionTransformer(nn.Module):
         self.out_indices = out_indices
 
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, num_layers)]  # stochastic num_layers decay rule
-        self.blocks = nn.ModuleList([
+        self.blocks = BaseModuleList([
             Block(
                 dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer)
@@ -261,7 +261,6 @@ class VisionTransformer(nn.Module):
         # Classifier head
         self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity() and head is not None
 
-        self.init_weights()
 
     def init_weights(self):
         logger = get_root_logger()

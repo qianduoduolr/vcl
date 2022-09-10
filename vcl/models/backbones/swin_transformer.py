@@ -23,7 +23,7 @@ from ..builder import BACKBONES
 from mmseg.models.utils.embed import PatchEmbed, PatchMerging
 
 
-class Mlp(nn.Module):
+class Mlp(BaseModule):
     """ Multilayer perceptron."""
 
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
@@ -74,7 +74,7 @@ def window_reverse(windows, window_size, H, W):
     return x
 
 
-class WindowAttention(nn.Module):
+class WindowAttention(BaseModule):
     """ Window based multi-head self attention (W-MSA) module with relative position bias.
     It supports both of shifted and non-shifted window.
     Args:
@@ -155,7 +155,7 @@ class WindowAttention(nn.Module):
         return x
 
 
-class SwinTransformerBlock(nn.Module):
+class SwinTransformerBlock(BaseModule):
     """ Swin Transformer Block.
     Args:
         dim (int): Number of input channels.
@@ -168,8 +168,8 @@ class SwinTransformerBlock(nn.Module):
         drop (float, optional): Dropout rate. Default: 0.0
         attn_drop (float, optional): Attention dropout rate. Default: 0.0
         drop_path (float, optional): Stochastic depth rate. Default: 0.0
-        act_layer (nn.Module, optional): Activation layer. Default: nn.GELU
-        norm_layer (nn.Module, optional): Normalization layer.  Default: nn.LayerNorm
+        act_layer (BaseModule, optional): Activation layer. Default: nn.GELU
+        norm_layer (BaseModule, optional): Normalization layer.  Default: nn.LayerNorm
     """
 
     def __init__(self, dim, num_heads, window_size=7, shift_size=0,
@@ -256,7 +256,7 @@ class SwinTransformerBlock(nn.Module):
 
 
 
-class BasicLayer(nn.Module):
+class BasicLayer(BaseModule):
     """ A basic Swin Transformer layer for one stage.
     Args:
         dim (int): Number of feature channels
@@ -269,8 +269,8 @@ class BasicLayer(nn.Module):
         drop (float, optional): Dropout rate. Default: 0.0
         attn_drop (float, optional): Attention dropout rate. Default: 0.0
         drop_path (float | tuple[float], optional): Stochastic depth rate. Default: 0.0
-        norm_layer (nn.Module, optional): Normalization layer. Default: nn.LayerNorm
-        downsample (nn.Module | None, optional): Downsample layer at the end of the layer. Default: None
+        norm_layer (BaseModule, optional): Normalization layer. Default: nn.LayerNorm
+        downsample (BaseModule | None, optional): Downsample layer at the end of the layer. Default: None
         use_checkpoint (bool): Whether to use checkpointing to save memory. Default: False.
     """
 
@@ -295,7 +295,7 @@ class BasicLayer(nn.Module):
         self.use_checkpoint = use_checkpoint
 
         # build blocks
-        self.blocks = nn.ModuleList([
+        self.blocks = BaseModuleList([
             SwinTransformerBlock(
                 dim=dim,
                 num_heads=num_heads,
@@ -359,13 +359,13 @@ class BasicLayer(nn.Module):
             return x, H, W, x, H, W
 
 
-class PatchEmbed(nn.Module):
+class PatchEmbed(BaseModule):
     """ Image to Patch Embedding
     Args:
         patch_size (int): Patch token size. Default: 4.
         in_chans (int): Number of input image channels. Default: 3.
         embed_dim (int): Number of linear projection output channels. Default: 96.
-        norm_layer (nn.Module, optional): Normalization layer. Default: None
+        norm_layer (BaseModule, optional): Normalization layer. Default: None
     """
 
     def __init__(self, patch_size=4, in_chans=3, embed_dim=96, norm_layer=None):
@@ -402,7 +402,7 @@ class PatchEmbed(nn.Module):
 
 
 @BACKBONES.register_module()
-class SwinTransformer(nn.Module):
+class SwinTransformer(BaseModule):
     """ Swin Transformer backbone.
         A PyTorch impl of : `Swin Transformer: Hierarchical Vision Transformer using Shifted Windows`  -
           https://arxiv.org/pdf/2103.14030
@@ -421,7 +421,7 @@ class SwinTransformer(nn.Module):
         drop_rate (float): Dropout rate.
         attn_drop_rate (float): Attention dropout rate. Default: 0.
         drop_path_rate (float): Stochastic depth rate. Default: 0.2.
-        norm_layer (nn.Module): Normalization layer. Default: nn.LayerNorm.
+        norm_layer (BaseModule): Normalization layer. Default: nn.LayerNorm.
         ape (bool): If True, add absolute position embedding to the patch embedding. Default: False.
         patch_norm (bool): If True, add normalization after patch embedding. Default: True.
         out_indices (Sequence[int]): Output from which stages.
@@ -486,7 +486,7 @@ class SwinTransformer(nn.Module):
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]  # stochastic depth decay rule
 
         # build layers
-        self.layers = nn.ModuleList()
+        self.layers = BaseModuleList()
         for i_layer in range(self.num_layers):
             
             if i_layer < self.num_layers - 1:
@@ -529,7 +529,6 @@ class SwinTransformer(nn.Module):
             self.add_module(layer_name, layer)
 
         self._freeze_stages()
-        self.init_weights()
 
     def _freeze_stages(self):
         if self.frozen_stages >= 0:

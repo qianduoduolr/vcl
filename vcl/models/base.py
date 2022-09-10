@@ -4,9 +4,10 @@ from collections import OrderedDict
 
 import torch
 import torch.nn as nn
+from mmcv.runner import BaseModule
 
 
-class BaseModel(nn.Module, metaclass=ABCMeta):
+class BaseModel(BaseModule, metaclass=ABCMeta):
     """Base model.
 
     All models should subclass it.
@@ -20,14 +21,6 @@ class BaseModel(nn.Module, metaclass=ABCMeta):
 
         ``train_step``, supporting to train one step when training.
     """
-
-
-    def init_weights(self):
-        """Abstract method for initializing weight.
-
-        All subclass should overwrite it.
-        """
-
 
     def forward_train(self, imgs, labels):
         """Abstract method for training forward.

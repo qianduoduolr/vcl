@@ -88,17 +88,6 @@ class Dist_Tracker(BaseModel):
         else:
             self.mask = None
 
-        
-        self.init_weights()
-    
-    def init_weights(self):
-        
-        self.backbone.init_weights()
-        self.backbone_t.init_weights()
-        
-        if self.pretrained is not None:
-            _ = load_checkpoint(self, self.pretrained, map_location='cpu')
-
 
     def forward_train(self, imgs, images_lab=None):
 

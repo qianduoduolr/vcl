@@ -3,12 +3,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from mmcv.runner import BaseModule
 from torch.utils.checkpoint import checkpoint
 
 from vcl.models.common.utils import shift_dim, view_range, tensor_slice
 
 
-class AttentionStack(nn.Module):
+class AttentionStack(BaseModule):
     def __init__(
         self, shape, embd_dim, n_head, n_layer, dropout,
         attn_type, attn_dropout, class_cond_dim, frame_cond_shape,
@@ -58,7 +59,7 @@ class AttentionStack(nn.Module):
         return x
 
 
-class AttentionBlock(nn.Module):
+class AttentionBlock(BaseModule):
     def __init__(self, shape, embd_dim, n_head, n_layer, dropout,
                  attn_type, attn_dropout, class_cond_dim, frame_cond_shape):
         super().__init__()
@@ -117,7 +118,7 @@ class AttentionBlock(nn.Module):
         return x
 
 
-class MultiHeadAttention(nn.Module):
+class MultiHeadAttention(BaseModule):
     def __init__(self, shape, dim_q, dim_kv, n_head, n_layer,
                  causal, attn_type, attn_kwargs):
         super().__init__()
@@ -197,7 +198,7 @@ class MultiHeadAttention(nn.Module):
         return a
 
 ############## Attention #######################
-class FullAttention(nn.Module):
+class FullAttention(BaseModule):
     def __init__(self, shape, causal, attn_dropout):
         super().__init__()
         self.causal = causal
@@ -223,7 +224,7 @@ class FullAttention(nn.Module):
 
         return view_range(out, 2, 3, old_shape)
 
-class AxialAttention(nn.Module):
+class AxialAttention(BaseModule):
     def __init__(self, n_dim, axial_dim):
         super().__init__()
         if axial_dim < 0:
@@ -245,7 +246,7 @@ class AxialAttention(nn.Module):
         return out
 
 
-class SparseAttention(nn.Module):
+class SparseAttention(BaseModule):
     ops = dict()
     attn_mask = dict()
     block_layout = dict()
@@ -453,7 +454,7 @@ class StridedSparsityConfig(object):
 
 
 ################ Spatiotemporal broadcasted positional embeddings ###############
-class AddBroadcastPosEmbed(nn.Module):
+class AddBroadcastPosEmbed(BaseModule):
     def __init__(self, shape, embd_dim, dim=-1):
         super().__init__()
         assert dim in [-1, 1] # only first or last dim supported
@@ -508,7 +509,7 @@ def scaled_dot_product_attention(q, k, v, mask=None, attn_dropout=0., training=T
     return a
 
 
-class RightShift(nn.Module):
+class RightShift(BaseModule):
     def __init__(self, embd_dim):
         super().__init__()
         self.embd_dim = embd_dim
@@ -528,12 +529,12 @@ class RightShift(nn.Module):
         return x
 
 
-class GeLU2(nn.Module):
+class GeLU2(BaseModule):
     def forward(self, x):
         return (1.702 * x).sigmoid() * x
 
 
-class LayerNorm(nn.Module):
+class LayerNorm(BaseModule):
     def __init__(self, embd_dim, class_cond_dim):
         super().__init__()
         self.conditional = class_cond_dim is not None

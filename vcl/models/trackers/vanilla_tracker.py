@@ -11,7 +11,8 @@ from mmcv.runner import auto_fp16
 from ..builder import build_backbone, build_loss, build_components
 from ..backbones import ResNet
 from ..common import (cat, images2video, masked_attention_efficient,
-                      pil_nearest_interpolate, spatial_neighbor, video2images)
+                      pil_nearest_interpolate, spatial_neighbor, video2images, non_local_attention)
+
 from ..registry import MODELS
 from ..base import BaseModel
 from ...utils import *
@@ -37,21 +38,19 @@ class BaseTracker(BaseModel):
         super().__init__()
         self.backbone = build_backbone(backbone)
         if head is not None:
-            self.head = build_components(head)
+            if head.get('type', False):
+                self.head = build_components(head)
+            else:
+                self.head = nn.Conv2d(head['in_c'], head['out_c'], kernel_size=3, padding=1)
+
         else:
             self.head = None
 
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
-        self.init_weights()
 
         self.fp16_enabled = False
         self.register_buffer('iteration', torch.tensor(0, dtype=torch.float))
-
-    def init_weights(self):
-        """Initialize the model network weights."""
-        # self.backbone.init_weights()
-        pass
 
     @auto_fp16()
     def extract_feat(self, imgs):
@@ -134,6 +133,17 @@ class VanillaTracker(BaseTracker):
             assert feat_bank[i].size(2) == clip_len
 
         return feat_bank
+
+    def get_corrspondence(self, q, k, t=0.07, norm=True, mode='dot', mask=None):
+
+        query = self.backbone(q)
+        key =  self.backbone(k)
+
+        corr = non_local_attention(query, key.unsqueeze(1), temprature=t, norm=norm, att_only=True, mode=mode, mask=mask)
+        corr = F.softmax(corr[:,0], -1)
+
+        return corr
+
 
     def forward_train(self, imgs, labels=None):
         raise NotImplementedError
@@ -221,7 +231,9 @@ class VanillaTracker(BaseTracker):
                     topk=self.test_cfg.topk,
                     normalize=self.test_cfg.get('with_norm', True),
                     non_mask_len=0 if self.test_cfg.get(
-                        'with_first_neighbor', True) else 1)
+                        'with_first_neighbor', True) else 1,
+                    sim_mode=self.test_cfg.get(
+                        'sim_mode', 'dot_product'))
                 
                 if not self.hard_prop:
                     seg_bank.append(seg_logit.cpu())
@@ -277,178 +289,6 @@ class VanillaTracker(BaseTracker):
             return list(all_seg_preds)
    
 
-@MODELS.register_module()
-class VanillaTracker_V2(VanillaTracker):
-    """Follow MAMP."""
-
-    def __init__(self, pad_divisible=8, *args, **kwargs):
-        super(VanillaTracker_V2, self).__init__(*args, **kwargs)
-        self.divisible = pad_divisible
-
-    def forward_test(self, imgs, ref_seg_map, img_meta,
-                    save_image=False,
-                    save_path=None,
-                    iteration=None):
-        """Defines the computation performed at every call when evaluation and
-        testing."""
-
-        imgs = imgs.reshape((-1, ) + imgs.shape[2:])
-        clip_len = imgs.size(2)
-        
-        imgs = [ self.align_pad(imgs[:, :, i])[0] for i in range(clip_len) ]
-        imgs = torch.stack(imgs, dim=2)
-        
-        ori_h, ori_w = img_meta[0]['original_shape'][:2]
-        
-        # get target shape
-        dummy_feat = self.extract_feat_test(imgs[0:1, :, 0])
-        if isinstance(dummy_feat, (list, tuple)):
-            feat_shapes = [_.shape for _ in dummy_feat]
-        else:
-            feat_shapes = [dummy_feat.shape]
-        all_seg_preds = []
-        feat_bank = self.get_feats(imgs, len(dummy_feat))
-        for feat_idx, feat_shape in enumerate(feat_shapes):
-            input_onehot = ref_seg_map.ndim == 4
-            if not input_onehot:
-                ref_seg_map, H, W = self.align_pad(ref_seg_map.unsqueeze(1))
-                resized_seg_map = self.prep(ref_seg_map)[:,0].long()
-                resized_seg_map = F.one_hot(resized_seg_map).permute(
-                    0, 3, 1, 2).float()
-                ref_seg_map = F.interpolate(
-                    ref_seg_map.float(),
-                    size=(H,W),
-                    mode='nearest').squeeze(1)
-            else:
-                resized_seg_map = F.interpolate(
-                    ref_seg_map,
-                    size=feat_shape[2:],
-                    mode='bilinear',
-                    align_corners=False).float()
-                ref_seg_map = F.interpolate(
-                    ref_seg_map,
-                    size=img_meta[0]['original_shape'][:2],
-                    mode='bilinear',
-                    align_corners=False)
-            seg_bank = []
-
-            seg_preds = [ref_seg_map[:,:ori_h,:ori_w].detach().cpu().numpy()]
-            neighbor_range = self.test_cfg.get('neighbor_range', None)
-            if neighbor_range is not None:
-                spatial_neighbor_mask = spatial_neighbor(
-                    feat_shape[0],
-                    *feat_shape[2:],
-                    neighbor_range=neighbor_range,
-                    device=imgs.device,
-                    dtype=imgs.dtype,
-                    mode='circle')
-            else:
-                spatial_neighbor_mask = None
-
-            seg_bank.append(resized_seg_map.cpu())
-            for frame_idx in range(1, clip_len):
-                key_start = max(0, frame_idx - self.test_cfg.precede_frames)
-                query_feat = feat_bank[feat_idx][:, :,
-                                                 frame_idx]
-                key_feat = feat_bank[feat_idx][:, :, key_start:frame_idx].to(
-                    imgs.device)
-                value_logits = torch.stack(
-                    seg_bank[key_start:frame_idx], dim=2)
-                if self.test_cfg.get('with_first', True):
-                    key_feat = torch.cat([
-                        feat_bank[feat_idx][:, :, 0:1],
-                        key_feat
-                    ],
-                                         dim=2)
-                    value_logits = cat([
-                        seg_bank[0].unsqueeze(2), value_logits
-                    ],
-                                       dim=2)
-                seg_logit = masked_attention_efficient(
-                    query_feat,
-                    key_feat,
-                    value_logits,
-                    spatial_neighbor_mask,
-                    temperature=self.test_cfg.temperature,
-                    topk=self.test_cfg.topk,
-                    normalize=self.test_cfg.get('with_norm', True),
-                    non_mask_len=0 if self.test_cfg.get(
-                        'with_first_neighbor', True) else 1)
-                
-                if not self.hard_prop:
-                    seg_bank.append(seg_logit.cpu())
-                else:
-                    seg_logit_hard = seg_logit.argmax(1,keepdim=True)
-                    seg_logit_hard = F.one_hot(seg_logit_hard)[:,0].permute(0,3,1,2).float()
-                    seg_bank.append(seg_logit_hard.cpu())
-
-                seg_pred = F.interpolate(
-                    seg_logit,
-                    size=(H,W),
-                    mode='bilinear',
-                    align_corners=False)
-                if not input_onehot:
-                    seg_pred_min = seg_pred.view(*seg_pred.shape[:2], -1).min(
-                        dim=-1)[0].view(*seg_pred.shape[:2], 1, 1)
-                    seg_pred_max = seg_pred.view(*seg_pred.shape[:2], -1).max(
-                        dim=-1)[0].view(*seg_pred.shape[:2], 1, 1)
-                    normalized_seg_pred = (seg_pred - seg_pred_min) / (
-                        seg_pred_max - seg_pred_min + 1e-12)
-                    seg_pred = torch.where(seg_pred_max > 0,
-                                           normalized_seg_pred, seg_pred)
-                    seg_pred = seg_pred.argmax(dim=1)
-                    seg_pred = F.interpolate(
-                        seg_pred.float().unsqueeze(1),
-                        size=(H,W),
-                        mode='nearest').squeeze(1)
-                seg_pred = seg_pred[:,:ori_h,:ori_w]
-                seg_preds.append(seg_pred.detach().cpu().numpy())
-
-            seg_preds = np.stack(seg_preds, axis=1)
-            if self.save_np:
-                assert seg_preds.shape[0] == 1
-                eval_dir = '.eval'
-                mmcv.mkdir_or_exist(eval_dir)
-                temp_file = tempfile.NamedTemporaryFile(
-                    dir=eval_dir, suffix='.npy', delete=False)
-                file_path = osp.join(eval_dir, temp_file.name)
-                np.save(file_path, seg_preds[0])
-                all_seg_preds.append(file_path)
-            else:
-                all_seg_preds.append(seg_preds)
-        if self.save_np:
-            if len(all_seg_preds) > 1:
-                return [all_seg_preds]
-            else:
-                return [all_seg_preds[0]]
-        else:
-            if len(all_seg_preds) > 1:
-                all_seg_preds = np.stack(all_seg_preds, axis=1)
-            else:
-                all_seg_preds = all_seg_preds[0]
-            # unravel batch dim
-            return list(all_seg_preds)
-        
-    def align_pad(self, img):
-        cur_b, cur_c, cur_h, cur_w = img.shape
-        pad_h = 0 if (cur_h % self.divisible) == 0 else self.divisible - (cur_h % self.divisible)
-        pad_w = 0 if (cur_w % self.divisible) == 0 else self.divisible - (cur_w % self.divisible)
-
-        if (pad_h + pad_w) != 0:
-            pad = nn.ZeroPad2d(padding=(0, pad_w, 0, pad_h))
-            image = pad(img)
-            final_h = cur_h + pad_h 
-            final_w = cur_w + pad_w
-            return image, final_h, final_w
-        else:
-            return img, cur_h, cur_w
-        
-    def prep(self, image, mode='default'):
-        _,c,_,_ = image.size()
-
-        x = image.float()[:,:,::self.divisible,::self.divisible]
-
-        return x
 
 @MODELS.register_module()
 class VanillaTracker_Fusion(VanillaTracker):

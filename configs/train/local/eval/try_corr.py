@@ -3,26 +3,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'res18_d4_fusion_eval_1'
+exp_name = 'res50_d4_eval'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
-# model settings
-model = dict(
-    type='Framework_V2',
-    backbone=dict(type='ResNet',depth=50, strides=(1, 2, 2, 1), out_indices=(2,), pool_type='none', dilations=(1,1,2,4)),
-    backbone_t=None,
-    loss=dict(type='MSELoss',reduction='mean'),
-    feat_size=[32,],
-    radius=[6,],
-    downsample_rate=[8,],
-    temperature=1.0,
-    temperature_t=0.07,
-    T=-1,
-    momentum=-1,
-    detach=True,
-    loss_weight = dict(stage0_l1_loss=1),
-    pretrained=None
-)
 
 model_test = None
 
@@ -30,23 +13,37 @@ model_test = None
 train_cfg = dict(syncbn=True)
 
 test_cfg = dict(
-    backbone_=dict(
-                    type='ResNet',depth=18, 
-                    strides=(1, 2, 2, 1), out_indices=(2,), 
-                    pool_type=None, 
-                    pretrained='/gdata/lirui/expdir/VCL/group_stsl_former/mast_d4_l2_pyramid_dis_18/epoch_3200.pth', 
-                    torchvision_pretrain=False
-                    ),
-    fusion_gama=0.1,
     precede_frames=20,
     topk=10,
     temperature=0.07,
-    strides=(1, 2, 2, 1),
-    out_indices=(2, ),
+    strides=(1, 2, 1, 1),
+    out_indices=(3, ),
     neighbor_range=24,
     with_first=True,
+    with_norm=False,
     with_first_neighbor=True,
+    sim_mode='l2-distance',
     output_dir='eval_results')
+
+# model settings
+# model = dict(
+#     type='VanillaTracker',
+#     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2,), pool_type='none', pretrained='/home/lr/mount/expdir/VCL/group_stsl_former/mast_d4_l2_pyramid_dis_18/epoch_3200.pth', torchvision_pretrain=False),
+#     # head=dict(in_c=1024, out_c=64),
+#     test_cfg=test_cfg,
+#     train_cfg=train_cfg
+# )
+
+
+model = dict(
+    type='VanillaTracker',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2,), pool_type='none', dilations=(1,1,2,4), \
+        pretrained='/home/lr/mount/expdir/VCL/group_motion_prediction/spa_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_27/epoch_160.pth', torchvision_pretrain=False),
+    # head=dict(in_c=1024, out_c=64),
+    test_cfg=test_cfg,
+    train_cfg=train_cfg
+)
+
 
 # dataset settings
 train_dataset_type = 'VOS_youtube_dataset_rgb'
@@ -69,21 +66,21 @@ train_pipeline = [
     # dict(type='ColorDropout', keys='jitter_imgs', drop_rate=0.8),
     dict(type='FormatShape', input_format='NPTCHW'),
     dict(type='FormatShape', input_format='NPTCHW', keys='images_lab'),
-    dict(type='Collect', keys=['imgs', 'images_lab'], meta_keys=[]),
+    dict(type='Collect', keys=['imgs', 'images_lab'], metas_keys=[]),
     dict(type='ToTensor', keys=['imgs', 'images_lab'])
 ]
 
 val_pipeline = [
-    dict(type='Resize', scale=(-1, 480), keep_ratio=True),
-    dict(type='Flip', flip_ratio=0),
+    # dict(type='Resize', scale=(, 256), keep_ratio=False),
     dict(type='RGB2LAB'),
+    # dict(type='Normalize', **img_norm_cfg),
     dict(type='Normalize', **img_norm_cfg_lab),
     dict(type='FormatShape', input_format='NCTHW'),
     dict(
         type='Collect',
-        keys=['imgs', 'ref_seg_map'],
-        meta_keys=('video_path', 'original_shape')),
-    dict(type='ToTensor', keys=['imgs', 'ref_seg_map'])
+        keys=['imgs'],
+        meta_keys=()),
+    dict(type='ToTensor', keys=['imgs'])
 ]
 
 # demo_pipeline = None
@@ -97,8 +94,8 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            root='/dev/shm',
-            list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
+            root='/home/lr/dataset/YouTube-VOS',
+            list_path='/home/lr/dataset/YouTube-VOS/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
             clip_length=2,
             pipeline=train_pipeline,
@@ -106,8 +103,8 @@ data = dict(
 
     test =  dict(
             type=test_dataset_type,
-            root='/gdata/lirui/dataset/DAVIS',
-            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
+            root='/home/lr/dataset/DAVIS',
+            list_path='/home/lr/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -115,8 +112,8 @@ data = dict(
     
     val =  dict(
             type=val_dataset_type,
-            root='/gdata/lirui/dataset/DAVIS',
-            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
+            root='/home/lr/dataset/DAVIS',
+            list_path='/home/lr/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -147,7 +144,6 @@ log_config = dict(
     hooks=[
         dict(type='TextLoggerHook', by_epoch=False),
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
-        # dict(type='WandbLoggerHook', init_kwargs=dict(project='video_correspondence', name=f'{exp_name}'))
     ])
 
 visual_config = None
@@ -156,15 +152,16 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/gdata/lirui/expdir/VCL/group_stsl/spa_temp_fusion/{exp_name}'
+work_dir = f'/home/lr/expdir/VCL/group_stsl/{exp_name}'
 
 
 evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True
                   )
-eval_arc = 'VanillaTracker_Fusion'
+
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path='/gdata/lirui/expdir/VCL/group_motion_prediction/spa_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_12/epoch_160.pth',
+                #   checkpoint_path='/home/lr/models/vos/stcn_revised_keys_whead.pth',
+                checkpoint_path=None,
                   torchvision_pretrained=None
                 )
 
