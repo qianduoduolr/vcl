@@ -25,8 +25,8 @@ from vcl.datasets.pipelines import Compose
 
 parser = ArgumentParser()
 parser.add_argument('--config', default='/home/lr/project/vcl/configs/train/local/eval/try_corr.py')
-parser.add_argument('--src_image', default='/home/lr/dataset/DAVIS/JPEGImages/480p/monkeys/00001.jpg')
-parser.add_argument('--tar_image', default='/home/lr/dataset/DAVIS/JPEGImages/480p/monkeys/00001.jpg')
+parser.add_argument('--src_image', default='/home/lr/dataset/DAVIS/JPEGImages/480p/hike/00005.jpg')
+parser.add_argument('--tar_image', default='/home/lr/dataset/DAVIS/JPEGImages/480p/hike/00005.jpg')
 parser.add_argument('--resize', type=bool, default=True)
 parser.add_argument('--mask', type=bool, default=False)
 
@@ -35,6 +35,8 @@ parser.add_argument('--model', default='saves/propagation_model.pth')
 args = parser.parse_args()
 
 cfg = Config.fromfile(args.config)
+
+# temp -> mp -> detco -> st(res50) -> st(res18)
 
 # Reading stuff
 src_image = mmcv.imread(args.src_image, channel_order='rgb')
@@ -106,13 +108,15 @@ def comp_binary(image, mask):
     return comp
 
 # loading a pretrained propagation network as correspondence network
-model = build_model(cfg.model).cuda()
+model = build_model(cfg.model6).cuda()
 model.init_weights()
-model.eval()
 
 ckpt = cfg.eval_config.checkpoint_path
 if ckpt is not None:
     _ = load_checkpoint(model, ckpt, map_location='cpu')
+
+model.eval()
+
 
 # We can precompute the affinity matrix (H/pad_size * W/pad_size) * (H/pad_size * W/pad_size)
 # pad_size is the encoder stride
@@ -120,7 +124,7 @@ if args.mask:
     mask = make_mask(48, 9)
 else:
     mask = None
-corr = model.get_corrspondence(src_im_th, tar_im_th, mask=mask).transpose(1,2)
+corr = model.get_corrspondence(tar_im_th, src_im_th, mask=mask)
 
 
 # Generate the transfer mask
@@ -130,7 +134,7 @@ corr = model.get_corrspondence(src_im_th, tar_im_th, mask=mask).transpose(1,2)
 
 def match(W, transfer_feat):
     # This is mostly just torch.bmm(features, affinity)
-    transferred = torch.bmm(transfer_feat.flatten(-2), W).view(b, 1, nh, nw)
+    transferred = torch.bmm(transfer_feat.flatten(-2), W.transpose(1,2)).view(b, 1, nh, nw)
     # Upsample pad_size stride image to original size
     transferred = F.interpolate(transferred, scale_factor=pad_size, mode='bilinear', align_corners=False)
     # Remove padding introduced at the beginning

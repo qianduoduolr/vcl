@@ -1,3 +1,4 @@
+from re import S
 import torch
 import torch.nn as nn
 from ..registry import LOSSES
@@ -154,3 +155,33 @@ class ConcentrationSwitchLoss(nn.Module):
         loss = torch.sum(loss) * self.loss_weight
         
         return loss
+
+
+@LOSSES.register_module()
+class ConcentrationSelfSimLoss(nn.Module):
+	def __init__(self,  stride, F_size, temp, win_len=-1):
+		super(ConcentrationSelfSimLoss, self).__init__()
+		self.win_len = win_len
+		self.grid = nn.Parameter(create_grid(F_size), requires_grad = False)
+		self.F_size = torch.Size(F_size)
+		self.stride = stride
+		self.temp = temp
+		self.softmax = nn.Softmax(dim=1)
+	
+	def forward(self, aff, aff_self):
+		
+		aff = aff[:,0]
+		aff_self = aff_self[:,0]
+
+        # aff here is not processed by softmax
+		b, c, h, w = self.F_size
+
+		if aff.dim() == 4:
+			aff = torch.squeeze(aff)
+        # b * 2 * h * w
+		coord = aff2coord(self.F_size, self.grid, aff.permute(0,2,1), self.temp).flatten(-2)
+		mean_coord = torch.einsum('bcj,bji->bci',[coord, aff_self.permute(0,2,1)])
+		loss = (mean_coord - coord) ** 2
+
+
+		return loss.mean()

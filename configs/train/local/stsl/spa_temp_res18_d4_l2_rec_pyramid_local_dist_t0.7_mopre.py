@@ -3,11 +3,31 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'res50_d4_eval'
+exp_name = 'spa_temp_res18_d4_l2_rec_pyramid_local_dist_t0.7_mopre'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
+# model settings
+model = dict(
+    type='Framework_MP',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 4), out_indices=(1, 2, ), pool_type='none', pretrained='/home/lr/models/ssl/image_based/moco_v2_res18_ep200_lab.pth'),
+    backbone_t=dict(type='ResNet',depth=50, strides=(1, 2, 2, 4), out_indices=(2,), pool_type='none', dilations=(1,1,2,4), pretrained='/home/lr/mount/expdir/VCL/group_motion_prediction/spa_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_12/epoch_160.pth', torchvision_pretrain=False),
+    loss=dict(type='MSELoss',reduction='mean'),
+    feat_size=[64, 32],
+    radius=[12, 6],
+    downsample_rate=[4, 8],
+    temperature=1.0,
+    temperature_t=0.07,
+    T=0.7,
+    momentum=-1,
+    detach=True,
+    loss_weight = dict(stage0_l1_loss=1, stage1_l1_loss=1, layer_dist_loss=1000, correlation_dist_loss=500),
+    pretrained=None
+)
 
-model_test = None
+model_test = dict(
+    type='VanillaTracker',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
+)
 
 # model training and testing settings
 train_cfg = dict(syncbn=True)
@@ -16,70 +36,12 @@ test_cfg = dict(
     precede_frames=20,
     topk=10,
     temperature=0.07,
-    strides=(1, 2, 1, 1),
+    strides=(1, 2, 2, 1),
     out_indices=(3, ),
     neighbor_range=24,
     with_first=True,
-    with_norm=False,
     with_first_neighbor=True,
-    sim_mode='l2-distance',
     output_dir='eval_results')
-
-# model settings
-model1 = dict(
-    type='VanillaTracker',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2,), pool_type='none', pretrained='/home/lr/mount/expdir/VCL/group_stsl_former/mast_d4_l2_pyramid_dis_18/epoch_3200.pth', torchvision_pretrain=False),
-    # head=dict(in_c=1024, out_c=64),
-    test_cfg=test_cfg,
-    train_cfg=train_cfg
-)
-
-
-model2 = dict(
-    type='VanillaTracker',
-    backbone=dict(type='ResNet',depth=50, strides=(1, 2, 2, 1), out_indices=(2,), pool_type='none', dilations=(1,1,2,4), pretrained='/home/lr/mount/expdir/VCL/group_motion_prediction/spa_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_12/epoch_160.pth', torchvision_pretrain=False),
-    # head=dict(in_c=1024, out_c=64),
-    test_cfg=test_cfg,
-    train_cfg=train_cfg
-)
-
-model3 = dict(
-    type='VanillaTracker',
-    backbone=dict(type='ResNet',depth=50, strides=(1, 2, 1, 4), out_indices=(3,),  \
-        pretrained='/home/lr/models/ssl/image_based/detco_200ep_AA.pth'),
-    # head=dict(in_c=1024, out_c=64),
-    test_cfg=test_cfg,
-    train_cfg=train_cfg
-)
-
-model4 = dict(
-    type='VanillaTracker',
-    backbone=dict(type='ResNet',depth=50, strides=(1, 2, 2, 1), out_indices=(2,), pool_type='none', pretrained='/home/lr/mount/expdir/VCL/group_stsl_former/final_framework_v2_33/epoch_800.pth', torchvision_pretrain=False),
-    # head=dict(in_c=1024, out_c=64),
-    test_cfg=test_cfg,
-    train_cfg=train_cfg
-)
-
-model5 = dict(
-    type='VanillaTracker',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2,), pool_type='none', pretrained='/home/lr/mount/expdir/VCL/group_stsl_former/final_framework_v2_15/epoch_1600.pth', torchvision_pretrain=False),
-    # head=dict(in_c=1024, out_c=64),
-    test_cfg=test_cfg,
-    train_cfg=train_cfg
-)
-
-
-model6 = dict(
-    type='VanillaTracker',
-    backbone=dict(type='ResNet',depth=50, strides=(1, 2, 1, 1), out_indices=(2,), pretrained='/home/lr/models/ssl/image_based/cmp_res50_revise_keys.pth', torchvision_pretrain=True),
-    # head=dict(in_c=1024, out_c=64),
-    test_cfg=test_cfg,
-    train_cfg=train_cfg
-)
-
-
-
-
 
 # dataset settings
 train_dataset_type = 'VOS_youtube_dataset_rgb'
@@ -102,27 +64,27 @@ train_pipeline = [
     # dict(type='ColorDropout', keys='jitter_imgs', drop_rate=0.8),
     dict(type='FormatShape', input_format='NPTCHW'),
     dict(type='FormatShape', input_format='NPTCHW', keys='images_lab'),
-    dict(type='Collect', keys=['imgs', 'images_lab'], metas_keys=[]),
+    dict(type='Collect', keys=['imgs', 'images_lab'], meta_keys=[]),
     dict(type='ToTensor', keys=['imgs', 'images_lab'])
 ]
 
 val_pipeline = [
-    # dict(type='Resize', scale=(, 256), keep_ratio=False),
-    # dict(type='RGB2LAB'),
-    # dict(type='Normalize', **img_norm_cfg_lab),
-    dict(type='Normalize', **img_norm_cfg),
+    dict(type='Resize', scale=(-1, 480), keep_ratio=True),
+    dict(type='Flip', flip_ratio=0),
+    dict(type='RGB2LAB'),
+    dict(type='Normalize', **img_norm_cfg_lab),
     dict(type='FormatShape', input_format='NCTHW'),
     dict(
         type='Collect',
-        keys=['imgs'],
-        meta_keys=()),
-    dict(type='ToTensor', keys=['imgs'])
+        keys=['imgs', 'ref_seg_map'],
+        meta_keys=('video_path', 'original_shape')),
+    dict(type='ToTensor', keys=['imgs', 'ref_seg_map'])
 ]
 
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=8, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=2, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -157,12 +119,12 @@ data = dict(
 )
 # optimizer
 optimizers = dict(
-    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
+    backbone=dict(type='Adam', lr=0.0001, betas=(0.9, 0.999))
     )
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=1600
+max_epoch=3200
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,
@@ -180,6 +142,7 @@ log_config = dict(
     hooks=[
         dict(type='TextLoggerHook', by_epoch=False),
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
+        # dict(type='WandbLoggerHook', init_kwargs=dict(project='video_correspondence', name=f'{exp_name}'))
     ])
 
 visual_config = None
@@ -191,26 +154,24 @@ log_level = 'INFO'
 work_dir = f'/home/lr/expdir/VCL/group_stsl/{exp_name}'
 
 
-evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True
+evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=1600, by_epoch=True
                   )
 
 eval_config= dict(
-                  output_dir=f'{work_dir}/eval_output',
-                #   checkpoint_path='/home/lr/models/vos/stcn_revised_keys_whead.pth',
-                checkpoint_path=None,
-                  torchvision_pretrained=None
+                  output_dir=f'{work_dir}/pose_eval_output',
+                  checkpoint_path=f'/home/lr/expdir/VCL/group_stsl/{exp_name}/epoch_{max_epoch}.pth'
                 )
 
 
 load_from = None
 resume_from = None
-# ddp_shuffle = True
+ddp_shuffle = True
 workflow = [('train', 1)]
 find_unused_parameters = True
-test_mode = True
+
 
 
 
 if __name__ == '__main__':
-
-    make_local_config(exp_name, file='eval')
+    make_pbs(exp_name, docker_name)
+    make_local_config(exp_name, file='stsl')

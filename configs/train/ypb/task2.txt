@@ -1,1 +1,1 @@
-eval/res50_d4_eval_2
+stsl/spa_temp_res18_d4_l2_rec_pyramid_local_dist_t0.7_mpr_conceloss

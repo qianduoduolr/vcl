@@ -101,8 +101,6 @@ class Memory_Tracker_Custom(BaseModel):
             
         bsz, _, n, c, h, w = images_lab.shape
 
-        # x = tensor2img(imgs[0,0], norm_mode='mean-std')
-        
         images_lab_gt = [images_lab[:,0,i].clone() for i in range(n)]
         images_lab = [images_lab[:,0,i] for i in range(n)]
         _, ch = self.dropout2d_lab(images_lab)
@@ -517,3 +515,132 @@ class Memory_Tracker_Custom_Iterative(Memory_Tracker_Custom):
             outputs = outputs.permute(0,2,1).reshape(bsz, -1, feat_size, feat_size)    
         return outputs
 
+
+
+@MODELS.register_module()
+class Memory_Tracker_Custom_Pyramid_Cmp_V2(Memory_Tracker_Custom):
+    def __init__(self,
+                loss=None,
+                pool_type='mean',
+                bilinear_downsample=True,
+                reverse=True,
+                T=0.2,
+                num_stage=2,
+                feat_size=[64, 32],
+                radius=[12, 6],
+                downsample_rate=[4, 8],
+                detach=False,
+                *args,
+                **kwargs
+                 ):
+        """ MAST  (CVPR2020) with CMP (CVPR2019)
+
+        Args:
+            backbone ([type]): [description]
+            test_cfg ([type], optional): [description]. Defaults to None.
+            train_cfg ([type], optional): [description]. Defaults to None.
+        """
+        super().__init__(*args, **kwargs)
+        from mmcv.ops import Correlation
+        
+        self.reverse = reverse
+        self.num_stage = num_stage
+        self.feat_size = feat_size
+        self.downsample_rate = downsample_rate
+        self.loss = build_loss(loss) if loss is not None else None
+        self.pool_type = pool_type
+        self.bilinear_downsample = bilinear_downsample
+        self.detach = detach
+        self.radius = radius
+        self.T = T
+        
+        self.mask = [ make_mask(feat_size[i], radius[i]) for i in range(len(radius)) if radius[i] != -1]        
+        self.corr = [Correlation(max_displacement=R) for R in radius ]
+        
+        
+        
+    def forward_train(self, imgs, images_lab=None):
+            
+        bsz, num_clips, t, c, h, w = images_lab.shape
+        
+        images_lab_gt = [images_lab[:,0,i,:].clone() for i in range(t)]
+        images_lab = [images_lab[:,0,i,:] for i in range(t)]
+        _, ch = self.dropout2d_lab(images_lab)
+        
+        # forward to get feature
+        fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        fs = [f.reshape(bsz, t, *f.shape[-3:]) for f in fs]
+        
+        tar_pyramid, refs_pyramid = [f[:, -1] for f in fs], [ f[:, :-1] for f in fs]
+        
+        losses = {}
+        
+        atts = []
+        corrs = []
+        for idx, (tar, refs) in enumerate(zip(tar_pyramid, refs_pyramid)):
+            # get correlation attention map            
+            _, att = non_local_attention(tar, refs, mask=self.mask[idx], scaling=True)            
+            # for mast l1_loss
+            ref_gt = [self.prep(gt[:,ch], downsample_rate=self.downsample_rate[idx]) for gt in images_lab_gt[:-1]]
+            outputs = frame_transform(att, ref_gt, flatten=False)
+            outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, self.feat_size[idx], self.feat_size[idx])     
+            losses[f'stage{idx}_l1_loss'], err_map = self.compute_lphoto(images_lab_gt, ch, outputs)
+            
+            corr = self.corr[idx](tar, refs[:,0])
+            atts.append(att)
+            corrs.append(corr)
+        
+        # for cmp weight
+        corr_feat = corrs[-1].reshape(bsz, -1, self.feat_size[-1], self.feat_size[-1])
+        corr = corr_feat.softmax(1)
+        corr_en = (-torch.log(corr+1e-12)).sum(1).flatten(-2)
+        corr_sorted, _ = torch.sort(corr_en, dim=-1, descending=True)
+        idx = int(corr_en.shape[-1] * self.T) - 1
+        T = corr_sorted[:, idx:idx+1]
+        sparse_mask = (corr_en > T).reshape(bsz, 1, *corr_feat.shape[-2:]).float().detach()
+            
+        if self.bilinear_downsample:
+            if not self.reverse:
+                atts[0] = atts[0].permute(0,1,3,2)
+            if self.pool_type == 'mean':
+                att_ = atts[0].reshape(bsz, -1, *fs[0].shape[-2:])
+                att_ = F.avg_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1).reshape(bsz, -1, *fs[0].shape[-2:])
+                target = F.avg_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1)    
+            elif self.pool_type == 'max':
+                att_ = atts[0].reshape(bsz, -1, *fs[0].shape[-2:])
+                att_ = F.max_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1).reshape(bsz, -1, *fs[0].shape[-2:])
+                target = F.max_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1)
+
+            if not self.reverse:
+                target = target.permute(0,2,1)
+            
+            weight = sparse_mask.flatten(-2).permute(0,2,1).repeat(1, 1, target.shape[-1])
+            
+            losses['dist_loss'] = self.loss(atts[-1][:,0], target.detach(), weight=weight) if self.detach else \
+                self.loss(atts[-1][:,0], target, weight=weight) 
+            
+        else:
+            if not self.reverse:
+                atts[1] = atts[1].permute(0,1,3,2)
+    
+            att_ = atts[1].reshape(bsz, -1, *fs[1].shape[-2:])
+            att_ = F.interpolate(att_, size=fs[0].shape[-2:],mode="bilinear").flatten(-2).permute(0,2,1).reshape(bsz, -1, *fs[1].shape[-2:])
+            att_ = F.interpolate(att_, size=fs[0].shape[-2:],mode="bilinear").flatten(-2).permute(0,2,1)    
+
+            if not self.reverse:
+                att_ = att_.permute(0,2,1)
+                
+            losses['dist_loss'] = self.loss(att_, atts[0][:,0].detach()) if self.detach else \
+                self.loss(att_, atts[0][:,0]) 
+        
+            
+        vis_results = dict(mask=sparse_mask[0,0], imgs=imgs[0,0])
+
+        return losses, vis_results
+
+
+    def prep(self, image, downsample_rate):
+        _,c,_,_ = image.size()
+        x = image.float()[:,:,::downsample_rate,::downsample_rate]
+
+        return x

@@ -210,3 +210,95 @@ class Framework_V2(BaseModel):
         x = image.float()[:,:,::downsample_rate,::downsample_rate]
 
         return x
+
+
+@MODELS.register_module()
+class Framework_MP(Framework_V2):
+    def __init__(self, conce_loss, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.conce_loss = build_loss(conce_loss)
+
+    def forward_train(self, imgs, images_lab=None):
+            
+        bsz, num_clips, t, c, h, w = imgs.shape
+        
+        images_lab_gt = [images_lab[:,0,i,:].clone() for i in range(t)]
+        images_lab = [images_lab[:,0,i,:] for i in range(t)]
+        _, ch = self.dropout2d_lab(images_lab)
+        
+        # forward to get feature
+        fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
+        if isinstance(fs, tuple): fs = tuple(fs)
+        else: fs = [fs]
+        
+        losses = {}
+        
+        atts = []
+        corrs = []
+        # for idx, (tar, refs) in enumerate(zip(tar_pyramid, refs_pyramid)):
+        for idx, f in enumerate(fs):
+            if self.head is not None and idx == 0:
+                f = self.head(f)
+            f = f.reshape(bsz, t, *f.shape[-3:])
+            
+            # get correlation for distillation
+            if idx == len(fs) - 1 and self.backbone_t != None:
+                _, att_g = non_local_attention(f[:,-1], f[:,:-1], scaling=self.scaling)
+                        
+            # get correlation attention map            
+            _, att = non_local_attention(f[:,-1], f[:,:-1], mask=self.mask[idx], scaling=True)      
+                  
+            # for mast l1_loss
+            ref_gt = [self.prep(gt[:,ch], downsample_rate=self.downsample_rate[idx]) for gt in images_lab_gt[:-1]]
+            outputs = frame_transform(att, ref_gt, flatten=False)
+            outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, self.feat_size[idx], self.feat_size[idx])     
+            losses[f'stage{idx}_l1_loss'] = self.compute_lphoto(images_lab_gt, ch, outputs)[0] * self.loss_weight[f'stage{idx}_l1_loss']
+            
+            # save corr and att
+            corr = self.corr[idx](f[:,-1], f[:,0])
+            corrs.append(corr)
+            atts.append(att)
+            
+        # get weight base on correlation entropy
+        if self.T != -1:
+            corr_feat = corrs[-1].reshape(bsz, -1, self.feat_size[-1], self.feat_size[-1])
+            corr = corr_feat.softmax(1)
+            corr_en = (-torch.log(corr+1e-12)).sum(1).flatten(-2)
+            corr_sorted, _ = torch.sort(corr_en, dim=-1, descending=True)
+            idx = int(corr_en.shape[-1] * self.T) - 1
+            T = corr_sorted[:, idx:idx+1]
+            sparse_mask = (corr_en > T).reshape(bsz, 1, *corr_feat.shape[-2:]).float().detach()
+            weight = sparse_mask.flatten(-2).permute(0,2,1).repeat(1, 1, atts[-1].shape[-1])
+        else:
+            weight = None
+        
+        if len(corrs) > 1:
+            # for layer distillation loss
+            if self.pool_type == 'mean':
+                att_ = atts[0].reshape(bsz, -1, *fs[0].shape[-2:])
+                att_ = F.avg_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1).reshape(bsz, -1, *fs[0].shape[-2:])
+                target = F.avg_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1)
+            elif self.pool_type == 'max':
+                att_ = atts[0].reshape(bsz, -1, *fs[0].shape[-2:])
+                att_ = F.max_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1).reshape(bsz, -1, *fs[0].shape[-2:])
+                target = F.max_pool2d(att_, 2, stride=2).flatten(-2).permute(0,2,1)
+            
+            if not self.detach:
+                losses['layer_dist_loss'] = self.loss_weight['layer_dist_loss'] * self.loss(atts[-1][:,0], target, weight=weight)
+            else:
+                losses['layer_dist_loss'] = self.loss_weight['layer_dist_loss'] * self.loss(atts[-1][:,0], target.detach(), weight=weight)
+            
+        # for correlation distillation loss
+        if self.backbone_t is not None:
+            with torch.no_grad():
+                self.backbone_t.eval()
+                fs_t = self.backbone_t(torch.stack(images_lab,1).flatten(0,1))
+                fs_t = fs_t.reshape(bsz, t, *fs_t.shape[-3:])
+                tar_t, refs_t = fs_t[:, -1], fs_t[:, :-1]
+                _, target_att = non_local_attention(tar_t, refs_t, temprature=self.temperature_t, norm=self.norm)
+                _, att_self = non_local_attention(tar_t, tar_t.unsqueeze(1), mask=self.mask[-1], scaling=True)
+                
+            losses['correlation_dist_loss'] = self.loss_weight['correlation_dist_loss'] * self.loss(att_g, target_att)
+            losses['conce_loss'] = self.loss_weight['conce_loss'] * self.conce_loss(atts[-1], att_self)
+
+        return losses

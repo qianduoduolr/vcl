@@ -1,28 +1,31 @@
 import os
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'train_dry_run'
+exp_name = 'spa_temp_res18_d4_l2_rec_pyramid_local_dist_t0.7_mpr_conceloss_2'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='Framework_V2',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 4), out_indices=(1, 2,), pool_type='none'),
-    backbone_t=None,
+    type='Framework_MP',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 4), out_indices=(1, 2, ), pool_type='none'),
+    backbone_t=dict(type='ResNet',depth=50, strides=(1, 2, 2, 4), out_indices=(2,), pool_type='none', dilations=(1,1,2,4), pretrained='/gdata/lirui/expdir/VCL/group_motion_prediction/spa_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_12/epoch_160.pth', torchvision_pretrain=False),
     loss=dict(type='MSELoss',reduction='mean'),
+    conce_loss=dict(type='ConcentrationSelfSimLoss', stride=4, F_size=(32, 2, 32, 32), temp=1),
     feat_size=[64, 32],
     radius=[12, 6],
     downsample_rate=[4, 8],
     temperature=1.0,
     temperature_t=0.07,
-    T=-1,
+    T=0.7,
     momentum=-1,
     detach=True,
-    loss_weight = dict(stage0_l1_loss=1, stage1_l1_loss=1, layer_dist_loss=0, correlation_dist_loss=0),
+    loss_weight = dict(stage0_l1_loss=1, stage1_l1_loss=1, layer_dist_loss=1000, correlation_dist_loss=0, conce_loss=10),
     pretrained=None
 )
+
+
 
 model_test = dict(
     type='VanillaTracker',
@@ -83,22 +86,26 @@ val_pipeline = [
 
 # demo_pipeline = None
 data = dict(
-    workers_per_gpu=1,
-    train_dataloader=dict(samples_per_gpu=16, drop_last=True),  # 4 gpus
+    workers_per_gpu=2,
+    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
     # train
     train=
             dict(
-            type=train_dataset_type,
-            root='/gdata/lirui/dataset/YouTube-VOS',
-            list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
-            data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
-            clip_length=2,
-            pipeline=train_pipeline,
-            test_mode=False),
-
+            type='RepeatDataset',
+            dataset=dict(
+                        type=train_dataset_type,
+                        root='/dev/shm',
+                        list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
+                        data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
+                        clip_length=2,
+                        pipeline=train_pipeline,
+                        test_mode=False
+                        ),
+            times=10,
+            ),
     test =  dict(
             type=test_dataset_type,
             root='/gdata/lirui/dataset/DAVIS',
@@ -124,7 +131,7 @@ optimizers = dict(
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=5
+max_epoch=320
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,
@@ -134,14 +141,21 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=30, save_optimizer=True, by_epoch=True)
-# remove gpu_collect=True in non distributed training
-# evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
+
+work_dir = f'/gdata/lirui/expdir/VCL/group_stsl/{exp_name}'
+
+checkpoint_config = dict(interval=max_epoch//2, save_optimizer=True, by_epoch=True)
 log_config = dict(
     interval=100,
     hooks=[
         dict(type='TextLoggerHook', by_epoch=False),
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
+           dict(type='WandbLoggerHook', 
+            init_kwargs=dict(project='video_correspondence_cmp', 
+                            name=exp_name, 
+                            config=model, 
+                            dir=work_dir), 
+            log_artifact=False)
     ])
 
 visual_config = None
@@ -150,24 +164,25 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/gdata/lirui/expdir/VCL/group_stsl/{exp_name}'
 
 
+evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=max_epoch//3, by_epoch=True
+                  )
 
 eval_config= dict(
-                  output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_stsl/{exp_name}/epoch_{max_epoch}.pth',
-                  dry_run=True
+                  output_dir=f'{work_dir}/pose_eval_output',
+                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_stsl/{exp_name}/epoch_{max_epoch}.pth'
                 )
 
 
 load_from = None
 resume_from = None
+ddp_shuffle = True
 workflow = [('train', 1)]
 find_unused_parameters = True
 
 
 
+
 if __name__ == '__main__':
-    make_pbs(exp_name, docker_name)
-    make_local_config(exp_name)
+    make_local_config(exp_name, file='stsl')
