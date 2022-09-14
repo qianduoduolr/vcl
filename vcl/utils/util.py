@@ -108,8 +108,8 @@ def make_local_config(exp_name, file='motion_prediction'):
     with open(f'/home/lr/project/vcl/configs/train/local/{file}/{exp_name}.py', 'r') as f:
         for line in f:
             line = line.replace('/home/lr','/gdata/lirui')
-            line = line.replace('/gdata/lirui/dataset/YouTube-VOS','/dev/shm')
-            line = line.replace('/dev/shm/', '/gdata/lirui/dataset/YouTube-VOS/')
+            # line = line.replace('/gdata/lirui/dataset/YouTube-VOS','/dev/shm')
+            # line = line.replace('/dev/shm/', '/gdata/lirui/dataset/YouTube-VOS/')
             # line = line.replace('/home/lr/dataset','/home/lr/dataset')
             config_data += line
 

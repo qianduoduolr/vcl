@@ -144,7 +144,7 @@ lr_config = dict(
     )
 
 
-work_dir = f'/gdata/lirui/expdir/VCL/group_stsl/{exp_name}'
+work_dir = f'/output/{exp_name}'
 
 checkpoint_config = dict(interval=max_epoch//2, save_optimizer=True, by_epoch=True)
 log_config = dict(

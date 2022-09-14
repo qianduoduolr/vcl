@@ -269,6 +269,9 @@ class Framework_MP(Framework_V2):
             T = corr_sorted[:, idx:idx+1]
             sparse_mask = (corr_en > T).reshape(bsz, 1, *corr_feat.shape[-2:]).float().detach()
             weight = sparse_mask.flatten(-2).permute(0,2,1).repeat(1, 1, atts[-1].shape[-1])
+
+            a = sparse_mask[0,0].detach().cpu().numpy()
+            b = tensor2img(imgs[0,0,0], norm_mode='mean-std')
         else:
             weight = None
         
@@ -292,7 +295,7 @@ class Framework_MP(Framework_V2):
         if self.backbone_t is not None:
             with torch.no_grad():
                 self.backbone_t.eval()
-                fs_t = self.backbone_t(torch.stack(images_lab,1).flatten(0,1))
+                fs_t = self.backbone_t(torch.stack(images_lab_gt,1).flatten(0,1))
                 fs_t = fs_t.reshape(bsz, t, *fs_t.shape[-3:])
                 tar_t, refs_t = fs_t[:, -1], fs_t[:, :-1]
                 _, target_att = non_local_attention(tar_t, refs_t, temprature=self.temperature_t, norm=self.norm)

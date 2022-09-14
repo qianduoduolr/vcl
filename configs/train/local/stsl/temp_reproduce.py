@@ -3,26 +3,19 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'spa_temp_res18_d4_l2_rec_pyramid_local_dist_t0.7_mp_conceloss_3'
+exp_name = 'temp_reproduce'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='Framework_MP',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 4), out_indices=(2, ), pool_type='none'),
-    backbone_t=dict(type='ResNet',depth=50, strides=(1, 2, 2, 4), out_indices=(2,), pool_type='none', dilations=(1,1,2,4), pretrained='/home/lr/mount/expdir/VCL/group_motion_prediction/spa_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_12/epoch_160.pth', torchvision_pretrain=False),
-    loss=dict(type='MSELoss',reduction='mean'),
-    conce_loss=dict(type='ConcentrationSelfSimLoss', stride=4, F_size=(2, 2, 32, 32), temp=1),
-    feat_size=[32,],
-    radius=[6,],
-    downsample_rate=[8,],
-    temperature=1.0,
-    temperature_t=0.07,
+    type='Memory_Tracker_Custom_Pyramid_Cmp_V2',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(1, 2), pool_type='none'),
+    loss=dict(type='MSELoss',reduction='mean', loss_weight=1000),
+    radius=[12, 6],
     T=0.7,
-    momentum=-1,
+    downsample_rate=[4,8],
+    feat_size=[64,32],
     detach=True,
-    loss_weight = dict(stage0_l1_loss=1, stage1_l1_loss=0, layer_dist_loss=0, correlation_dist_loss=0, conce_loss=10),
-    pretrained=None
 )
 
 
@@ -87,25 +80,21 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=2, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=4, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
     # train
-    train=
+    train=  
             dict(
-            type='RepeatDataset',
-            dataset=dict(
-                        type=train_dataset_type,
-                        root='/home/lr/dataset/YouTube-VOS',
-                        list_path='/home/lr/dataset/YouTube-VOS/2018/train',
-                        data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
-                        clip_length=2,
-                        pipeline=train_pipeline,
-                        test_mode=False
-                        ),
-            times=10,
-            ),
+            type=train_dataset_type,
+            root='/home/lr/dataset/YouTube-VOS',
+            list_path='/home/lr/dataset/YouTube-VOS/2018/train',
+            data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
+            clip_length=2,
+            pipeline=train_pipeline,
+            test_mode=False),
+            
     test =  dict(
             type=test_dataset_type,
             root='/home/lr/dataset/DAVIS',
@@ -131,7 +120,7 @@ optimizers = dict(
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=320
+max_epoch=3200
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,
@@ -141,13 +130,20 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
+work_dir = f'/home/lr/expdir/VCL/group_stsl/{exp_name}'
+
 checkpoint_config = dict(interval=max_epoch//2, save_optimizer=True, by_epoch=True)
 log_config = dict(
     interval=100,
     hooks=[
         dict(type='TextLoggerHook', by_epoch=False),
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
-        # dict(type='WandbLoggerHook', init_kwargs=dict(project='video_correspondence', name=f'{exp_name}'))
+          dict(type='WandbLoggerHook', 
+            init_kwargs=dict(project='video_correspondence_cmp', 
+                            name=exp_name, 
+                            config=model, 
+                            dir=work_dir), 
+            log_artifact=False)
     ])
 
 visual_config = None
@@ -156,7 +152,6 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/home/lr/expdir/VCL/group_stsl/{exp_name}'
 
 
 evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=max_epoch//2, by_epoch=True
@@ -178,5 +173,5 @@ find_unused_parameters = True
 
 
 if __name__ == '__main__':
-    make_pbs(exp_name, docker_name)
-    make_local_config(exp_name, file='stsl')
+
+    make_local_config_back(exp_name, file='stsl')
