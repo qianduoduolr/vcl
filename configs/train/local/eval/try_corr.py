@@ -28,7 +28,7 @@ test_cfg = dict(
 # model settings
 model1 = dict(
     type='VanillaTracker',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2,), pool_type='none', pretrained='/home/lr/mount/expdir/VCL/group_stsl_former/mast_d4_l2_pyramid_dis_18/epoch_3200.pth', torchvision_pretrain=False),
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2,), pool_type='none', pretrained='/home/lr//expdir/VCL/group_stsl_former/mast_d4_l2_pyramid_dis_18/epoch_3200.pth', torchvision_pretrain=False),
     # head=dict(in_c=1024, out_c=64),
     test_cfg=test_cfg,
     train_cfg=train_cfg
@@ -37,7 +37,7 @@ model1 = dict(
 
 model2 = dict(
     type='VanillaTracker',
-    backbone=dict(type='ResNet',depth=50, strides=(1, 2, 2, 1), out_indices=(2,), pool_type='none', dilations=(1,1,2,4), pretrained='/home/lr/mount/expdir/VCL/group_motion_prediction/spa_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_12/epoch_160.pth', torchvision_pretrain=False),
+    backbone=dict(type='ResNet',depth=50, strides=(1, 2, 2, 1), out_indices=(2,), pool_type='none', dilations=(1,1,2,4), pretrained='/home/lr/expdir/VCL/group_motion_prediction/spa_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_12/epoch_160.pth', torchvision_pretrain=False),
     # head=dict(in_c=1024, out_c=64),
     test_cfg=test_cfg,
     train_cfg=train_cfg
@@ -45,7 +45,7 @@ model2 = dict(
 
 model3 = dict(
     type='VanillaTracker',
-    backbone=dict(type='ResNet',depth=50, strides=(1, 2, 1, 4), out_indices=(3,),  \
+    backbone=dict(type='ResNet',depth=50, strides=(1, 2, 1, 4), out_indices=(2,),  \
         pretrained='/home/lr/models/ssl/image_based/detco_200ep_AA.pth'),
     # head=dict(in_c=1024, out_c=64),
     test_cfg=test_cfg,
@@ -108,9 +108,9 @@ train_pipeline = [
 
 val_pipeline = [
     # dict(type='Resize', scale=(, 256), keep_ratio=False),
-    # dict(type='RGB2LAB'),
-    # dict(type='Normalize', **img_norm_cfg_lab),
-    dict(type='Normalize', **img_norm_cfg),
+    dict(type='RGB2LAB'),
+    dict(type='Normalize', **img_norm_cfg_lab),
+    # dict(type='Normalize', **img_norm_cfg),
     dict(type='FormatShape', input_format='NCTHW'),
     dict(
         type='Collect',

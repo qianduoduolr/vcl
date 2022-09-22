@@ -9,7 +9,7 @@ docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 # model settings
 model = dict(
     type='Memory_Tracker_Custom_V2',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 4), out_indices=(2,), pool_type='none'),
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 4), out_indices=(2,), pool_type='none',),
     loss_weight=dict(l1_loss=1),
     downsample_rate=[8,],
     radius=[6,],

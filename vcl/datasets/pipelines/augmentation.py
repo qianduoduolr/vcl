@@ -1382,7 +1382,7 @@ class RGB2GRAY(object):
             results[self.output_keys]  = copy.deepcopy(results[self.keys])
         for i, img in enumerate(results[self.keys]):
             # results[self.output_keys][i] = mmcv.imconvert(img, 'rgb', 'lab')
-            results[self.output_keys][i] = (cv2.cvtColor(img, cv2.COLOR_RGB2GRAY) / 255.0)[None]
+            results[self.output_keys][i] = (cv2.cvtColor(img, cv2.COLOR_RGB2GRAY) / 255.0)[:,:,None]
             
         return results
 

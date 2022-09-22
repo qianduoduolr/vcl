@@ -41,7 +41,7 @@ class VisualizationHook(Hook):
                  output_dir,
                  res_name_list,
                  interval=-1,
-                 filename_tmpl='iter_{}.png',
+                 filename_tmpl='iter_{}_{}.png',
                  rerange=True,
                  bgr2rgb=True,
                  nrow=1,
@@ -67,22 +67,26 @@ class VisualizationHook(Hook):
         """
         if not self.every_n_iters(runner, self.interval):
             return
-        results = runner.outputs['results']
+        results = runner.outputs['vis_results']
 
-        filename = self.filename_tmpl.format(runner.iter + 1)
+        # img_list = [x for k, x in results.items() if k in self.res_name_list]
+        for k, x in results.items():
+            filename = osp.join(self.output_dir ,self.filename_tmpl.format(runner.iter + 1, k))
+            mmcv.imwrite(x, filename)
 
-        img_list = [x for k, x in results.items() if k in self.res_name_list]
-        img_cat = torch.cat(img_list, dim=3).detach()
-        if self.rerange:
-            img_cat = ((img_cat + 1) / 2)
-        if self.bgr2rgb:
-            img_cat = img_cat[:, [2, 1, 0], ...]
-        img_cat = img_cat.clamp_(0, 1)
-        save_image(
-            img_cat,
-            osp.join(self.output_dir, filename),
-            nrow=self.nrow,
-            padding=self.padding)
+
+        # img_cat = torch.cat(img_list, dim=3).detach()
+        # if self.rerange:
+        #     img_cat = ((img_cat + 1) / 2)
+        # if self.bgr2rgb:
+        #     img_cat = img_cat[:, [2, 1, 0], ...]
+        # # img_cat = img_cat.clamp_(0, 1)
+        # save_image(
+        #     img_cat,
+        #     osp.join(self.output_dir, filename),
+        #     nrow=self.nrow,
+        #     padding=self.padding)
+
         
 @HOOKS.register_module()
 class VisualizationHook_Custom(Hook):

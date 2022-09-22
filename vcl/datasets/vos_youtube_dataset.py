@@ -81,8 +81,6 @@ class VOS_youtube_dataset_rgb(Video_dataset_base):
 
         offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, step, mode=self.temporal_sampling_mode)
 
-        offsets = [0]
-
         # load frame
         if self.data_backend == 'raw_frames':
             frames = self._parser_rgb_rawframe(offsets, frames_path, self.clip_length, step=step)
@@ -156,10 +154,10 @@ class VOS_youtube_dataset_rgb_flow(VOS_youtube_dataset_rgb):
             for idx, frame in enumerate(frames[:-1]):
                 if idx < len(frames) -1:
                     sample['frames_path'].append(osp.join(self.video_dir, vname, frame))
-                    sample['flows_path'].append(osp.join(self.flow_dir, vname, frame))
+                    sample['flows_path'].append(osp.join(self.flow_dir, vname, frame).replace('jpg', 'flo'))
                 
             sample['num_frames'] = len(sample['frames_path'])
-            if sample['num_frames'] < self.clip_length * self.step:
+            if sample['num_frames'] <= self.clip_length * self.step:
                 continue
         
             self.samples.append(sample)
@@ -185,9 +183,8 @@ class VOS_youtube_dataset_rgb_flow(VOS_youtube_dataset_rgb):
         elif self.data_backend == 'lmdb':
             frames = self._parser_rgb_lmdb(self.txn, offsets, frames_path, self.clip_length, step=self.step)
 
-        flows = self._parser_rgb_rawframe(offsets, flows_path, self.clip_length, step=self.step)
+        flows = self._parser_rgb_rawflow(offsets, flows_path, self.clip_length, step=self.step)
         flows = [ cv2.resize(flow, frames[0].shape[:2][::-1]) for flow in flows ]
-        
         
         data = {
             'imgs': frames,

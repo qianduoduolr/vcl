@@ -13,6 +13,7 @@ from raft import RAFT
 from utils import flow_viz
 from utils.utils import InputPadder
 from torch.nn.parallel import DistributedDataParallel
+import mmcv
 
 from tqdm import tqdm
 
@@ -64,12 +65,11 @@ def main(args):
                     glob.glob(os.path.join(vid_file, '*.jpg'))
 
             images = sorted(images)
-
-            video_path = vid_file.replace('JPEGImages_s256','Flows_s256')
-            if len(glob.glob(os.path.join(video_path, '*.jpg'))) == len(images) -1: continue
+            # print(len(images))
+            video_path = vid_file.replace('JPEGImages_s256','Flows_s256_flo').replace('gdata',  'gdata1')
+            # if len(glob.glob(os.path.join(video_path, '*.jpg'))) == len(images) -1: continue
 
             os.makedirs(video_path, exist_ok=True)
-
             
             out_flows = []
             for idx, (imfile1, imfile2) in enumerate(zip(images[:-1], images[1:])):
@@ -79,38 +79,44 @@ def main(args):
                 image1, image2 = padder.pad(image1, image2)
 
                 flow_low, flow_up = model(image1, image2, iters=20, test_mode=True)
-
                 empty_img = 128 * np.ones((int(image1.shape[2]),int(image1.shape[3]),3)).astype(np.uint8)
 
-                flow = np.clip(flow_up.permute(0,2,3,1).cpu().numpy(), -bound, bound)
+                base_name = os.path.basename(imfile1)
+                dst_path = os.path.join(video_path, base_name)
 
                 if args.norm == 'min-max':
+                    flow = np.clip(flow_up.permute(0,2,3,1).cpu().numpy(), -bound, bound)
                     flow = (flow - flow.min()) * 255.0 / (flow.max() - flow.min())
                     flow = np.round(flow).astype('uint8')
-                else:
+                    flow_img = empty_img.copy()
+                    flow_img[:,:,:2] = flow[:]
+                    cv2.imwrite(dst_path, flow_img)
+
+                elif args.norm == '0-1':
+                    flow = np.clip(flow_up.permute(0,2,3,1).cpu().numpy(), -bound, bound)
                     flow = (flow + bound) * (255.0 / (2*bound))
                     flow = np.round(flow).astype('uint8')
+                    flow_img = empty_img.copy()
+                    flow_img[:,:,:2] = flow[:]
+                    cv2.imwrite(dst_path, flow_img)
 
-                flow_img = empty_img.copy()
-                flow_img[:,:,:2] = flow[:]
-
-                base_name = os.path.basename(imfile1)
-
-                dst_path = os.path.join(video_path, base_name)
-                cv2.imwrite(dst_path, flow_img)
+                else:
+                    flow_img = flow_up[0].permute(1,2,0).cpu().numpy()
+                    mmcv.flowwrite(flow_img, dst_path.replace('jpg', 'flo'))
+      
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', help="restore checkpoint", default='/gdata/lirui/models/optical_flow/raft-things.pth')
     parser.add_argument('--path', help="dataset for evaluation", default='/gdata/lirui/dataset/YouTube-VOS/2018/train/JPEGImages_s256')
-    parser.add_argument('--out', help="dataset for evaluation", default='/gdata/lirui/dataset/YouTube-VOS/2018/train/Flows_s256')
+    parser.add_argument('--out', help="dataset for evaluation", default='/gdata1/lirui/dataset/YouTube-VOS/2018/train/Flows_s256_flo')
     parser.add_argument('--small', action='store_true', help='use small model')
     parser.add_argument('--mixed_precision', action='store_true', help='use mixed precision')
     parser.add_argument('--alternate_corr', action='store_true', help='use efficent correlation implementation')
     parser.add_argument('--local_rank',  type=int, help='use small model')
     parser.add_argument('--num-gpu',  type=int, default=1, help='use small model')
     parser.add_argument('--split',  type=int, default=-1, help='use small model')
-    parser.add_argument('--norm',  type=str, default='min-max', help='use small model')
+    parser.add_argument('--norm',  type=str, default='none', help='use small model')
 
     
 

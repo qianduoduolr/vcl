@@ -90,6 +90,16 @@ class Video_dataset_base(BaseDataset):
                 frame_list_all.append(frame)
         return frame_list_all
 
+    def _parser_rgb_rawflow(self, offsets, frames_path, clip_length, step=1):
+        """read frame"""
+        frame_list_all = []
+        for offset in offsets:
+            for idx in range(clip_length):
+                frame_path = frames_path[offset + idx * step]
+                frame = mmcv.flowread(frame_path)
+                frame_list_all.append(frame)
+        return frame_list_all
+
     def _parser_rgb_lmdb_deprected(self, offsets, frames_path, clip_length, step=1, flag='color', backend='cv2', name_idx=-1):
         """read frame"""
         lmdb_env = lmdb.open(os.path.dirname(frames_path[0]), readonly=True, lock=False)

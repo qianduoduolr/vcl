@@ -17,20 +17,20 @@ def timeit(x, func, iter=10):
 	return runtime
 
 class HOGLayer(nn.Module):
-    def __init__(self, nbins=10, kernel=8, pool=8, max_angle=math.pi, stride=1, padding=1, dilation=1):
+    def __init__(self, nbins=10, kernel=8, max_angle=math.pi, stride=1, padding=1, dilation=1, pool_padding=1, pool_stride=1):
         super(HOGLayer, self).__init__()
         self.nbins = nbins
         self.stride = stride
         self.padding = padding
         self.dilation = dilation
-        self.pool = pool
+        # self.pool = pool
         self.max_angle = max_angle
         mat = torch.FloatTensor([[1, 0, -1],
                                  [2, 0, -2],
                                  [1, 0, -1]])
-        mat = torch.cat((mat[None], mat.t()[None]), dim=0).double()
+        mat = torch.cat((mat[None], mat.t()[None]), dim=0)
         self.register_buffer("weight", mat[:,None,:,:])
-        self.pooler = nn.AvgPool2d(kernel, stride=pool, padding=0, ceil_mode=False, count_include_pad=True)
+        self.pooler = nn.AvgPool2d(kernel, stride=pool_stride, padding=pool_padding)
 
     def forward(self, x):
         with torch.no_grad():
@@ -46,12 +46,16 @@ class HOGLayer(nn.Module):
             phase_int = phase_int[:,None,:,:]
 
             n, c, h, w = gxy.shape
-            out = torch.zeros((n, self.nbins, h, w), dtype=torch.double, device=gxy.device)
+            out = torch.zeros((n, self.nbins, h, w), dtype=torch.float, device=gxy.device)
+
+            b = phase_int.floor() %self.nbins
+            t = phase_int.ceil() %self.nbins
+            f = phase_int % self.nbins
+            t_v = norm * (1-(t-f))
+            b_v = norm * (1-(f-b))
             
-            p = phase_int.floor().long()%self.nbins
-            
-            out.scatter_(1, p, norm)
-            out.scatter_add_(1, p, 1 - norm)
+            out.scatter_(1, phase_int.floor().long()%self.nbins, b_v) # fix 
+            out.scatter_add_(1, phase_int.ceil().long()%self.nbins, t_v) # fix
 
             return self.pooler(out)
         

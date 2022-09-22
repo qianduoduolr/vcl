@@ -134,13 +134,19 @@ class VanillaTracker(BaseTracker):
 
         return feat_bank
 
-    def get_corrspondence(self, q, k, t=0.07, norm=True, mode='dot', mask=None):
+    def get_corrspondence(self, q, k, t=0.001, norm=True, mode='dot', mask=None):
 
         query = self.backbone(q)
-        key =  self.backbone(k)
+        key =  self.backbone(torch.cat(k, 0))
 
-        corr = non_local_attention(query, key.unsqueeze(1), temprature=t, norm=norm, att_only=True, mode=mode, mask=mask)
-        corr = F.softmax(corr[:,0], -1)
+        bsz, c, h, w = query.shape
+        key = key.view(bsz, -1, c, h, w)
+
+        # bi(tj)
+        _, corr = non_local_attention(query, key, temprature=t, norm=norm, mode=mode, mask=mask, per_ref=False)
+
+        # btij
+        corr = corr.view(bsz, corr.shape[1], -1, corr.shape[1]).permute(0, 2, 1, 3)
 
         return corr
 
@@ -294,9 +300,9 @@ class VanillaTracker(BaseTracker):
 class VanillaTracker_Fusion(VanillaTracker):
     """Pixel Tracker framework."""
 
-    def __init__(self, spatial_modality='LAB', backbone_=None, *args, **kwargs):
+    def __init__(self, backbone_=None, *args, **kwargs):
         super(VanillaTracker_Fusion, self).__init__(*args, **kwargs)
-        self.spatial_modality = spatial_modality
+        self.spatial_modality = self.test_cfg.get('spatial_modality', 'LAB')
         if backbone_ is not None:
             # backbone_.strides = self.backbone.strides
             backbone_.out_indices = self.backbone.out_indices

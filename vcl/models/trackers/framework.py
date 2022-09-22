@@ -214,9 +214,12 @@ class Framework_V2(BaseModel):
 
 @MODELS.register_module()
 class Framework_MP(Framework_V2):
-    def __init__(self, conce_loss, *args, **kwargs):
+    def __init__(self, conce_loss, mp_scaling=True, mp_t=1, mp_norm=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.conce_loss = build_loss(conce_loss)
+        self.mp_scaling = mp_scaling
+        self.mp_t = mp_t
+        self.mp_norm = mp_norm
 
     def forward_train(self, imgs, images_lab=None):
             
@@ -295,11 +298,11 @@ class Framework_MP(Framework_V2):
         if self.backbone_t is not None:
             with torch.no_grad():
                 self.backbone_t.eval()
-                fs_t = self.backbone_t(torch.stack(images_lab_gt,1).flatten(0,1))
+                fs_t = self.backbone_t(imgs.flatten(0,2))
                 fs_t = fs_t.reshape(bsz, t, *fs_t.shape[-3:])
                 tar_t, refs_t = fs_t[:, -1], fs_t[:, :-1]
                 _, target_att = non_local_attention(tar_t, refs_t, temprature=self.temperature_t, norm=self.norm)
-                _, att_self = non_local_attention(tar_t, tar_t.unsqueeze(1), mask=self.mask[-1], scaling=True)
+                _, att_self = non_local_attention(tar_t, tar_t.unsqueeze(1), mask=self.mask[-1], scaling=self.mp_scaling, temprature=self.mp_t, norm=self.mp_norm)
                 
             losses['correlation_dist_loss'] = self.loss_weight['correlation_dist_loss'] * self.loss(att_g, target_att)
             losses['conce_loss'] = self.loss_weight['conce_loss'] * self.conce_loss(atts[-1], att_self)

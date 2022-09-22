@@ -8,6 +8,7 @@ import time
 
 import mmcv
 import torch
+import random
 from mmcv import Config
 from mmcv.runner import init_dist
 
@@ -33,6 +34,7 @@ def parse_args():
         default=1,
         help='number of gpus to use '
         '(only applicable to non-distributed training)')
+    parser.add_argument('--auto-seed', type=bool, default=True, help='auto generate random seed')
     parser.add_argument('--seed', type=int, default=None, help='random seed')
     parser.add_argument(
         '--deterministic',
@@ -117,6 +119,8 @@ def main():
     logger.info('Config:\n{}'.format(cfg.text))
 
     # set random seeds
+    if args.auto_seed:
+        args.seed = random.randint(1, 1e5)
     if args.seed is not None:
         logger.info('Set random seed to {}, deterministic: {}'.format(
             args.seed, args.deterministic))

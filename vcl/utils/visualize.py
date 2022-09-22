@@ -273,7 +273,7 @@ def compute_flow_v2(corr):
     h = w = int(corr.shape[-1] ** 0.5)
 
     yv, xv = torch.meshgrid([torch.arange(h),torch.arange(w)])
-    grid = torch.stack((yv, xv), 2).view((32, 32, 2)).float().cuda()
+    grid = torch.stack((yv, xv), 2).view((h, w, 2)).float().cuda()
     
     # x1 -> x2
     warp_grid = torch.einsum("bij,jd -> bid",[corr, grid.flatten(0,1)])

@@ -2,6 +2,7 @@ from re import S
 import torch
 import torch.nn as nn
 from ..registry import LOSSES
+import mmcv
 
 
 def transform(aff, frame1):
@@ -180,6 +181,9 @@ class ConcentrationSelfSimLoss(nn.Module):
 			aff = torch.squeeze(aff)
         # b * 2 * h * w
 		coord = aff2coord(self.F_size, self.grid, aff.permute(0,2,1), self.temp).flatten(-2)
+
+		# a = mmcv.visualization.flow2rgb(coord[0].detach().cpu().permute(1,0).view(h, w, 2).numpy())
+
 		mean_coord = torch.einsum('bcj,bji->bci',[coord, aff_self.permute(0,2,1)])
 		loss = (mean_coord - coord) ** 2
 

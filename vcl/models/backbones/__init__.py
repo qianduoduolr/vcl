@@ -1,5 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 from .resnet import *
+from .flow_encoder import *
 # from .swin_transformer_mmcv import *
 # from .swin_transformer import *
 # from .vision_transformer_mmcv import *

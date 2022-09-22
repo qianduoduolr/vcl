@@ -106,14 +106,12 @@ class RW_Tracker(BaseModel):
         
         bsz, C, T, N = q.shape
         
-        #################################################################
         # Compute walks 
-        #################################################################
         walks = dict()
         As = self.affinity(q[:, :, :-1], q[:, :, 1:])
         A12s = [self.stoch_mat(As[:, i], do_dropout=True) for i in range(T-1)]
 
-        #################################################### Palindromes
+        # Palindromes
         A21s = [self.stoch_mat(As[:, i].transpose(-1, -2), do_dropout=True) for i in range(T-1)]
         AAs = []
         for i in list(range(1, len(A12s))):
@@ -127,10 +125,7 @@ class RW_Tracker(BaseModel):
         for i, aa in AAs:
             walks[f"cyc {i}"] = [aa, self.xent_targets(aa)]
 
-
-        #################################################################
         # Compute loss 
-        #################################################################
         xents = [torch.tensor([0.]).cuda()]
         losses = dict()
 
@@ -138,8 +133,6 @@ class RW_Tracker(BaseModel):
             logits = torch.log(A+1e-20).flatten(0, -2)
             loss = self.ce_loss(logits, target.unsqueeze(1))
             acc = (torch.argmax(logits, dim=-1) == target).float().mean()
-            # diags.update({f"{H} xent {name}": loss.detach(),
-            #               f"{H} acc {name}": acc})
             xents += [loss]
 
 

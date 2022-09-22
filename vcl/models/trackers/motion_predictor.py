@@ -196,13 +196,6 @@ class Memory_Tracker_Custom_Cmp(Memory_Tracker_Custom):
             corr = self.corr[-1](f[:,-1], f[:,0])
 
 
-        # exp corr loss
-        if self.loss_weight.get('corr_loss', 0) != 0:
-            if corr_idx_t == 0:
-                losses['corr_loss'] = self.loss_weight['corr_loss'] * build_loss(dict(type='L1Loss'))(att[:,0], att_m)
-            else:
-                losses['corr_loss'] = self.loss_weight['corr_loss'] * build_loss(dict(type='L1Loss'))(corr, corr_m)
-
         # local distillation loss
         if self.T != -1:
             corr_feat = corr.reshape(bsz, -1, self.feat_size[-1], self.feat_size[-1])
@@ -223,7 +216,6 @@ class Memory_Tracker_Custom_Cmp(Memory_Tracker_Custom):
         if self.loss_weight.get('local_corr_dist_loss', 0) != 0 and len(self.mask) > 1:
             losses['local_corr_dist_loss'] = self.loss_weight['local_corr_dist_loss'] * build_loss(dict(type='MSELoss'))(att[:,0], att_hr, weight)
 
-        
         #################### Motion Prediction #######################        
         # for cmp loss target 
         if self.mode == 'exp':
@@ -250,7 +242,6 @@ class Memory_Tracker_Custom_Cmp(Memory_Tracker_Custom):
 
     def corr_downsample(self, corr, bsz, pool_type='mean', mode='custom'):
         if mode == 'custom':
-
             if pool_type == 'mean':
                 corr = corr.reshape(bsz, -1, self.feat_size[0], self.feat_size[0])
                 corr = F.avg_pool2d(corr, 2, stride=2).flatten(-2).permute(0,2,1).reshape(bsz, -1, self.feat_size[0], self.feat_size[0])
@@ -339,7 +330,7 @@ class Memory_Tracker_Custom_Cmp(Memory_Tracker_Custom):
 
         h = w = self.feat_size[1]
         target = atts[0]
-        off = att2flow(h, w, target)
+        off = compute_flow_v2(h, w, target)
         corr_predict = corr_predict.permute(0,2,1)
         
         losses['cmp_loss'] = self.loss_weight['cmp_loss'] * F.smooth_l1_loss(corr_predict, off, reduction='mean')
@@ -393,232 +384,6 @@ class Memory_Tracker_Custom_Cmp(Memory_Tracker_Custom):
         g = tensor2img(o, norm_mode='mean-std')
         imgs_gt_f1 = tensor2img(imgs[0], norm_mode='mean-std')
         imgs_gt_f2 = tensor2img(imgs[1], norm_mode='mean-std')
-
-        print('haha')
-
-
-
-@MODELS.register_module()
-class Memory_Tracker_Custom_Cmp_V2(Memory_Tracker_Custom):
-    def __init__(self,
-                decoder,
-                motion_estimator=None,
-                loss=None,
-                pool_type='mean',
-                bilinear_downsample=True,
-                reverse=True,
-                temperature_t=1.0,
-                scale_t=True,
-                norm_t=False,
-                pre_softmax=False,
-                T=-1,
-                vae_var=1,
-                num_stage=2,
-                output_dim=-1,
-                detach=False,
-                mp_only=False,
-                boundary_r=-1,
-                mode='classification',
-                modality='LAB',
-                *args,
-                **kwargs
-                 ):
-        """ MAST  (CVPR2020) with CMP (CVPR2019) 
-
-        Args:
-            backbone ([type]): [description]
-            test_cfg ([type], optional): [description]. Defaults to None.
-            train_cfg ([type], optional): [description]. Defaults to None.
-        """
-        super().__init__(*args, **kwargs)
-        from mmcv.ops import Correlation
-        
-        self.motion_estimator = build_backbone(motion_estimator) if motion_estimator is not None else None
-
-        self.reverse = reverse
-        self.num_stage = num_stage
-        self.loss = build_loss(loss) if loss is not None else None
-        self.pool_type = pool_type
-        self.bilinear_downsample = bilinear_downsample
-        self.detach = detach
-        self.ouput_dim = (2 * self.radius[-1] + 1) ** 2 if output_dim == -1 else output_dim
-        self.T = T
-        self.mode = mode
-        self.vae_var = vae_var
-        self.mp_only = mp_only
-        self.modality = modality
-
-        self.temperature_t = temperature_t
-        self.norm_t = norm_t
-        self.scale_t = scale_t
-        self.pre_softmax = pre_softmax
-        
-        # flow decoder
-        if self.mode.find('vae') != -1:
-            self.flow_decoder = MotionDecoderPlain(
-            input_dim=self.backbone.feat_dim,
-            output_dim=self.ouput_dim,
-            combo=[1,2,4])
-
-            self.flow_decoder_m = MotionDecoderPlain(
-            input_dim=self.ouput_dim // 2,
-            output_dim=self.ouput_dim // 2,
-            combo=[1,2,4])
-
-        elif self.mode.find('exp') != -1:
-            self.flow_decoder = MotionDecoderPlain(
-            input_dim=self.backbone.feat_dim,
-            output_dim=self.ouput_dim,
-            combo=[1,2,4])
-
-            self.flow_decoder_m = MotionDecoderPlain(
-            input_dim=self.ouput_dim,
-            output_dim=self.ouput_dim,
-            combo=[1,2,4])
-        else:
-            self.flow_decoder = MotionDecoderPlain(
-            input_dim=self.backbone.feat_dim,
-            output_dim=self.ouput_dim,
-            combo=[1,2,4])
-
-        self.corr = [Correlation(max_displacement=R) for R in self.radius ]
-        
-        self.rgb_decoder = build_components(decoder)
-
-
-
-    def forward_train(self, imgs, images_lab=None):
-            
-        bsz, num_clips, t, c, h, w = images_lab.shape
-        
-        losses = {}
-
-        images_lab_gt = [images_lab[:,0,i,:].clone() for i in range(t)]
-        images_rgb_gt = [imgs[:,0,i,:].clone() for i in range(t)]
-
-        images_lab = [images_lab[:,0,i,:] for i in range(t)]
-        _, ch = self.dropout2d_lab(images_lab)
-        
-        ################ Feature/Correlation Extraction #####################
-        # estimate motion 
-        with torch.no_grad():
-            fs = self.motion_estimator(torch.stack(images_lab_gt,1).flatten(0,1))
-            fs = fs.reshape(bsz, t, *fs.shape[-3:])
-            if self.norm_t:
-                fs = F.normalize(fs, dim=2)
-            
-            if fs.shape[-1] > self.feat_size[-1]:
-                # apply corr at higher resolution
-                corr_idx_t = 0
-                mask = make_mask(self.feat_size[-1] * 2, self.radius[-1] * 2)
-            else:
-                corr_idx_t = -1
-                mask = self.mask[corr_idx_t]
-            
-            att_m = non_local_attention(fs[:,-1], fs[:, :-1], mask=mask, scaling=self.scale_t, \
-                temprature=self.temperature_t)[-1].detach()
-            corr_m = self.corr[corr_idx_t](fs[:,-1], fs[:, 0]).detach()
-
-            if self.pre_softmax:
-                corr_m = torch.div(corr_m, self.temperature_t).softmax(1)
-
-            if corr_idx_t == 0:
-                att_m = self.corr_downsample(att_m, bsz, mode='custom')
-                corr_m = self.corr_downsample(corr_m, bsz, mode='mmcv')
-                
-        # forward to get feature
-        _, tar_cmp = self.backbone(images_lab_gt[0]) # to fix
-        ref_rec = self.backbone(images_lab_gt[0])[-2]
-
-        #################### Motion Prediction #######################      
-        if self.modality == 'LAB': images_rec = images_lab_gt
-        else: images_rec = images_rgb_gt  
-        loss, out = self.forward_vae(corr_m, tar_cmp, ref_rec, images_rec, ch)
-        losses.update(loss)
-
-        vis_results = dict(rec=out[0], gt=images_rec[-1][0])
-
-        return losses, vis_results
-
-    
-    def forward_vae(self, target, tar_cmp, ref_cmp, images_rec_gt, ch, weight=None):
-    
-        bsz = tar_cmp.shape[0]
-        corr_predict = self.flow_decoder(tar_cmp)
-        # VAE prior loss
-        mu_pred = corr_predict[:,:self.ouput_dim // 2]
-        logvar_pred = corr_predict[:,self.ouput_dim // 2:]
-
-        losses = {}
-
-        if self.mode.find('learnt_prior') != -1:
-            mu_tar = target.reshape(bsz, (2*self.radius[-1]+1) ** 2, *tar_cmp.shape[-2:])
-            sampled_corr = self.reparameterise(mu_pred, logvar_pred)
-            corr_predict = self.flow_decoder_m(sampled_corr)
-            
-        elif self.mode.find('fix_prior') != -1:
-            mu_tar = torch.zeros_like(mu_pred)
-            sampled_corr = self.reparameterise(mu_pred, logvar_pred)
-            corr_predict = self.flow_decoder_m(sampled_corr)
-
-            # additional exp loss
-            losses['cmp_loss'] = self.loss_weight['cmp_loss'] *  build_loss(dict(type='L1Loss'))(corr_predict.flatten(-2), target.reshape(bsz, (2*self.radius[0]+1) ** 2, -1))
-
-
-        logvar_tar = torch.log(torch.ones_like(logvar_pred) * self.vae_var) # var set to 1
-        losses['vae_kl_loss'] = self.loss_weight['vae_kl_loss'] * build_loss(dict(type='Kl_Loss_Gaussion'))([mu_pred, logvar_pred], [mu_tar, logvar_tar])
-
-        corr_predict = corr_predict.softmax(1).flatten(-2) # bki
-        ref_ft = F.unfold(ref_cmp, self.radius[-1] * 2 + 1, padding=self.radius[-1]).view(bsz, ref_cmp.shape[1], -1, ref_cmp.shape[-1] ** 2) # bcki
-        outputs = torch.einsum('bcki, bki-> bci', [ref_ft, corr_predict]).reshape(bsz, -1, *tar_cmp.shape[-2:]) 
-        out = self.rgb_decoder(outputs)
-        losses['vae_rec_loss'] = self.loss_weight['vae_rec_loss'] * self.loss(out, images_rec_gt[-1])
-
-        return losses, out
-
-    def reparameterise(self, mu, logvar):
-        epsilon = torch.randn_like(mu)
-        return mu + epsilon * torch.exp(logvar / 2)
-
-    
-    def forward_test(self, imgs, iteration, images_lab=None, **kwargs):
-    
-        bsz, num_clips, t, c, h, w = images_lab.shape
-        losses = {}
-
-        images_lab_gt = [images_lab[:,0,i,:].clone() for i in range(t)]
-        imgs = [imgs[:,0,i,:].clone() for i in range(t)]
-
-
-        tar_cmp = self.backbone(images_lab_gt[-1])[-1]
-        ref_cmp = self.backbone(images_lab_gt[0])[-2]
-
-
-        corr_predict = self.flow_decoder(tar_cmp)
-        # VAE prior loss
-        mu_pred = corr_predict[:,:self.ouput_dim // 2]
-        logvar_pred = corr_predict[:,self.ouput_dim // 2:]
-        sigma = 5.0
-
-        outs = []
-        for i in range(3):
-            sampled_corr = self.reparameterise(mu_pred, torch.tensor([sigma]).cuda())
-            corr_predict = self.flow_decoder_m(sampled_corr)
-
-            corr_predict = corr_predict.softmax(1).flatten(-2) # bki
-            ref_ft = F.unfold(ref_cmp, self.radius[-1] * 2 + 1, padding=self.radius[-1]).view(bsz, ref_cmp.shape[1], -1, ref_cmp.shape[-1] ** 2) # bcki
-            outputs = torch.einsum('bcki, bki-> bci', [ref_ft, corr_predict]).reshape(bsz, -1, *tar_cmp.shape[-2:]) 
-            out = self.rgb_decoder(outputs)
-            outs.append(out)
-        
-        outs.extend(imgs[-2:-1])
-        o = torch.cat(outs, 0)
-        out = tensor2img(o, norm_mode='mean-std')
-
-        idx = random.randint(0,4000)
-        os.makedirs(f'/home/lr/expdir/VCL/group_motion_prediction/spa_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_decoder/sigma{sigma}', exist_ok=True)
-        mmcv.imwrite(out, f'/home/lr/expdir/VCL/group_motion_prediction/spa_res18_d4_l2_cmp_t0.0_m_Res18t_vae_learntp_decoder/sigma{sigma}/{iteration}.jpg')
-
 
 
 
