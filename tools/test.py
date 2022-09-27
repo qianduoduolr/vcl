@@ -17,7 +17,7 @@ from vcl.models import build_model
 
 def parse_args():
     parser = argparse.ArgumentParser(description='mmediting tester')
-    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/train/local/eval/res18_mp_generation.py')
+    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/train/local/eval/res18_d4_eval_flow.py')
     parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='')
     parser.add_argument('--seed', type=int, default=None, help='random seed')
     parser.add_argument(

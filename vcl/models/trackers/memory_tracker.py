@@ -19,7 +19,7 @@ from vcl.models.common.correlation import *
 from vcl.models.common.hoglayer import *
 from vcl.models.losses.losses import l1_loss
 
-from ..base import BaseModel
+from .base import BaseModel
 from ..builder import build_backbone, build_components, build_loss
 from ..registry import MODELS
 from vcl.utils import *
@@ -44,14 +44,14 @@ class Memory_Tracker_Custom(BaseModel):
                  feat_size=[64,],
                  conc_loss=None,
                  forward_backward_t=-1,
-                 drop_last=True,
                  scaling=True,
                  upsample=True,
+                 drop_ch=True,
                  weight=20,
                  rec_sampling='stride',
-                 test_cfg=None,
-                 train_cfg=None,
                  pretrained=None,
+                  *args,
+                 **kwargs
                  ):
         """ MAST  (CVPR2020)
 
@@ -60,7 +60,8 @@ class Memory_Tracker_Custom(BaseModel):
             test_cfg ([type], optional): [description]. Defaults to None.
             train_cfg ([type], optional): [description]. Defaults to None.
         """
-        super().__init__()
+        super().__init__(*args,
+                 **kwargs)
 
         self.backbone = build_backbone(backbone)
         self.downsample_rate = downsample_rate
@@ -70,15 +71,12 @@ class Memory_Tracker_Custom(BaseModel):
             self.head = None
             
         self.per_ref = per_ref
-        self.test_cfg = test_cfg
-        self.train_cfg = train_cfg
-        
         self.logger = get_root_logger()
         
         self.pretrained = pretrained
-        self.drop_last = drop_last
         self.scaling = scaling
         self.upsample = upsample
+        self.drop_ch = drop_ch
         self.rec_sampling = rec_sampling
         self.weight = weight
         self.temperature = temperature
@@ -186,11 +184,10 @@ class Memory_Tracker_Custom(BaseModel):
         drop_ch_ind = np.random.choice(np.arange(1,3), drop_ch_num, replace=False)
 
         for idx, a in enumerate(arr):
-            if idx == len(arr) - 1 and not self.drop_last:
-                continue
-            for dropout_ch in drop_ch_ind:
-                a[:, dropout_ch] = 0
-            a *= (3 / (3 - drop_ch_num))
+            if self.drop_ch:
+                for dropout_ch in drop_ch_ind:
+                    a[:, dropout_ch] = 0
+                a *= (3 / (3 - drop_ch_num))
 
         return arr, drop_ch_ind # return channels not masked
     
@@ -527,17 +524,6 @@ class Memory_Tracker_Custom_Pyramid_Iterative(Memory_Tracker_Custom):
                     att_hr.append(self.corr_downsample(att, bsz))
                 else:
                     att_lr.append(att)
-                    
-
-            # if self.loss_weight.get('long_term_0_loss', False):
-            #     att_raw_long_range, att = non_local_attention(f[:, -1], f[:,:1], mask=self.mask[idx], scaling=self.scaling, per_ref=self.per_ref, temprature=self.temperature)    
-
-            #     for i in range(1,n-1):
-            #         if i == 1:
-            #             att_raw_tar = atts_raw[-1]
-            #         att_raw_tar = torch.einsum('btij,btjk->btik', [att_raw_tar, atts_raw[-i-1]])
-
-            #     losses[f'long_term_{idx}_loss'] += self.loss_weight[f'long_term_{idx}_loss'] * build_loss(dict(type='MSELoss'))(att_raw_long_range.softmax(-1), att_raw_tar.detach())
 
             del pre_out
             del atts_raw
@@ -646,74 +632,3 @@ class Memory_Tracker_Custom_Mo(Memory_Tracker_Custom):
         vis_results = dict(corr=vis_corr, imgs=vis_img, gt=gt_corr)
 
         return losses, vis_results
-
-
-
-
-@MODELS.register_module()
-class Memory_Tracker_Custom_Hog(Memory_Tracker_Custom):
-    def __init__(self,
-                kernel=7,
-                padding=3,
-                loss=None,
-                *args,
-                **kwargs
-                 ):
-        """ MAST  (CVPR2020)
-
-        Args:
-            backbone ([type]): [description]
-            test_cfg ([type], optional): [description]. Defaults to None.
-            train_cfg ([type], optional): [description]. Defaults to None.
-        """
-        super().__init__(*args, **kwargs)
-        
-        self.hog_layer = HOGLayer(kernel=kernel, pool_stride=self.downsample_rate, pool_padding=padding)
-        self.loss = build_loss(loss)
-    
-    def forward_train(self, imgs, images_lab=None):
-        bsz, _, n, c, h, w = images_lab.shape
-        images_gray_gt = [imgs[:,0,i].type_as(images_lab) for i in range(n)]
-        images_lab = [images_lab[:,0,i] for i in range(n)]
-        _, ch = self.dropout2d_lab(images_lab)
-        
-        # forward to get feature
-        fs = self.backbone(torch.stack(images_lab,1).flatten(0,1))
-        if self.head is not None:
-            fs = self.head(fs)
-        
-        fs = fs.reshape(bsz, n, *fs.shape[-3:])
-        tar, refs = fs[:, -1], fs[:, :-1]
-        
-        # get correlation attention map      
-        _, att = non_local_attention(tar, refs, mask=self.mask[0], scaling=self.scaling, per_ref=self.per_ref, temprature=self.temperature)
-
-        losses = {}
-        
-        # for mast l1_loss
-        ref_gt = [self.prep(gt) for gt in images_gray_gt[:-1]]
-        outputs = frame_transform(att, ref_gt, flatten=False, per_ref=self.per_ref)
-        if self.per_ref:
-            outputs = outputs[:,0].permute(0,2,1).reshape(bsz, -1, *fs.shape[-2:])     
-        else:
-            outputs = outputs.permute(0,2,1).reshape(bsz, -1, *fs.shape[-2:])     
-            
-        losses['hog_rec_loss'] = self.loss_weight['hog_rec_loss'] * self.compute_loss(images_gray_gt, outputs)
-    
-        
-        return losses, None
-
-    
-    def prep(self, image):
-        _,c,_,_ = image.size()
-        x = self.hog_layer(image)
-        return x
-
-    def compute_loss(self, images_gray_gt, outputs, weight=20):
-        b, c, h, w = images_gray_gt[0].size()
-
-        tar = self.prep(images_gray_gt[-1])
-        
-        loss = self.loss(outputs * weight, tar * weight)
-
-        return loss

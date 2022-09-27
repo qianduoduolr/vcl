@@ -17,7 +17,7 @@ from vcl.models import build_model
 
 def parse_args():
     parser = argparse.ArgumentParser(description='mmediting tester')
-    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/train/local/eval/spa_temp_fusion/res18_d4_fusion_eval_cmp.py')
+    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/train/local/eval/res18_d4_eval_flow.py')
     parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='')
     parser.add_argument('--out-indices', nargs='+', type=int, default=[2])
     parser.add_argument('--seed', type=int, default=None, help='random seed')
@@ -138,7 +138,7 @@ def main():
     data_loader = build_dataloader(dataset, **loader_cfg)
 
     # build the model and load checkpoint
-    if not eval_config.get('mast_prop', False):
+    if 'decoder' not in cfg.model.keys():
         head = cfg.model.get('head', None)
         backbone_ = cfg.test_cfg.get('backbone_', None)
         eval_arc = cfg.get('eval_arc', 'VanillaTracker')
@@ -155,17 +155,16 @@ def main():
             
         if cfg.test_cfg.get('dilations', False):
             model.backbone.dilations = cfg.test_cfg.dilations
-               
+                
         if cfg.test_cfg.get('model_cfg', False):
             model_cfg = cfg.test_cfg.model_cfg
             for k,v in model_cfg.items():
                 model.backbone[k] = v
-
     else:
-        model = mmcv.ConfigDict(type='Memory_Tracker', backbone=cfg.model.backbone)
-        eval_config.pop('mast_prop')
+        model = cfg.model
 
-    model = build_model(model, train_cfg=None, test_cfg=cfg.test_cfg)
+
+    model = build_model(model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
     model.init_weights()
 
     args.save_image = args.save_path is not None

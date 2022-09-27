@@ -6,10 +6,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import mmcv
-from mmcv.runner import auto_fp16, load_checkpoint
+from mmcv.runner import auto_fp16, load_checkpoint, BaseModule
 from torch import distributed as dist
 
-from ...base import BaseModel
 from ...builder import build_backbone, build_loss, build_components
 from ...registry import COMPONENTS
 from vcl.utils.helpers import *
@@ -24,7 +23,7 @@ from vcl.models.common.utils import shift_dim
 
 
 @COMPONENTS.register_module()
-class VQVAE_3D(BaseModel):
+class VQVAE_3D(BaseModule):
     def __init__(self, 
                  embedding_dim=128, 
                  n_embed=2048, 

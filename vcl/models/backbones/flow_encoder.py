@@ -92,7 +92,7 @@ class RAFTEncoder(BaseModule):
                  norm_eval: bool = False,
                  plugins: Optional[Sequence[dict]] = None,
                  with_cp: bool = False,
-                 init_cfg: Optional[Union[dict, list]] = None) -> None:
+                 init_cfg: Optional[Union[dict, list]] = None):
 
         super().__init__(init_cfg=init_cfg)
 
@@ -163,8 +163,7 @@ class RAFTEncoder(BaseModule):
             self.conv2 = build_conv_layer(
                 self.conv_cfg, last_channel, out_channels, kernel_size=1)
 
-    def _make_stem_layer(self, in_channels: int, stem_channels: int) -> None:
-        """Make stem layer for ResNet."""
+    def _make_stem_layer(self, in_channels: int, stem_channels: int):
         if self.deep_stem:
             self.stem = nn.Sequential(
                 build_conv_layer(
@@ -212,8 +211,9 @@ class RAFTEncoder(BaseModule):
             self.relu = nn.ReLU(inplace=True)
 
     def make_stage_plugins(self, plugins: Sequence[dict],
-                           stage_idx: int) -> Sequence[dict]:
-        """make plugins for ResNet 'stage_idx'-th stage .
+                           stage_idx: int):
+        """ 
+        make plugins for ResNet 'stage_idx'-th stage .
         Currently we support to insert 'context_block',
         'empirical_attention_block', 'nonlocal_block' into the backbone like
         ResNet/ResNeXt. They could be inserted after conv1/conv2/conv3 of
@@ -259,16 +259,16 @@ class RAFTEncoder(BaseModule):
 
         return stage_plugins
 
-    def make_res_layer(self, **kwargs) -> torch.nn.Module:
+    def make_res_layer(self, **kwargs):
         """Pack all blocks in a stage into a ``ResLayer``."""
         return ResLayer(**kwargs)
 
     @property
-    def norm1(self) -> torch.nn.Module:
+    def norm1(self):
         """nn.Module: the normalization layer named "norm1" """
         return getattr(self, self.norm1_name)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor):
         """Forward function.
         Args:
             x (torch.Tensor): Input feature.

@@ -7,7 +7,7 @@ from tkinter.messagebox import NO
 import mmcv
 from mmcv.runner import auto_fp16, load_state_dict, load_checkpoint
 
-from ..base import BaseModel
+from .base import BaseModel
 from ..builder import build_backbone, build_components, build_loss, build_model
 from ..registry import MODELS
 from vcl.utils.helpers import *
@@ -41,9 +41,9 @@ class Framework_V2(BaseModel):
                  scaling=True,
                  norm=False,
                  detach=False,
-                 train_cfg=None,
-                 test_cfg=None,
                  pretrained=None,
+                 *args,
+                 **kwargs
                  ):
         """ Distilation tracker
 
@@ -55,15 +55,13 @@ class Framework_V2(BaseModel):
             pretrained ([type], optional): [description]. Defaults to None.
         """
 
-        super().__init__()
+        super().__init__(*args,
+                 **kwargs)
         from mmcv.ops import Correlation
         
         self.num_stage = num_stage
         self.feat_size = feat_size
         self.pool_type = pool_type
-
-        self.train_cfg = train_cfg
-        self.test_cfg = test_cfg
         self.downsample_rate = downsample_rate
 
         self.momentum = momentum

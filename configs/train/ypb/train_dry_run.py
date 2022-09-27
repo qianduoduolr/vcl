@@ -169,5 +169,4 @@ find_unused_parameters = True
 
 
 if __name__ == '__main__':
-    make_pbs(exp_name, docker_name)
-    make_local_config(exp_name)
+    make_local_config_back(exp_name)

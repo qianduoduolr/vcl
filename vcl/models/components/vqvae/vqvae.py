@@ -1,11 +1,10 @@
 from base64 import encode
 from email.utils import encode_rfc2231
 import mmcv
-from mmcv.runner import auto_fp16, load_checkpoint
+from mmcv.runner import auto_fp16, load_checkpoint, BaseModule
 from dall_e  import map_pixels, unmap_pixels, load_model
 from torch import distributed
 
-from ...base import BaseModel
 
 from ...builder import build_backbone, build_loss, build_components
 from ...registry import COMPONENTS
@@ -20,7 +19,7 @@ import torch.nn.functional as F
 from torchvision.ops import roi_align
 
 @COMPONENTS.register_module()
-class VQVAE(BaseModel):
+class VQVAE(BaseModule):
     """
         Vector Quantized Variational Autoencoder. This networks includes a encoder which maps an
         input image to a discrete latent space, and a decoder to maps the latent map back to the input domain
@@ -123,7 +122,7 @@ class VQVAE(BaseModel):
 
 
 @COMPONENTS.register_module()
-class VQ(BaseModel):
+class VQ(BaseModule):
     """
         Vector Quantized (Only quantization means K-means for the given features)
     """

@@ -10,7 +10,7 @@ from vcl.models.common.correlation import frame_transform
 from vcl.models.losses.losses import Ce_Loss
 from vcl.models.common.correlation import *
 
-from ..base import BaseModel
+from .base import BaseModel
 from ..builder import build_backbone, build_loss, build_components, build_model
 from ..registry import MODELS
 from vcl.utils.helpers import *
@@ -24,14 +24,16 @@ import torch.nn.functional as F
 
 @MODELS.register_module()
 class RW_Tracker(BaseModel):
-    def __init__(self, backbone, ce_loss, temperature=0.07, edgedrop_rate=0.1, train_cfg=None, test_cfg=None):
+    def __init__(self, backbone, ce_loss, temperature=0.07, edgedrop_rate=0.1,  *args,
+                 **kwargs):
         """
         CRW (2021NIPS) with CNN model
         Args:
             temperature (float, optional): [description]. Defaults to 0.07.
             edgedrop_rate (float, optional): [description]. Defaults to 0.1.
         """
-        super().__init__()
+        super().__init__(*args,
+                 **kwargs)
         self.backbone = build_backbone(backbone)
         self.fc = nn.Linear(512, 128)
         self.pool = nn.AdaptiveAvgPool2d(1)

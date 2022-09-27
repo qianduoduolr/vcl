@@ -4,3 +4,4 @@ from .local_attention import *
 from .utils import *
 from .correlation import *
 from .hoglayer import *
+from .corr_lookup import *

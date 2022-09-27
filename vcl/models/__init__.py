@@ -1,6 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 from .backbones import *  # noqa: F401, F403
-from .base import BaseModel
 from .components import *
 from .trackers  import *
 from .builder import (build, build_backbone, build_loss,

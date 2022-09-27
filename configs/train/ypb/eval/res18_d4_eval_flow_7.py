@@ -3,26 +3,50 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'temp_res18_d4_l2_rec'
+exp_name = 'res18_d4_eval_flow'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='Memory_Tracker_Custom',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 4), out_indices=(2,), pool_type='none',),
-    loss_weight=dict(l1_loss=1),
-    downsample_rate=[8,],
-    radius=[6,],
-    temperature=1,
-    feat_size=[32,],
-    pretrained=None,
+    type='Memory_Tracker_Flow',
+            num_levels=4,
+            cxt_channels=128,
+            h_channels=128,
+            corr_op_cfg=dict(type='CorrLookup', align_corners=True, radius=2),
+            corr_op_cfg_infer=dict(type='CorrLookup', align_corners=True, radius=6),
+            backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
+            cxt_backbone=dict(
+                type='RAFTEncoder',
+                in_channels=3,
+                out_channels=256,
+                net_type='Basic',
+                # norm_cfg=dict(type='SyncBN'),
+                init_cfg=[
+                    dict(
+                        type='Kaiming',
+                        layer=['Conv2d'],
+                        mode='fan_out',
+                        nonlinearity='relu'),
+                    dict(type='Constant', layer=['SyncBatchNorm2d'], val=1, bias=0)
+                ]),
+            decoder=dict(
+                type='RAFTDecoder',
+                net_type='Basic',
+                num_levels=4,
+                radius=4,
+                iters=6,
+                mask_pred=False,
+                corr_op_cfg=dict(type='CorrLookup', align_corners=True),
+                gru_type='SeqConv',
+                # flow_loss=dict(type='SequenceLoss'),
+                act_cfg=dict(type='ReLU')),
+            loss=dict(type='SequenceLoss'),
+            loss_weight=dict(flow_rec_loss=1),
+            drop_ch=False,
+            freeze_bn=False
 )
 
-
-model_test = dict(
-    type='VanillaTracker',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
-)
+model_test = None
 
 # model training and testing settings
 train_cfg = dict(syncbn=True)
@@ -86,25 +110,18 @@ data = dict(
     # train
     train=
             dict(
-            type='RepeatDataset',
-            dataset=dict(
-                        type=train_dataset_type,
-                        root='/home/lr/dataset/YouTube-VOS',
-                        list_path='/home/lr/dataset/YouTube-VOS/2018/train',
-                        data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
-                        clip_length=2,
-                        rand_step=True,
-                        step=4,
-                        pipeline=train_pipeline,
-                        test_mode=False
-                        ),
-            times=10,
-            ),
+            type=train_dataset_type,
+            root='/gdata/lirui/dataset/YouTube-VOS',
+            list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
+            data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
+            clip_length=2,
+            pipeline=train_pipeline,
+            test_mode=False),
 
     test =  dict(
             type=test_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -112,8 +129,8 @@ data = dict(
     
     val =  dict(
             type=val_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -126,7 +143,7 @@ optimizers = dict(
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=160
+max_epoch=1600
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,
@@ -136,7 +153,7 @@ lr_config = dict(
     warmup_by_epoch=True
     )
 
-checkpoint_config = dict(interval=max_epoch//2, save_optimizer=True, by_epoch=True)
+checkpoint_config = dict(interval=1600, save_optimizer=True, by_epoch=True)
 # remove gpu_collect=True in non distributed training
 # evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
@@ -153,26 +170,28 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/home/lr/expdir/VCL/group_stsl/{exp_name}'
+work_dir = f'/gdata/lirui/expdir/VCL/group_stsl/{exp_name}'
 
 
-evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=max_epoch//2, by_epoch=True
+evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True
                   )
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/home/lr/expdir/VCL/group_stsl/{exp_name}/epoch_{max_epoch}.pth'
+                  checkpoint_path='/gdata/lirui/expdir/VCL/group_fm_flow/spa_temp_d4_r2_raft_test/epoch_160.pth',
+                  torchvision_pretrained=None
                 )
 
 
 load_from = None
 resume_from = None
-ddp_shuffle = True
+# ddp_shuffle = True
 workflow = [('train', 1)]
 find_unused_parameters = True
+test_mode = True
 
 
 
 if __name__ == '__main__':
 
-    make_local_config(exp_name, file='stsl')
+    make_local_config(exp_name, file='eval')

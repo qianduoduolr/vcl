@@ -2,7 +2,7 @@
 import torch.nn as nn
 from mmcv import build_from_cfg
 
-from .registry import BACKBONES, COMPONENTS, LOSSES, MODELS, DROP_LAYERS
+from .registry import BACKBONES, COMPONENTS, LOSSES, MODELS, DROP_LAYERS, OPERATORS
 
 
 def build(cfg, registry, default_args=None):
@@ -57,3 +57,13 @@ def build_components(cfg):
 def build_drop_layer(cfg):
     """Build dropout layer."""
     return build(cfg, DROP_LAYERS)
+
+
+
+def build_operators(cfg):
+    """Build backbone.
+
+    Args:
+        cfg (dict): Configuration for building backbone.
+    """
+    return build(cfg, OPERATORS)

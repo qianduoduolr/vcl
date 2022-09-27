@@ -3,9 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
+from ..registry import OPERATORS
 
 
-def coords_grid(flow: Tensor) -> Tensor:
+def coords_grid(flow: Tensor):
     """Generate shifted coordinate grid based based input flow.
     Args:
         flow (Tensor): Estimated optical flow.
@@ -24,7 +25,7 @@ def coords_grid(flow: Tensor) -> Tensor:
     grid = grid.permute(0, 2, 3, 1)
     return grid
 
-
+@OPERATORS.register_module()
 class Warp(nn.Module):
     """Warping layer to warp feature using optical flow.
     Args:
@@ -43,7 +44,7 @@ class Warp(nn.Module):
                  mode: str = 'bilinear',
                  padding_mode: str = 'zeros',
                  align_corners: bool = False,
-                 use_mask: bool = True) -> None:
+                 use_mask: bool = True):
 
         super().__init__()
         self.mode = mode
@@ -51,7 +52,7 @@ class Warp(nn.Module):
         self.align_corners = align_corners
         self.use_mask = use_mask
 
-    def forward(self, feat: Tensor, flow: Tensor) -> Tensor:
+    def forward(self, feat: Tensor, flow: Tensor):
         """Forward function for warp.
         Args:
             feat (Tensor): Input feature
@@ -87,14 +88,3 @@ class Warp(nn.Module):
         s += f'align_corners={self.align_corners},'
         s += f'use_mask={self.use_mask})'
         return s
-
-
-def att2flow(h, w, target):
-    yv, xv = torch.meshgrid([torch.arange(h),torch.arange(w)])
-    grid = torch.stack((yv, xv), 2).view((h * w, 2)).float().cuda()
-        
-    # x1 -> x2
-    warp_grid = torch.einsum("bij,jd -> bid",[target, grid])
-
-    off = warp_grid - grid.unsqueeze(0)
-    return off

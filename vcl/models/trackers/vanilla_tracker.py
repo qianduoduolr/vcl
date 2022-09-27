@@ -14,7 +14,7 @@ from ..common import (cat, images2video, masked_attention_efficient,
                       pil_nearest_interpolate, spatial_neighbor, video2images, non_local_attention)
 
 from ..registry import MODELS
-from ..base import BaseModel
+from .base import BaseModel
 from ...utils import *
 
 @MODELS.register_module()
@@ -34,8 +34,9 @@ class BaseTracker(BaseModel):
         test_cfg (dict): Config for testing. Default: None.
     """
 
-    def __init__(self, backbone, head=None, train_cfg=None, test_cfg=None):
-        super().__init__()
+    def __init__(self, backbone, head=None,  *args,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
         self.backbone = build_backbone(backbone)
         if head is not None:
             if head.get('type', False):
@@ -45,9 +46,6 @@ class BaseTracker(BaseModel):
 
         else:
             self.head = None
-
-        self.train_cfg = train_cfg
-        self.test_cfg = test_cfg
 
         self.fp16_enabled = False
         self.register_buffer('iteration', torch.tensor(0, dtype=torch.float))

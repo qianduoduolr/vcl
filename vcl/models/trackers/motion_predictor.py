@@ -19,7 +19,7 @@ from vcl.models.common.correlation import *
 from vcl.models.common.hoglayer import *
 from vcl.models.losses.losses import l1_loss
 
-from ..base import BaseModel
+from .base import BaseModel
 from ..builder import build_backbone, build_components, build_loss
 from ..registry import MODELS
 from vcl.utils import *

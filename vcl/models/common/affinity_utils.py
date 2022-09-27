@@ -72,50 +72,6 @@ def propagate_temporal(imgs, affinities, topk=None):
     new_imgs = new_imgs.reshape(batches, channels, height, width)
     return new_imgs
 
-
-#
-#
-# def propagate_temporal_naive(imgs, affinities, topk=None):
-#     batches, channels, clip_len, height, width = imgs.size()
-#     assert affinities.size(0) == batches
-#     assert affinities.size(1) == clip_len
-#     assert affinities.size(2) == height * width
-#     assert affinities.size(2) == affinities.size(3)
-#     affinities = affinities.reshape(batches, clip_len * height * width,
-#                                     height * width)
-#     new_imgs = imgs.new_zeros(batches, channels, height*width)
-#     num_chunks = 4 * clip_len
-#     chunk_size = height * width // num_chunks
-#     for i in range(num_chunks):
-#         new_imgs[:, :, i * chunk_size:(i + 1) * chunk_size] =
-#         _propagate_chunk(
-#             imgs, affinities[:, :, i * chunk_size:(i + 1) * chunk_size],
-#             topk=topk)
-#     # handle remaining
-#     if height * width % chunk_size != 0:
-#         new_imgs[:, :, num_chunks * chunk_size:] = _propagate_chunk(
-#             imgs, affinities[:, :, num_chunks*chunk_size:],
-#             topk=topk)
-#     new_imgs = new_imgs.reshape(batches, channels, height, width)
-#
-#     return new_imgs
-
-# def _propagate_chunk(imgs, affinities, topk=None):
-#     batches, channels = imgs.shape[:2]
-#     if topk is not None:
-#         affinities = affinities.clone()
-#         tk_val, tk_idx = affinities.topk(dim=1, k=topk)
-#         tk_val_min, _ = tk_val.min(dim=1)
-#         tk_val_min = tk_val_min.view(batches, 1, -1)
-#         affinities[tk_val_min > affinities] = 0
-#     imgs = imgs.reshape(batches, channels, -1)
-#     assert imgs.size(2) == affinities.size(1)
-#     new_img = torch.bmm(imgs, affinities)
-#
-#     return new_img
-#
-
-
 def spatial_neighbor(batches,
                      height,
                      width,

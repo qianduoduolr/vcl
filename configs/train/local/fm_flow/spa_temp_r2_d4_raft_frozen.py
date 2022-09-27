@@ -3,26 +3,51 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'temp_res18_d4_l2_rec'
+exp_name = 'spa_temp_r2_d4_raft_frozen'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='Memory_Tracker_Custom',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 4), out_indices=(2,), pool_type='none',),
-    loss_weight=dict(l1_loss=1),
-    downsample_rate=[8,],
-    radius=[6,],
-    temperature=1,
-    feat_size=[32,],
-    pretrained=None,
+            type='Memory_Tracker_Flow',
+            num_levels=4,
+            cxt_channels=128,
+            h_channels=128,
+            corr_op_cfg=dict(type='CorrLookup', align_corners=True, radius=2),
+            corr_op_cfg_infer=dict(type='CorrLookup', align_corners=True, radius=6),
+            backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
+            cxt_backbone=dict(
+                type='RAFTEncoder',
+                in_channels=3,
+                out_channels=256,
+                net_type='Basic',
+                # norm_cfg=dict(type='SyncBN'),
+                init_cfg=[
+                    dict(
+                        type='Kaiming',
+                        layer=['Conv2d'],
+                        mode='fan_out',
+                        nonlinearity='relu'),
+                    dict(type='Constant', layer=['SyncBatchNorm2d'], val=1, bias=0)
+                ]),
+            decoder=dict(
+                type='RAFTDecoder',
+                net_type='Basic',
+                num_levels=4,
+                radius=4,
+                iters=6,
+                mask_pred=False,
+                corr_op_cfg=dict(type='CorrLookup', align_corners=True),
+                gru_type='SeqConv',
+                # flow_loss=dict(type='SequenceLoss'),
+                act_cfg=dict(type='ReLU')),
+            loss=dict(type='SequenceLoss'),
+            loss_weight=dict(flow_rec_loss=1),
+            drop_ch=False,
+            freeze_bn=False
 )
 
 
-model_test = dict(
-    type='VanillaTracker',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
-)
+model_test = None
 
 # model training and testing settings
 train_cfg = dict(syncbn=True)
@@ -57,8 +82,8 @@ train_pipeline = [
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Normalize', **img_norm_cfg_lab, keys='images_lab'),
     # dict(type='ColorDropout', keys='jitter_imgs', drop_rate=0.8),
-    dict(type='FormatShape', input_format='NPTCHW'),
-    dict(type='FormatShape', input_format='NPTCHW', keys='images_lab'),
+    dict(type='FormatShape', input_format='NCTHW'),
+    dict(type='FormatShape', input_format='NCTHW', keys='images_lab'),
     dict(type='Collect', keys=['imgs', 'images_lab'], meta_keys=[]),
     dict(type='ToTensor', keys=['imgs', 'images_lab'])
 ]
@@ -79,7 +104,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=8, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=2, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -87,19 +112,18 @@ data = dict(
     train=
             dict(
             type='RepeatDataset',
-            dataset=dict(
-                        type=train_dataset_type,
-                        root='/home/lr/dataset/YouTube-VOS',
-                        list_path='/home/lr/dataset/YouTube-VOS/2018/train',
-                        data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
-                        clip_length=2,
-                        rand_step=True,
-                        step=4,
-                        pipeline=train_pipeline,
-                        test_mode=False
-                        ),
+            dataset=  dict(
+                    type=train_dataset_type,
+                    root='/home/lr/dataset/YouTube-VOS',
+                    list_path='/home/lr/dataset/YouTube-VOS/2018/train',
+                    data_prefix=dict(RGB='train/JPEGImages_s256', FLOW=None, ANNO=None),
+                    clip_length=2,
+                    steps=dict(v=[1,3,5], p=[0.5,0.3,0.2]),
+                    pipeline=train_pipeline,
+            test_mode=False),
             times=10,
             ),
+          
 
     test =  dict(
             type=test_dataset_type,
@@ -121,47 +145,45 @@ data = dict(
 )
 # optimizer
 optimizers = dict(
-    backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
-    )
+    type='AdamW',
+    lr=0.0005,
+    betas=(0.9, 0.999),
+    eps=1e-08,
+    weight_decay=0.0001,
+    amsgrad=False)
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
 max_epoch=160
 lr_config = dict(
-    policy='CosineAnnealing',
-    min_lr_ratio=0.001,
-    by_epoch=False,
-    warmup_iters=10,
-    warmup_ratio=0.1,
-    warmup_by_epoch=True
-    )
+    policy='OneCycle',
+    max_lr=0.0005,
+    pct_start=0.05,
+    anneal_strategy='linear')
+
 
 checkpoint_config = dict(interval=max_epoch//2, save_optimizer=True, by_epoch=True)
-# remove gpu_collect=True in non distributed training
-# evaluation = dict(interval=1000, save_image=False, gpu_collect=False)
 log_config = dict(
     interval=100,
     hooks=[
         dict(type='TextLoggerHook', by_epoch=False),
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
-        # dict(type='WandbLoggerHook', init_kwargs=dict(project='video_correspondence', name=f'{exp_name}'))
     ])
-
-visual_config = None
-
 
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/home/lr/expdir/VCL/group_stsl/{exp_name}'
+work_dir = f'/home/lr/expdir/VCL/group_fm_flow/{exp_name}'
+
+visual_config = dict(type='VisualizationHook', interval=50, res_name_list=['flow', 'imgs'], output_dir=work_dir+'/vis')
 
 
-evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=max_epoch//2, by_epoch=True
-                  )
+# evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=max_epoch//2, by_epoch=True
+#                   )
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/home/lr/expdir/VCL/group_stsl/{exp_name}/epoch_{max_epoch}.pth'
+                  checkpoint_path=f'/home/lr/expdir/VCL/group_fm_flow/{exp_name}/epoch_{max_epoch}.pth'
                 )
 
 
@@ -175,4 +197,4 @@ find_unused_parameters = True
 
 if __name__ == '__main__':
 
-    make_local_config(exp_name, file='stsl')
+    make_local_config(exp_name, file='fm_flow')

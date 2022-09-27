@@ -2,7 +2,9 @@ import torch
 import torch.nn.functional as F
 from torch.nn.modules.utils import _pair
 from typing import List
-import math
+import math, time
+
+from vcl.utils.visualize import affanity
 
 def cat(tensors: List[torch.Tensor], dim: int = 0):
     """Efficient version of torch.cat that avoids a copy if there is only a
@@ -11,6 +13,23 @@ def cat(tensors: List[torch.Tensor], dim: int = 0):
     if len(tensors) == 1:
         return tensors[0]
     return torch.cat(tensors, dim)
+
+def coords_grid(batch: int, xx, yy):
+    """Coordinate grid.
+    Args:
+        batch (int): The batch size of feature.
+        xx (Tensor): 1-D tensor of size W with values from the interval
+            [0, W-1].
+        yy (Tensor): 1-D tensor of size H with values from the interval
+            [0, H-1].
+    Returns:
+        Tensor: Tensor of shape (batch, 2, H, W) with values of items'
+            coordinate.
+    """
+    coords = torch.meshgrid(yy, xx)
+    coords = torch.stack(coords[::-1], dim=0).float()
+
+    return coords[None].repeat(batch, 1, 1, 1)  # shape(batch, 2, H, W)
 
 
 def local_square_attention(query,
@@ -198,20 +217,20 @@ def masked_attention(query,
     clip_len = key.size(2)
     assert query.shape[2:] == key.shape[3:]
     att_channels, height, width = query.shape[1:]
-    output_channels = value.size(1)
+    C = value.size(1)
     if normalize:
         query = F.normalize(query, p=2, dim=1)
         key = F.normalize(key, p=2, dim=1)
     query_vec = query.view(batches, att_channels, query.shape[2:].numel())
     key_vec = key.view(batches, att_channels, key.shape[2:].numel())
-    value_vec = value.view(batches, output_channels, value.shape[2:].numel())
+    value_vec = value.view(batches, C, value.shape[2:].numel())
     # [N, TxHxW, HxW]
     affinity = torch.einsum('bci,bcj->bij', key_vec, query_vec) / temperature
     mask = mask.view(1, height * width,
                      height * width).expand(clip_len, -1,
                                             -1).reshape_as(affinity)
     affinity.masked_fill_(~mask.bool(), float('-inf'))
-    output = torch.zeros(batches, output_channels, height * width).to(query)
+    output = torch.zeros(batches, C, height * width).to(query)
     for ptr in range(0, height * width, step):
         # [N, TxHxW, step]
         cur_affinity = affinity[:, :, ptr:ptr + step]
@@ -224,10 +243,10 @@ def masked_attention(query,
             # assert torch.allclose(topk_affinity, topk_affinity_)
             # assert torch.allclose(topk_indices, topk_indices_)
             topk_value = value_vec.transpose(0, 1).reshape(
-                output_channels, -1).index_select(
+                C, -1).index_select(
                     dim=1, index=topk_indices.reshape(-1))
             # [N, C, topk, step]
-            topk_value = topk_value.reshape(output_channels,
+            topk_value = topk_value.reshape(C,
                                             *topk_indices.shape).transpose(
                                                 0, 1)
             cur_output = torch.einsum('bcks,bks->bcs', topk_value,
@@ -237,7 +256,7 @@ def masked_attention(query,
                                       cur_affinity.softmax(dim=1))
         output[..., ptr:ptr + step] = cur_output
 
-    output = output.reshape(batches, output_channels, height, width)
+    output = output.reshape(batches, C, height, width)
 
     return output
 
@@ -282,14 +301,14 @@ def masked_attention_efficient(query,
     # assert query.shape[2:] == key.shape[3:]
     att_channels, query_height, query_width = query.shape[1:]
     key_height, key_width = key.shape[3:]
-    output_channels = value.size(1)
+    C = value.size(1)
     if normalize:
         query = F.normalize(query, p=2, dim=1)
         key = F.normalize(key, p=2, dim=1)
     query_vec = query.view(batches, att_channels, query.shape[2:].numel())
     key_vec = key.view(batches, att_channels, key.shape[2:].numel())
-    value_vec = value.view(batches, output_channels, value.shape[2:].numel())
-    output = torch.zeros(batches, output_channels,
+    value_vec = value.view(batches, C, value.shape[2:].numel())
+    output = torch.zeros(batches, C,
                          query_height * query_width).to(query)
     if step is None:
         step = query_height * query_width
@@ -333,10 +352,10 @@ def masked_attention_efficient(query,
             # topk_affinity, topk_indices = cur_affinity[:, :topk], idx[:,
             # :topk]
             topk_value = value_vec.transpose(0, 1).reshape(
-                output_channels, -1).index_select(
+                C, -1).index_select(
                     dim=1, index=topk_indices.reshape(-1))
             # [N, C, topk, step]
-            topk_value = topk_value.reshape(output_channels,
+            topk_value = topk_value.reshape(C,
                                             *topk_indices.shape).transpose(
                                                 0, 1)
             if mode == 'softmax':
@@ -357,7 +376,7 @@ def masked_attention_efficient(query,
             cur_output = torch.einsum('bck,bks->bcs', value_vec, cur_affinity)
         output[..., ptr:ptr + step] = cur_output
 
-    output = output.reshape(batches, output_channels, query_height,
+    output = output.reshape(batches, C, query_height,
                             query_width)
 
     return output
@@ -407,12 +426,12 @@ def masked_attention_efficient_v2(query,
     # assert query.shape[2:] == key.shape[3:]
     att_channels, query_height, query_width = query.shape[1:]
     key_height, key_width = key.shape[3:]
-    output_channels = value.size(1)
+    C = value.size(1)
     if normalize:
         query = F.normalize(query, p=2, dim=1)
         key = F.normalize(key, p=2, dim=1)
 
-    output = torch.zeros(batches, output_channels,
+    output = torch.zeros(batches, C,
                          query_height * query_width).to(query)
     query_vec = query.repeat(clip_len, 1, 1, 1)
     key_vec = key.transpose(1,2).flatten(0,1)
@@ -420,7 +439,7 @@ def masked_attention_efficient_v2(query,
     # [NT, 3xR^2, H, W]
     value_vec = F.unfold(value.transpose(1,2).flatten(0,1), 2 * radius + 1, padding=radius)
     # [N, T, 3, R^2, HW]
-    value_vec = value_vec.view(batches, clip_len, output_channels, -1, key_height * key_width)
+    value_vec = value_vec.view(batches, clip_len, C, -1, key_height * key_width)
     # [N, 3, T*R^2, H, W]
     value_vec = value_vec.transpose(1,2).flatten(2,3)
 
@@ -431,10 +450,10 @@ def masked_attention_efficient_v2(query,
         # [N, topk, step]
         topk_affinity, topk_indices = affinity.topk(k=topk, dim=1)
         topk_value = value_vec.transpose(0, 1).reshape(
-            output_channels, -1).index_select(
+            C, -1).index_select(
                 dim=1, index=topk_indices.reshape(-1))
         # [N, C, topk, step]
-        topk_value = topk_value.reshape(output_channels,
+        topk_value = topk_value.reshape(C,
                                         *topk_indices.shape).transpose(
                                             0, 1)
         if mode == 'softmax':
@@ -455,8 +474,227 @@ def masked_attention_efficient_v2(query,
         output = torch.einsum('bck,bks->bcs', value_vec, affinity)
 
 
-    output = output.reshape(batches, output_channels, query_height,
+    output = output.reshape(batches, C, query_height,
                             query_width)
+
+    return output
+
+
+
+def flow_guided_attention_efficient(query,
+                               key,
+                               value,
+                               h_feat,
+                               cxt_feat,
+                               sample_fn,
+                               decoder,
+                               topk=None,
+                               step=32,
+                               t_step=5,
+                               radius=6,
+                               temperature=0.07,
+                               mode='softmax',
+                               with_norm=True
+                               ):
+    """
+
+    Args:
+        query(torch.Tensor): Value tensor, shape (T, C, H, W)
+        key (torch.Tensor): Value tensor, shape (T, C, H, W)
+        value (torch.Tensor): Value tensor, shape (T, C, H, W)
+        temperature (float): Temperature
+        topk (int): Top-k
+        normalize (bool): Whether normalize feature
+        step (int): Step for computing affinity
+        non_mask_len (int): Length of video that do not apply mask
+        mode (str): Affinity mode
+
+    Returns:
+
+    """
+    L, C, H, W = value.shape
+    C_ = query.shape[1]
+    decoder = decoder.cuda()
+
+    if step is None:
+        step = H * W
+
+    output = torch.zeros(1, C,
+                         H * W).to(value)
+
+    for ptr in range(0, H*W, step):
+        s = min(H*W - ptr, step)
+        affinity = torch.zeros(L, (radius*2 +1)**2,
+                            s).to(value)
+        value_ = []
+
+        start = time.time()
+
+        for ptr_t in range(0, L, t_step):
+            
+            t = min(L- ptr_t, t_step) 
+
+            flow_init = torch.zeros((t, 2, *query.shape[-2:]), device=query.device)
+            value_feat = value[ptr_t:ptr_t+t_step]
+
+            pred, corr = decoder(
+                    True,
+                    query[ptr_t:ptr_t+t_step],
+                    key[ptr_t:ptr_t+t_step],
+                    flow=flow_init,
+                    h_feat=h_feat[ptr_t:ptr_t+t_step],
+                    cxt_feat=cxt_feat[ptr_t:ptr_t+t_step],
+                )
+
+            if not with_norm:
+                pass
+            else:
+                query_feat = query[ptr_t:ptr_t+t_step].pow(2).sum(dim=1, keepdim=True).sqrt()
+                key_feat = key[ptr_t:ptr_t+t_step].pow(2).sum(dim=1, keepdim=True).sqrt()
+                # L'HW x 1 x H x W
+                norm_ = torch.matmul(query_feat.flatten(-2).permute(0,2,1), key_feat.flatten(-2)).reshape(t*H*W, 1, H, W)
+                corr = (corr * torch.sqrt(torch.tensor(C_).float())/ norm_) / temperature
+                corr = corr.reshape(t, -1, 1, H, W)
+            
+            xx = torch.arange(0, W, device=pred.device)
+            yy = torch.arange(0, H, device=pred.device)
+            # L' x 2 x H x W
+            grid = coords_grid(t, xx, yy) + pred
+            grid = grid.permute(0, 2, 3, 1)
+            grid = grid.flatten(1,2)
+
+            # L' x S x 2
+            g = grid[:, ptr:ptr + step]
+            c = corr[:, ptr:ptr + step]
+            # L'S x 1 x H x W
+            c = c.flatten(0,1)
+
+            # L' x r^2 x S
+            cur_affinity = sample_fn([c], flow=None, grid=g)
+            affinity[ptr_t:ptr_t+t_step, ...] = cur_affinity
+
+            # for valune
+            # L'S x C x H x W 
+            v = value_feat.repeat(1, s, 1, 1, 1).flatten(0,1)
+            # 1 x L' x C x r^2 x S
+            ref_v = sample_fn([v], flow=None, mode='nearest', grid=g).reshape(t, C, -1, s).unsqueeze(0)
+            value_.append(ref_v)
+
+        if topk is not None:
+            # 1 x (L' x r^2) x S
+            affinity = affinity.reshape(1, -1, s)
+
+            # [1, topk, S]
+            topk_affinity, topk_indices = affinity.topk(k=topk, dim=1)
+            
+            # 1 x C x (L x r^2) x S
+            value_ = torch.cat(value_, 1).transpose(1,2).flatten(2,3)
+
+            topk_value = value_.transpose(0, 1).reshape(
+                C, -1).index_select(
+                    dim=1, index=topk_indices.reshape(-1))
+            # [N, C, topk, step]
+            topk_value = topk_value.reshape(C,
+                                            *topk_indices.shape).transpose(
+                                                0, 1)
+            if mode == 'softmax':
+                topk_affinity = topk_affinity.softmax(dim=1)
+            elif mode == 'cosine':
+                topk_affinity = topk_affinity.clamp(min=0)**2
+            else:
+                raise ValueError
+
+            cur_output = torch.einsum('bcks,bks->bcs', topk_value,
+                                    topk_affinity)
+        # print(time.time()- start)
+        output[...,ptr:ptr+step] = 0
+        
+    return output
+
+def flow_guided_attention_efficient_v2(corr,
+                                value,
+                                pred,
+                                sample_fn,
+                               topk=10,
+                               step=32,
+                               mode='softmax',
+                               ):
+    """
+
+    Args:
+        query(torch.Tensor): Value tensor, shape (T, C, H, W)
+        key (torch.Tensor): Value tensor, shape (T, C, H, W)
+        value (torch.Tensor): Value tensor, shape (T, C, H, W)
+        temperature (float): Temperature
+        topk (int): Top-k
+        normalize (bool): Whether normalize feature
+        step (int): Step for computing affinity
+        non_mask_len (int): Length of video that do not apply mask
+        mode (str): Affinity mode
+
+    Returns:
+
+    """
+    L, C, H, W = value.shape
+
+    if step is None:
+        step = H * W
+
+    output = torch.zeros(1, C,
+                         H * W).to(value)
+
+    xx = torch.arange(0, W, device=pred.device)
+    yy = torch.arange(0, H, device=pred.device)
+    # L x 2 x H x W
+    grid = coords_grid(L, xx, yy) + pred
+    grid = grid.permute(0, 2, 3, 1)
+    grid = grid.flatten(1,2)
+    corr = corr.reshape(L, H*W, 1, H, W)
+
+    for ptr in range(0, H*W, step):
+        s = min(H*W - ptr, step)
+
+        # L x S x 2
+        g = grid[:, ptr:ptr + step]
+        c = corr[:, ptr:ptr + step]
+
+        # LS x 1 x H x W
+        c = c.flatten(0,1)
+
+        # L' x r^2 x S
+        cur_affinity = sample_fn([c], flow=None, grid=g)
+
+        if topk is not None:
+            # 1 x (L x r^2) x S
+            cur_affinity = cur_affinity.reshape(1, -1, s)
+
+            # [1, topk, S]
+            topk_affinity, topk_indices = cur_affinity.topk(k=topk, dim=1)
+            
+            v = value.repeat(1, s, 1, 1, 1).flatten(0,1)
+            # 1 x L x C x r^2 x S
+            value_ = sample_fn([v], flow=None, mode='nearest', grid=g).reshape(L, C, -1, s).unsqueeze(0)
+            # 1 x C x (L x r^2) x S
+            value_ = value_.transpose(1,2).flatten(2,3)
+
+            topk_value = value_.transpose(0, 1).reshape(
+                C, -1).index_select(
+                    dim=1, index=topk_indices.reshape(-1))
+            # [N, C, topk, step]
+            topk_value = topk_value.reshape(C,
+                                            *topk_indices.shape).transpose(
+                                                0, 1)
+            if mode == 'softmax':
+                topk_affinity = topk_affinity.softmax(dim=1)
+            elif mode == 'cosine':
+                topk_affinity = topk_affinity.clamp(min=0)**2
+            else:
+                raise ValueError
+
+            cur_output = torch.einsum('bcks,bks->bcs', topk_value,
+                                    topk_affinity)
+
+        output[...,ptr:ptr+step] = cur_output
 
     return output
 

@@ -30,7 +30,7 @@ from vcl.utils import *
 @DATASETS.register_module()
 class VOS_youtube_dataset_rgb(Video_dataset_base):
     def __init__(self, data_prefix, 
-                       rand_step=False,
+                       steps=dict(v=[1], p=[1]),
                        year='2018',
                        **kwargs
                        ):
@@ -38,7 +38,9 @@ class VOS_youtube_dataset_rgb(Video_dataset_base):
 
         self.data_prefix = data_prefix
         self.year = year
-        self.rand_step = rand_step
+        self.steps = steps
+
+        self.step = max(self.steps['v'])
         self.load_annotations()
 
     def __len__(self):
@@ -77,7 +79,7 @@ class VOS_youtube_dataset_rgb(Video_dataset_base):
         frames_path = sample['frames_path']
         num_frames = sample['num_frames']
         
-        step = random.randint(1, self.step) if self.rand_step else self.step
+        step = np.random.choice(self.steps['v'], p=np.array(self.steps['p']).ravel())
 
         offsets = self.temporal_sampling(num_frames, self.num_clips, self.clip_length, step, mode=self.temporal_sampling_mode)
 

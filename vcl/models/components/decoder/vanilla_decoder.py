@@ -1,4 +1,4 @@
-from ..registry import COMPONENTS
+from ...registry import COMPONENTS
 
 import torch
 import torch.nn as nn

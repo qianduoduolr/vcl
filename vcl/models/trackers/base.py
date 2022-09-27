@@ -21,6 +21,12 @@ class BaseModel(BaseModule, metaclass=ABCMeta):
 
         ``train_step``, supporting to train one step when training.
     """
+    def __init__(self, train_cfg, test_cfg, init_cfg=None):
+        super().__init__(init_cfg)
+
+        self.train_cfg = train_cfg
+        self.test_cfg = test_cfg
+
 
     def forward_train(self, imgs, labels):
         """Abstract method for training forward.

@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'temp_res18_d4_l2_rec'
+exp_name = 'temp_res18_d4_l2_rec_nodrop'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
@@ -15,6 +15,7 @@ model = dict(
     radius=[6,],
     temperature=1,
     feat_size=[32,],
+    drop_ch=False,
     pretrained=None,
 )
 
