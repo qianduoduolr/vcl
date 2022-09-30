@@ -18,7 +18,6 @@ model = dict(
     pretrained=None,
 )
 
-
 model_test = dict(
     type='VanillaTracker',
     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),

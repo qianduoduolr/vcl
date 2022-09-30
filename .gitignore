@@ -5,3 +5,4 @@ output
 .eval/
 **DS_Store
 wandb
+**/**/__pycache__
