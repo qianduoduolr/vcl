@@ -12,8 +12,9 @@ model = dict(
             num_levels=4,
             cxt_channels=128,
             h_channels=128,
+            flow_clamp=1,
             corr_op_cfg=dict(type='CorrLookup', align_corners=True, radius=2),
-            corr_op_cfg_infer=dict(type='CorrLookup', align_corners=True, radius=6),
+            corr_op_cfg_infer=dict(type='CorrLookup_Infer', align_corners=True, radius=3),
             backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
             cxt_backbone=dict(
                 type='RAFTEncoder',
@@ -45,6 +46,22 @@ model = dict(
             drop_ch=False,
             freeze_bn=False
 )
+# model = dict(
+#     type='Framework_V2',
+#     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2,), pool_type=None),
+#     backbone_t=None,
+#     loss=dict(type='MSELoss',reduction='mean'),
+#     feat_size=[32,],
+#     radius=[6,],
+#     downsample_rate=[8,],
+#     temperature=1.0,
+#     temperature_t=0.07,
+#     T=-1,
+#     momentum=-1,
+#     detach=True,
+#     loss_weight = dict(stage0_l1_loss=1),
+#     pretrained=None
+# )
 
 model_test = None
 
@@ -52,6 +69,8 @@ model_test = None
 train_cfg = dict(syncbn=True)
 
 test_cfg = dict(
+    zero_flow=False,
+    eval_mode='v2',
     precede_frames=20,
     topk=10,
     temperature=0.07,
@@ -88,7 +107,7 @@ train_pipeline = [
 ]
 
 val_pipeline = [
-    dict(type='Resize', scale=(256, 256), keep_ratio=False),
+    dict(type='Resize', scale=(384, 256), keep_ratio=False),
     dict(type='Flip', flip_ratio=0),
     dict(type='RGB2LAB'),
     dict(type='Normalize', **img_norm_cfg_lab),
@@ -178,7 +197,7 @@ evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epo
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path='/home/lr/expdir/VCL/group_stsl_former/mast_d4_l2_pyramid_dis_18/epoch_3200.pth',
+                  checkpoint_path='/home/lr/expdir/VCL/group_fm_flow/spa_temp_d4_r2_raft_test/epoch_160.pth',
                   torchvision_pretrained=None
                 )
 

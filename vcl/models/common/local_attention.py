@@ -334,9 +334,12 @@ def masked_attention_efficient(query,
                                          -1).reshape(batches, -1,
                                                      cur_affinity.size(2))
             else:
-                assert clip_len == 1
-                assert non_mask_len == 0
-                cur_mask = mask[..., ptr:ptr + step]
+                cur_mask = mask.view(1, 1, key_height * key_width,
+                                     query_height *
+                                     query_width)[..., ptr:ptr + step].expand(
+                                         batches, clip_len - non_mask_len, -1,
+                                         -1).reshape(batches, -1,
+                                                     cur_affinity.size(2))
 
             if non_mask_len > 0:
                 cur_mask = cat([
@@ -357,7 +360,8 @@ def masked_attention_efficient(query,
             # [N, C, topk, step]
             topk_value = topk_value.reshape(C,
                                             *topk_indices.shape).transpose(
-                                                0, 1)
+                                                           0, 1)
+
             if mode == 'softmax':
                 topk_affinity = topk_affinity.softmax(dim=1)
             elif mode == 'cosine':
@@ -481,20 +485,16 @@ def masked_attention_efficient_v2(query,
 
 
 
-def flow_guided_attention_efficient(query,
-                               key,
+def flow_guided_attention_efficient(
+                               preds,
+                               corrs,
                                value,
-                               h_feat,
-                               cxt_feat,
                                sample_fn,
-                               decoder,
                                topk=None,
                                step=32,
-                               t_step=5,
                                radius=6,
                                temperature=0.07,
                                mode='softmax',
-                               with_norm=True
                                ):
     """
 
@@ -513,8 +513,6 @@ def flow_guided_attention_efficient(query,
 
     """
     L, C, H, W = value.shape
-    C_ = query.shape[1]
-    decoder = decoder.cuda()
 
     if step is None:
         step = H * W
@@ -528,34 +526,12 @@ def flow_guided_attention_efficient(query,
                             s).to(value)
         value_ = []
 
-        start = time.time()
+        t_start = 0
+        for pred, corr in zip(preds, corrs):
 
-        for ptr_t in range(0, L, t_step):
-            
-            t = min(L- ptr_t, t_step) 
+            t = pred.shape[0]
+            value_feat = value[t_start:t_start+t]
 
-            flow_init = torch.zeros((t, 2, *query.shape[-2:]), device=query.device)
-            value_feat = value[ptr_t:ptr_t+t_step]
-
-            pred, corr = decoder(
-                    True,
-                    query[ptr_t:ptr_t+t_step],
-                    key[ptr_t:ptr_t+t_step],
-                    flow=flow_init,
-                    h_feat=h_feat[ptr_t:ptr_t+t_step],
-                    cxt_feat=cxt_feat[ptr_t:ptr_t+t_step],
-                )
-
-            if not with_norm:
-                pass
-            else:
-                query_feat = query[ptr_t:ptr_t+t_step].pow(2).sum(dim=1, keepdim=True).sqrt()
-                key_feat = key[ptr_t:ptr_t+t_step].pow(2).sum(dim=1, keepdim=True).sqrt()
-                # L'HW x 1 x H x W
-                norm_ = torch.matmul(query_feat.flatten(-2).permute(0,2,1), key_feat.flatten(-2)).reshape(t*H*W, 1, H, W)
-                corr = (corr * torch.sqrt(torch.tensor(C_).float())/ norm_) / temperature
-                corr = corr.reshape(t, -1, 1, H, W)
-            
             xx = torch.arange(0, W, device=pred.device)
             yy = torch.arange(0, H, device=pred.device)
             # L' x 2 x H x W
@@ -563,6 +539,7 @@ def flow_guided_attention_efficient(query,
             grid = grid.permute(0, 2, 3, 1)
             grid = grid.flatten(1,2)
 
+            corr = corr.reshape(t, H*W, 1, H, W)
             # L' x S x 2
             g = grid[:, ptr:ptr + step]
             c = corr[:, ptr:ptr + step]
@@ -571,7 +548,7 @@ def flow_guided_attention_efficient(query,
 
             # L' x r^2 x S
             cur_affinity = sample_fn([c], flow=None, grid=g)
-            affinity[ptr_t:ptr_t+t_step, ...] = cur_affinity
+            affinity[t_start:t_start+t, ...] = cur_affinity
 
             # for valune
             # L'S x C x H x W 
@@ -579,6 +556,8 @@ def flow_guided_attention_efficient(query,
             # 1 x L' x C x r^2 x S
             ref_v = sample_fn([v], flow=None, mode='nearest', grid=g).reshape(t, C, -1, s).unsqueeze(0)
             value_.append(ref_v)
+
+            t_start += t
 
         if topk is not None:
             # 1 x (L' x r^2) x S
@@ -606,8 +585,8 @@ def flow_guided_attention_efficient(query,
 
             cur_output = torch.einsum('bcks,bks->bcs', topk_value,
                                     topk_affinity)
-        # print(time.time()- start)
-        output[...,ptr:ptr+step] = 0
+
+        output[...,ptr:ptr+step] = cur_output
         
     return output
 
@@ -615,10 +594,12 @@ def flow_guided_attention_efficient_v2(corr,
                                 value,
                                 pred,
                                 sample_fn,
-                               topk=10,
-                               step=32,
-                               mode='softmax',
-                               ):
+                                topk=10,
+                                step=32,
+                                mode='softmax',
+                                zero_flow=False,
+                                boundary_clip=False,
+                                ):
     """
 
     Args:
@@ -645,45 +626,53 @@ def flow_guided_attention_efficient_v2(corr,
 
     xx = torch.arange(0, W, device=pred.device)
     yy = torch.arange(0, H, device=pred.device)
+
+    # check err
+    if zero_flow:
+        pred = 0
+
     # L x 2 x H x W
     grid = coords_grid(L, xx, yy) + pred
     grid = grid.permute(0, 2, 3, 1)
+
+    if boundary_clip:
+        grid[:,:,:,0] = torch.clamp(grid[:,:,:,0], 0, H-1)
+        grid[:,:,:,1] = torch.clamp(grid[:,:,:,1], 0, W-1)
+
     grid = grid.flatten(1,2)
     corr = corr.reshape(L, H*W, 1, H, W)
-
+    
     for ptr in range(0, H*W, step):
         s = min(H*W - ptr, step)
 
         # L x S x 2
         g = grid[:, ptr:ptr + step]
-        c = corr[:, ptr:ptr + step]
 
+        c = corr[:, ptr:ptr + step]
         # LS x 1 x H x W
         c = c.flatten(0,1)
 
-        # L' x r^2 x S
-        cur_affinity = sample_fn([c], flow=None, grid=g)
+        # L x r^2 x S
+        cur_affinity = sample_fn([c], grid=g, mask_oob=True, shape=(W,H))
+        
+        # 1 x (L x r^2) x S
+        cur_affinity = cur_affinity.reshape(1, -1, s)
+
+        v = value.unsqueeze(1).repeat(1, s, 1, 1, 1) # fix the bug
+        v = v.flatten(0,1)
+
+        # 1 x L x C x r^2 x S
+        value_ = sample_fn([v], mode='bilinear', grid=g).reshape(L, C, -1, s).unsqueeze(0)
+        # 1 x C x (L x r^2) x S
+        value_ = value_.transpose(1,2).flatten(2,3)
 
         if topk is not None:
-            # 1 x (L x r^2) x S
-            cur_affinity = cur_affinity.reshape(1, -1, s)
-
+            
             # [1, topk, S]
             topk_affinity, topk_indices = cur_affinity.topk(k=topk, dim=1)
-            
-            v = value.repeat(1, s, 1, 1, 1).flatten(0,1)
-            # 1 x L x C x r^2 x S
-            value_ = sample_fn([v], flow=None, mode='nearest', grid=g).reshape(L, C, -1, s).unsqueeze(0)
-            # 1 x C x (L x r^2) x S
-            value_ = value_.transpose(1,2).flatten(2,3)
+            # 1 x 3 x topk x S
+            topk_value = torch.gather(value_, dim=2, index=topk_indices.repeat(1,C,1,1))
 
-            topk_value = value_.transpose(0, 1).reshape(
-                C, -1).index_select(
-                    dim=1, index=topk_indices.reshape(-1))
-            # [N, C, topk, step]
-            topk_value = topk_value.reshape(C,
-                                            *topk_indices.shape).transpose(
-                                                0, 1)
             if mode == 'softmax':
                 topk_affinity = topk_affinity.softmax(dim=1)
             elif mode == 'cosine':
@@ -693,6 +682,12 @@ def flow_guided_attention_efficient_v2(corr,
 
             cur_output = torch.einsum('bcks,bks->bcs', topk_value,
                                     topk_affinity)
+
+        else:
+            cur_affinity = cur_affinity.softmax(dim=1)
+            cur_output = torch.einsum('bcks,bks->bcs', value_,
+                                    cur_affinity)
+
 
         output[...,ptr:ptr+step] = cur_output
 

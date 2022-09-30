@@ -79,7 +79,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=8, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=4, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -93,8 +93,6 @@ data = dict(
                         list_path='/home/lr/dataset/YouTube-VOS/2018/train',
                         data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
                         clip_length=2,
-                        rand_step=True,
-                        step=4,
                         pipeline=train_pipeline,
                         test_mode=False
                         ),

@@ -43,6 +43,7 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
                  num_levels: int,
                  cxt_channels: int,
                  h_channels: int,
+                 flow_clamp: int = -1,
                  freeze_bn: bool = False,
                  dense_rec: bool = False,
                  drop_ch: bool = False,
@@ -59,6 +60,7 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
         # self.warp = build_operators(warp)
         self.dense_rec = dense_rec
         self.drop_ch = drop_ch
+        self.flow_clamp = flow_clamp
         self.loss = build_loss(loss)
         self.corr_lookup = build_operators(corr_op_cfg)
         self.corr_lookup_inference = build_operators(corr_op_cfg_infer)
@@ -138,6 +140,9 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
             return_lr=True
         )
 
+        if self.flow_clamp != -1:
+            preds_lr = [torch.clamp(pred_lr, -self.flow_clamp, self.flow_clamp) for pred_lr in preds_lr]
+
         if self.dense_rec:
             gt = imgs[:,0,:,0]
             ref = imgs[:,0,:,1]
@@ -185,6 +190,7 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
         return feats, h_feats, cxt_feats
 
     def forward_test(self, imgs, ref_seg_map, img_meta,
+                    flows='none',
                     save_image=False,
                     save_path=None,
                     iteration=None):
@@ -195,6 +201,9 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
         feat_bank, h_feat_bank, cxt_feat_bank  = self.extract_feats(imgs)
         feat_shape = feat_bank[-1].shape
         H, W = feat_shape[-2:]
+
+        if self.test_cfg.get('with_norm', True):
+            feat_bank_norm = feat_bank.pow(2).sum(dim=1, keepdim=True).sqrt()
 
         input_onehot = ref_seg_map.ndim == 4
         if not input_onehot:
@@ -233,11 +242,13 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
             query_h_feat = h_feat_bank[:, :,frame_idx].to(imgs.device)
             key_feat = feat_bank[:, :, key_start:frame_idx].to(
                 imgs.device)
+            key_feat_norm = feat_bank_norm[:, :,key_start:frame_idx]
             value_logits = torch.stack(
                 seg_bank[key_start:frame_idx], dim=2).to(imgs.device)
 
             if self.test_cfg.get('with_first', True):
                 key_feat = torch.cat([feat_bank[:, :, 0:1].to(imgs.device),key_feat], dim=2)
+                key_feat_norm = torch.cat([feat_bank_norm[:, :, 0:1].to(imgs.device),key_feat_norm], dim=2)
                 value_logits = cat([seg_bank[0].unsqueeze(2).to(imgs.device), value_logits], dim=2)
 
             L = key_feat.shape[2]
@@ -249,14 +260,13 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
                 value_logits = value_logits.transpose(1,2).flatten(0,1)
                 query_feat = query_feat.repeat(L, 1, 1, 1)
                 key_feat = key_feat.transpose(1,2).flatten(0,1)
+                key_feat_norm = key_feat_norm.transpose(1,2).flatten(0,1)
 
                 query_h_feat = query_h_feat.repeat(L, 1, 1, 1)
                 query_cxt_feat = query_cxt_feat.repeat(L, 1, 1, 1)
-
-                query_feat_norm = query_feat.pow(2).sum(dim=1, keepdim=True).sqrt()
-                key_feat_norm = key_feat.pow(2).sum(dim=1, keepdim=True).sqrt()
                 
-                t_step = 8
+                t_step = self.test_cfg.get('t_step', 4)
+                
                 preds = []
                 corrs = []
 
@@ -279,19 +289,62 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
                         pass
                     else:
                         C_ = query_feat.shape[1]
+                        query_feat_norm = feat_bank_norm[:, :,frame_idx]
                         # L'HW x 1 x H x W
-                        norm_ = torch.matmul(query_feat_norm[ptr:ptr+t_step].flatten(-2).permute(0,2,1), key_feat_norm[ptr:ptr+t_step].flatten(-2)).reshape(t*H*W, 1, H, W)
+                        norm_ = torch.einsum('bci,tck->bitk', [query_feat_norm.flatten(-2), key_feat_norm[ptr:ptr+t_step].flatten(-2)]).permute(2,1,0,3).reshape(t*H*W, 1, H, W)
                         corr = (corr * torch.sqrt(torch.tensor(C_).float())/ norm_) / self.test_cfg.get('temperature')
+
+                    if self.flow_clamp != -1:
+                        flow = torch.clamp(flow, -self.flow_clamp, self.flow_clamp)
                     
                     preds.append(flow)
                     corrs.append(corr)
 
-                pred = torch.cat(preds, 0)
-                corr = torch.cat(corrs, 0)
 
-                del preds, corrs
+                if self.test_cfg.get('eval_mode', 'v2') == 'v2':
+                    pred = torch.cat(preds, 0)
+                    corr = torch.cat(corrs, 0)
+                    del preds, corrs
 
-                seg_logit = flow_guided_attention_efficient_v2(corr, value_logits, pred, sample_fn=self.                corr_lookup_inference, topk=self.test_cfg.get('topk', 10)).reshape_as(resized_seg_map)
+                    seg_logit = flow_guided_attention_efficient_v2(
+                                                                  corr, 
+                                                                  value_logits, 
+                                                                  pred, 
+                                                                  sample_fn=self.corr_lookup_inference, 
+                                                                  topk=self.test_cfg.get('topk', 10),
+                                                                  zero_flow=self.test_cfg.get('zero_flow', False),
+                                                                  ).reshape_as(resized_seg_map)
+
+                    # c = mmcv.flow2rgb(pred[0].permute(1,2,0).cpu().numpy())
+                    # i = tensor2img(imgs[0,:,1], norm_mode='mean-std-lab')
+                    # print('haha')
+                    # a = F.interpolate(
+                    #             seg_logit,
+                    #             size=img_meta[0]['original_shape'][:2],
+                    #             mode='bilinear',
+                    #             align_corners=False).argmax(dim=1).permute(1,2,0).cpu()
+                    # a = F.one_hot(a)[:,:,0].numpy()
+                    # b = F.interpolate(
+                    #             resized_seg_map,
+                    #             size=img_meta[0]['original_shape'][:2],
+                    #             mode='nearest',
+                    #             )[0].permute(1,2,0).cpu().numpy()
+
+                else:
+
+                    seg_logit = flow_guided_attention_efficient(
+                                                                preds,
+                                                                corrs,
+                                                                value_logits,
+                                                                self.corr_lookup_inference,
+                                                                topk=10,
+                                                                step=32,
+                                                                radius=6,
+                                                                temperature=0.07,
+                                                                mode='softmax',
+                                                                ).reshape_as(resized_seg_map)
+
+                    del preds, corrs
 
                 seg_bank.append(seg_logit.cpu())
 

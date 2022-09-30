@@ -255,16 +255,6 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
                 query_h_feat = query_h_feat.repeat(key_feat.shape[0], 1, 1, 1)
                 query_cxt_feat = query_cxt_feat.repeat(key_feat.shape[0], 1, 1, 1)
 
-                # seg_logit = flow_guided_attention_efficient(
-                #                                             query_feat, 
-                #                                             key_feat, 
-                #                                             value_logits, 
-                #                                             query_h_feat,
-                #                                             query_cxt_feat,
-                #                                             self.corr_lookup_inference, 
-                #                                             topk=self.test_cfg.get('topk', 10), 
-                #                                             decoder=self.decoder, 
-                #                                             ).reshape(1, C, H, W)
 
                 t_step = 21
                 step = 512

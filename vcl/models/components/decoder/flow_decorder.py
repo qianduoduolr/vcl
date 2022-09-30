@@ -457,8 +457,6 @@ class RAFTDecoder(BaseDecoder):
             delta_flow = self.flow_pred(h)
             flow = flow + delta_flow
 
-            flow
-
         return flow, corr_pyramid
 
     def forward_train(

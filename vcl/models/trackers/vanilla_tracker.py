@@ -238,7 +238,7 @@ class VanillaTracker(BaseTracker):
                         'with_first_neighbor', True) else 1,
                     sim_mode=self.test_cfg.get(
                         'sim_mode', 'dot_product'))
-                
+
                 if not self.hard_prop:
                     seg_bank.append(seg_logit.cpu())
                 else:
@@ -279,6 +279,7 @@ class VanillaTracker(BaseTracker):
                 all_seg_preds.append(file_path)
             else:
                 all_seg_preds.append(seg_preds)
+
         if self.save_np:
             if len(all_seg_preds) > 1:
                 return [all_seg_preds]
