@@ -55,7 +55,7 @@ train_cfg = dict(syncbn=True)
 
 test_cfg = dict(
     zero_flow=False,
-    precede_frames=20,
+    precede_frames=1,
     topk=10,
     temperature=0.07,
     strides=(1, 2, 2, 1),
@@ -179,7 +179,7 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/gdata/lirui/expdir/VCL/group_stsl/{exp_name}'
+work_dir = f'/output/{exp_name}'
 
 
 evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True

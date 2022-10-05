@@ -154,7 +154,7 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/gdata/lirui/expdir/VCL/group_stsl/{exp_name}'
+work_dir = f'/output/{exp_name}'
 
 
 evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True
