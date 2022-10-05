@@ -55,13 +55,13 @@ train_cfg = dict(syncbn=True)
 
 test_cfg = dict(
     zero_flow=True,
-    precede_frames=1,
+    precede_frames=5,
     topk=10,
     temperature=0.07,
     strides=(1, 2, 2, 1),
     out_indices=(3, ),
     neighbor_range=24,
-    with_first=True,
+    with_first=False,
     with_first_neighbor=True,
     output_dir='eval_results')
 
