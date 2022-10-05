@@ -12,9 +12,9 @@ model = dict(
             num_levels=4,
             cxt_channels=128,
             h_channels=128,
-            # flow_clamp=1,
+            flow_clamp=-1,
             corr_op_cfg=dict(type='CorrLookup', align_corners=True, radius=2),
-            corr_op_cfg_infer=dict(type='CorrLookup_Infer', align_corners=True, radius=3),
+            corr_op_cfg_infer=dict(type='CorrLookup_Infer', align_corners=True, radius=6),
             backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
             cxt_backbone=dict(
                 type='RAFTEncoder',
@@ -46,22 +46,6 @@ model = dict(
             drop_ch=False,
             freeze_bn=False
 )
-# model = dict(
-#     type='Framework_V2',
-#     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2,), pool_type=None),
-#     backbone_t=None,
-#     loss=dict(type='MSELoss',reduction='mean'),
-#     feat_size=[32,],
-#     radius=[6,],
-#     downsample_rate=[8,],
-#     temperature=1.0,
-#     temperature_t=0.07,
-#     T=-1,
-#     momentum=-1,
-#     detach=True,
-#     loss_weight = dict(stage0_l1_loss=1),
-#     pretrained=None
-# )
 
 model_test = None
 
@@ -70,7 +54,6 @@ train_cfg = dict(syncbn=True)
 
 test_cfg = dict(
     zero_flow=False,
-    eval_mode='v2',
     precede_frames=20,
     topk=10,
     temperature=0.07,
@@ -88,6 +71,7 @@ val_dataset_type = 'VOS_davis_dataset_test'
 test_dataset_type = 'VOS_davis_dataset_test'
 
 
+# train_pipeline = None
 # train_pipeline = None
 img_norm_cfg = dict(mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
 img_norm_cfg_lab = dict(mean=[50, 0, 0], std=[50, 127, 127], to_bgr=False)
@@ -107,7 +91,7 @@ train_pipeline = [
 ]
 
 val_pipeline = [
-    dict(type='Resize', scale=(384, 256), keep_ratio=False),
+    dict(type='Resize', scale=(-1, 480), keep_ratio=True),
     dict(type='Flip', flip_ratio=0),
     dict(type='RGB2LAB'),
     dict(type='Normalize', **img_norm_cfg_lab),
@@ -122,25 +106,29 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=8, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=16, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
     # train
-    train=
-            dict(
-            type=train_dataset_type,
-            root='/home/lr/dataset/YouTube-VOS',
-            list_path='/home/lr/dataset/YouTube-VOS/2018/train',
-            data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
-            clip_length=2,
-            pipeline=train_pipeline,
-            test_mode=False),
+    train=  dict(
+                type='RepeatDataset',
+                dataset=dict(
+                        type=train_dataset_type,
+                        root='/data/656146095/YouTube-VOS-lmdb-v2',
+                        list_path='/data/656146095/YouTube-VOS-lmdb-v2/2018/train',
+                        data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
+                        clip_length=2,
+                        data_backend='lmdb',
+                        pipeline=train_pipeline,
+                        test_mode=False),
+                times=10,
+    ),
 
     test =  dict(
             type=test_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            root='/data/656146095/DAVIS',
+            list_path='/data/656146095/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -148,13 +136,14 @@ data = dict(
     
     val =  dict(
             type=val_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            root='/data/656146095/DAVIS',
+            list_path='/data/656146095/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
             ),
 )
+
 # optimizer
 optimizers = dict(
     backbone=dict(type='Adam', lr=0.001, betas=(0.9, 0.999))
@@ -189,7 +178,7 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/home/lr/expdir/VCL/group_stsl/{exp_name}'
+work_dir = f'/gdata/lirui/expdir/VCL/group_stsl/{exp_name}'
 
 
 evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True
@@ -197,7 +186,7 @@ evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epo
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path='/home/lr/expdir/VCL/group_fm_flow/spa_temp_d4_r2_raft_test_flowsup_2/epoch_160.pth',
+                  checkpoint_path='/model/656146095/temp_raft_sup/epoch_160.pth',
                   torchvision_pretrained=None
                 )
 

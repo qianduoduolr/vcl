@@ -34,7 +34,7 @@ class BaseDecoder(BaseModule):
         pass
 
 
-    def get_flow(
+    def get_final_flow(
             self,
             flow_result: Sequence[Dict[str, np.ndarray]],
             img_metas: Sequence[dict] = None

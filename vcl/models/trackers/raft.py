@@ -117,7 +117,7 @@ class RAFT(BaseModel):
         if flow_init is None:
             flow_init = torch.zeros((B, 2, H, W), device=feat1.device)
 
-        pred = self.decoder(
+        pred, _, _ = self.decoder(
             False,
             feat1,
             feat2,
@@ -129,7 +129,7 @@ class RAFT(BaseModel):
 
         losses = {}
 
-        losses['flow_loss'] = self.loss(pred, flows[:,:,:,0])
+        losses['flow_loss'] = self.loss(pred, flows[:,0,:,0])
 
         return losses        
 
@@ -137,6 +137,7 @@ class RAFT(BaseModel):
             self,
             imgs: torch.Tensor,
             flow_init: Optional[torch.Tensor] = None,
+            return_lr: bool = False,
             img_metas: Optional[Sequence[dict]] = None):
         """Forward function for RAFT when model testing.
         Args:
@@ -168,6 +169,7 @@ class RAFT(BaseModel):
             h_feat=h_feat,
             cxt_feat=cxt_feat,
             img_metas=img_metas,
+            return_lr=return_lr
             )
         # recover iter in train
         self.decoder.iters = train_iter

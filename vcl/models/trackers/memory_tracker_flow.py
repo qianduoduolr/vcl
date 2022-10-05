@@ -18,12 +18,12 @@ from mmcv.ops import Correlation
 
 from vcl.models.common.correlation import *
 from vcl.models.common.hoglayer import *
-from vcl.models.common import images2video, masked_attention_efficient, pil_nearest_interpolate, spatial_neighbor, video2images
+from vcl.models.common import images2video, masked_attention_efficient, pil_nearest_interpolate, spatial_neighbor, video2images, non_local_attention
 from vcl.models.common.local_attention import flow_guided_attention_efficient, flow_guided_attention_efficient_v2
 from vcl.models.losses.losses import l1_loss
 
 from .base import BaseModel
-from ..builder import build_backbone, build_components, build_loss, build_operators
+from ..builder import build_backbone, build_components, build_loss, build_operators, build_model
 from ..registry import MODELS
 from vcl.utils import *
 
@@ -43,7 +43,9 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
                  num_levels: int,
                  cxt_channels: int,
                  h_channels: int,
+                 target_model: dict = None,
                  flow_clamp: int = -1,
+                 flow_detach: bool = False,
                  freeze_bn: bool = False,
                  dense_rec: bool = False,
                  drop_ch: bool = False,
@@ -52,6 +54,7 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
         super().__init__(*args, **kwargs)
 
         self.decoder = build_components(decoder)
+        self.target_model = build_model(target_model) if target_model is not None else None
 
         self.num_levels = num_levels
         self.context = build_backbone(cxt_backbone)
@@ -61,6 +64,7 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
         self.dense_rec = dense_rec
         self.drop_ch = drop_ch
         self.flow_clamp = flow_clamp
+        self.flow_detach = flow_detach
         self.loss = build_loss(loss)
         self.corr_lookup = build_operators(corr_op_cfg)
         self.corr_lookup_inference = build_operators(corr_op_cfg_infer)
@@ -124,50 +128,67 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
         feat1, feat2, h_feat, cxt_feat = self.extract_feat(images_lab)
         B, _, H, W = feat1.shape
         
+        # B x HW x HW
+        if self.flow_detach:
+            corr = non_local_attention(feat1, [feat2], flatten=False, temprature=1.0, mask=None, scaling=True, att_only=True)
+            corr = corr.reshape(bsz * H * W, 1, H, W)
+            feat1 = feat1.detach()
+            feat2 = feat2.detach()
+        
         
         # get correlation attention map      
         if flow_init is None:
             flow_init = torch.zeros((B, 2, H, W), device=feat1.device)
 
         # interative update the flow B x 2 x H x W
-        preds, preds_lr, corr_pyramid = self.decoder(
+        preds, preds_lr, corr_  = self.decoder(
             False,
             feat1,
             feat2,
             flow=flow_init,
             h_feat=h_feat,
             cxt_feat=cxt_feat,
-            return_lr=True
         )
 
         if self.flow_clamp != -1:
             preds_lr = [torch.clamp(pred_lr, -self.flow_clamp, self.flow_clamp) for pred_lr in preds_lr]
-
-        if self.dense_rec:
-            gt = imgs[:,0,:,0]
-            ref = imgs[:,0,:,1]
-            for pred in preds:
-                warp_frame = 1
-        else:
-            recs = []
-            gt = images_lab_gt[:,0,ch,0] * 20
-            ref_v = self.prep(images_lab_gt[:,0,ch,1]).unsqueeze(1).repeat(1, H*W, 1, 1, 1).flatten(0,1)
-            for pred_lr in preds_lr:
-                # pred_lr = torch.zeros_like(pred_lr).cuda()
-                update_v = self.corr_lookup([ref_v], pred_lr).reshape(bsz, 1, -1, H, W)
-                corr_v = self.corr_lookup(corr_pyramid[:1], pred_lr).reshape(bsz, 1, -1, H, W)
-                rec = (corr_v.softmax(2) * update_v).sum(2)
-                rec = F.interpolate(rec, (h,w), mode='bilinear')
-                recs.append(rec * 20)
         
-            # for mast l1_loss
-            losses = {}
-            losses['flow_rec_loss'] = self.loss_weight['flow_rec_loss'] * self.loss(recs, gt)
+        losses = {}
+        
+        if self.loss_weight['flow_rec_loss'] > 0:
+            if self.dense_rec:
+                pass
+            else:
+                recs = []
+                gt = images_lab_gt[:,0,ch,0] * 20
+                ref_v = self.prep(images_lab_gt[:,0,ch,1]).unsqueeze(1).repeat(1, H*W, 1, 1, 1).flatten(0,1)
+                for pred_lr in preds_lr:
+                    update_v = self.corr_lookup([ref_v], pred_lr).reshape(bsz, 1, -1, H, W)
+                    if self.flow_detach:
+                        corr_v = self.corr_lookup([corr], pred_lr).reshape(bsz, 1, -1, H, W)
+                    else:
+                        corr_v = self.corr_lookup(corr_[:1], pred_lr).reshape(bsz, 1, -1, H, W)
+                        
+                    rec = (corr_v.softmax(2) * update_v).sum(2)
+                    rec = F.interpolate(rec, (h,w), mode='bilinear')
+                    recs.append(rec * 20)
+            
+                # for mast l1_loss
+                losses['flow_rec_loss'] = self.loss_weight['flow_rec_loss'] * self.loss(recs, gt)
+
+        if self.target_model is not None:
+            self.target_model.eval()
+            with torch.no_grad():
+                target = self.target_model(test_mode=True, imgs=imgs)[0][-1]
+            losses['raft_gt_loss'] = self.loss_weight['raft_gt_loss'] * self.loss(preds, target)
+        
+        losses['abs_mv'] = preds_lr[-1].abs().mean()
         
         imgs = tensor2img(imgs[0,0].permute(1,0,2,3), norm_mode='mean-std')
         flow = preds[-1][0].permute(1,2,0).detach().cpu().numpy()
         flow = mmcv.flow2rgb(flow) * 255
-        vis_results = dict(flow=flow, imgs=imgs)
+        flow_gt = mmcv.flow2rgb(target[0].permute(1,2,0).detach().cpu().numpy()) * 255
+        vis_results = dict(flow=flow, imgs=imgs, flow_gt=flow_gt)
 
         return losses, vis_results
 
@@ -283,6 +304,7 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
                             flow=flow_init,
                             h_feat=query_h_feat[ptr:ptr+t_step],
                             cxt_feat=query_cxt_feat[ptr:ptr+t_step],
+                            return_lr=True
                         )
 
                     if not self.test_cfg.get('with_norm', True):
@@ -315,20 +337,12 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
                                                                   zero_flow=self.test_cfg.get('zero_flow', False),
                                                                   ).reshape_as(resized_seg_map)
 
-                    # c = mmcv.flow2rgb(pred[0].permute(1,2,0).cpu().numpy())
-                    # i = tensor2img(imgs[0,:,1], norm_mode='mean-std-lab')
-                    # print('haha')
                     # a = F.interpolate(
                     #             seg_logit,
                     #             size=img_meta[0]['original_shape'][:2],
                     #             mode='bilinear',
                     #             align_corners=False).argmax(dim=1).permute(1,2,0).cpu()
                     # a = F.one_hot(a)[:,:,0].numpy()
-                    # b = F.interpolate(
-                    #             resized_seg_map,
-                    #             size=img_meta[0]['original_shape'][:2],
-                    #             mode='nearest',
-                    #             )[0].permute(1,2,0).cpu().numpy()
 
                 else:
 

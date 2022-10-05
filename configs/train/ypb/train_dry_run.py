@@ -124,7 +124,7 @@ optimizers = dict(
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
-max_epoch=15
+max_epoch=5
 lr_config = dict(
     policy='CosineAnnealing',
     min_lr_ratio=0.001,

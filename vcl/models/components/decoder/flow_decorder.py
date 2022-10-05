@@ -429,7 +429,7 @@ class RAFTDecoder(BaseDecoder):
             lr_preds.append(flow)
 
         return upflow_preds, lr_preds, corr_pyramid
-
+    
     def get_flow_lr(self, feat1: torch.Tensor, feat2: torch.Tensor,
                 flow: torch.Tensor, h: torch.Tensor,
                 cxt_feat: torch.Tensor):
@@ -467,7 +467,7 @@ class RAFTDecoder(BaseDecoder):
             h_feat: torch.Tensor,
             cxt_feat: torch.Tensor,
             valid: Optional[torch.Tensor] = None,
-            return_lr: bool = False):
+            ):
         """Forward function when model training.
         Args:
             feat1 (Tensor): The feature from the first input image.
@@ -484,10 +484,9 @@ class RAFTDecoder(BaseDecoder):
 
         flow_pred, flow_pred_lr, corr_pyramid = self.get_flow(feat1, feat2, flow, h_feat, cxt_feat)
 
-        if return_lr:
-            return flow_pred, flow_pred_lr, corr_pyramid
-        else:
-            return flow_pred
+
+        return flow_pred, flow_pred_lr, corr_pyramid
+       
 
     @torch.no_grad()
     def forward_test(self,
@@ -496,6 +495,7 @@ class RAFTDecoder(BaseDecoder):
                      flow: torch.Tensor,
                      h_feat: torch.Tensor,
                      cxt_feat: torch.Tensor,
+                     return_lr: bool = False,
                      img_metas=None):
         """Forward function when model training.
         Args:
@@ -510,10 +510,13 @@ class RAFTDecoder(BaseDecoder):
             Sequence[Dict[str, ndarray]]: The batch of predicted optical flow
                 with the same size of images before augmentation.
         """
-        flow_pred, corr_pyramid = self.get_flow_lr(feat1, feat2, flow, h_feat, cxt_feat)
 
-
-        return flow_pred, corr_pyramid[0]
+        if not return_lr:
+            flow_pred, flow_pred_lr, corr_pyramid = self.get_flow(feat1, feat2, flow, h_feat, cxt_feat)
+            return flow_pred, flow_pred_lr, corr_pyramid
+        else:
+            flow_pred_lr, corr_pyramid = self.get_flow_lr(feat1, feat2, flow, h_feat, cxt_feat)
+            return flow_pred_lr, corr_pyramid[0]
 
     
     def forward(self, test_mode=False, *args, **kwargs):

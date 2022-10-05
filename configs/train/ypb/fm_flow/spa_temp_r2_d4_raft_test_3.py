@@ -13,7 +13,7 @@ model = dict(
             cxt_channels=128,
             h_channels=128,
             corr_op_cfg=dict(type='CorrLookup', align_corners=True, radius=2),
-            corr_op_cfg_infer=dict(type='CorrLookup', align_corners=True, radius=6),
+            corr_op_cfg_infer=dict(type='CorrLookup_infer', align_corners=True, radius=6),
             backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
             cxt_backbone=dict(
                 type='RAFTEncoder',

@@ -3,48 +3,25 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'res18_d4_eval_flow'
+exp_name = 'res18_d4_eval'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='Memory_Tracker_Flow',
-            num_levels=4,
-            cxt_channels=128,
-            h_channels=128,
-            flow_clamp=2,
-            corr_op_cfg=dict(type='CorrLookup', align_corners=True, radius=2),
-            corr_op_cfg_infer=dict(type='CorrLookup_Infer', align_corners=True, radius=6),
-            backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
-            cxt_backbone=dict(
-                type='RAFTEncoder',
-                in_channels=3,
-                out_channels=256,
-                net_type='Basic',
-                # norm_cfg=dict(type='SyncBN'),
-                init_cfg=[
-                    dict(
-                        type='Kaiming',
-                        layer=['Conv2d'],
-                        mode='fan_out',
-                        nonlinearity='relu'),
-                    dict(type='Constant', layer=['SyncBatchNorm2d'], val=1, bias=0)
-                ]),
-            decoder=dict(
-                type='RAFTDecoder',
-                net_type='Basic',
-                num_levels=4,
-                radius=4,
-                iters=6,
-                mask_pred=False,
-                corr_op_cfg=dict(type='CorrLookup', align_corners=True),
-                gru_type='SeqConv',
-                # flow_loss=dict(type='SequenceLoss'),
-                act_cfg=dict(type='ReLU')),
-            loss=dict(type='SequenceLoss'),
-            loss_weight=dict(flow_rec_loss=1),
-            drop_ch=False,
-            freeze_bn=False
+    type='Framework_V2',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2,), pool_type='none'),
+    backbone_t=None,
+    loss=dict(type='MSELoss',reduction='mean'),
+    feat_size=[32,],
+    radius=[6,],
+    downsample_rate=[8,],
+    temperature=1.0,
+    temperature_t=0.07,
+    T=-1,
+    momentum=-1,
+    detach=True,
+    loss_weight = dict(stage0_l1_loss=1),
+    pretrained=None
 )
 
 model_test = None
@@ -53,7 +30,6 @@ model_test = None
 train_cfg = dict(syncbn=True)
 
 test_cfg = dict(
-    zero_flow=False,
     precede_frames=20,
     topk=10,
     temperature=0.07,
@@ -113,7 +89,7 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            root='/gdata/lirui/dataset/YouTube-VOS',
+            root='/dev/shm',
             list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
             clip_length=2,
@@ -163,7 +139,6 @@ log_config = dict(
     hooks=[
         dict(type='TextLoggerHook', by_epoch=False),
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
-        # dict(type='WandbLoggerHook', init_kwargs=dict(project='video_correspondence', name=f'{exp_name}'))
     ])
 
 visual_config = None
@@ -180,7 +155,7 @@ evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epo
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path='/gdata/lirui/expdir/VCL/group_fm_flow/spa_temp_d4_r2_raft_test/epoch_160.pth',
+                  checkpoint_path='/gdata/lirui/expdir/VCL/group_fm_flow/spa_temp_d4_r2_raft_test_flowsup_2/epoch_160.pth',
                   torchvision_pretrained=None
                 )
 
