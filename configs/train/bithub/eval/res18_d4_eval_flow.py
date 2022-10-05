@@ -6,7 +6,6 @@ from vcl.utils import *
 exp_name = 'res18_d4_eval_flow'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
-
 # model settings
 model = dict(
     type='Memory_Tracker_Flow',
