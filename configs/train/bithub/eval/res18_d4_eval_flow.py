@@ -54,7 +54,7 @@ model_test = None
 train_cfg = dict(syncbn=True)
 
 test_cfg = dict(
-    zero_flow=True,
+    zero_flow=False,
     precede_frames=5,
     topk=10,
     temperature=0.07,
