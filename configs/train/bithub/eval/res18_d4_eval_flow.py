@@ -47,7 +47,6 @@ model = dict(
             freeze_bn=False
 )
 
-
 model_test = None
 
 # model training and testing settings
