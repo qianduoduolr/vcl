@@ -49,7 +49,6 @@ model = dict(
 
 model_test = None
 
-
 # model training and testing settings
 train_cfg = dict(syncbn=True)
 
