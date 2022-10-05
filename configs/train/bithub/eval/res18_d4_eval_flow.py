@@ -55,7 +55,7 @@ train_cfg = dict(syncbn=True)
 
 test_cfg = dict(
     zero_flow=False,
-    precede_frames=1,
+    precede_frames=20,
     topk=10,
     temperature=0.07,
     strides=(1, 2, 2, 1),
