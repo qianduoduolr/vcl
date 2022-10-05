@@ -88,7 +88,7 @@ model = dict(
                             init_cfg=dict(type='Pretrained', checkpoint='/home/lr/models/optical_flow/raft_8x2_100k_mixed_368x768.pth')
                                 ),
             loss=dict(type='SequenceLoss'),
-            loss_weight=dict(flow_rec_loss=0, raft_gt_loss=0.01),
+            loss_weight=dict(flow_rec_loss=0, raft_gt_loss=1),
             drop_ch=False,
             freeze_bn=False
 )
@@ -198,6 +198,9 @@ optimizers = dict(
     eps=1e-08,
     weight_decay=0.0001,
     amsgrad=False)
+
+optimizer_config = dict(grad_clip=dict(max_norm=1.))
+
 # learning policy
 # total_iters = 200000
 runner_type='epoch'

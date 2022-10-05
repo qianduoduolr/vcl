@@ -50,9 +50,10 @@ class IterBasedRunner_Custom(BaseRunner):
     This runner train models iteration by iteration.
     """
     
-    def __init__(self, model, model_test, *args, **kwargs):
+    def __init__(self, model, model_test, is_init_opz_hook=False, *args, **kwargs):
         super().__init__(model=model, *args, **kwargs)
         self.model_test = model_test
+        self.is_init_opz_hook = is_init_opz_hook
 
     def train(self, data_loader, **kwargs):
         self.model.train()
@@ -62,7 +63,7 @@ class IterBasedRunner_Custom(BaseRunner):
         data_batch = next(data_loader)
         self.call_hook('before_train_iter')
         self.progress_ratio = self._iter / self._max_iters
-        kwargs = {**kwargs, 'progress_ratio':self.progress_ratio}
+        kwargs = {**kwargs, 'is_init_opz_hook':self.is_init_opz_hook}
         outputs = self.model.train_step(data_batch, self.optimizer, **kwargs)
         if not isinstance(outputs, dict):
             raise TypeError('model.train_step() must return a dict')

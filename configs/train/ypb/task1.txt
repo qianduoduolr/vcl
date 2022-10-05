@@ -1,1 +1,1 @@
-fm_flow/spa_temp_r2_d4_raft_flowsup_15
+train_dry_run

@@ -133,38 +133,7 @@ class Memory_Tracker_Custom(BaseModel):
         vis_results = dict(err=None, imgs=imgs[0,0])
 
         return losses, vis_results
-    
-    def train_step(self, data_batch, optimizer, progress_ratio):
-        """Abstract method for one training step.
-
-        All subclass should overwrite it.
-        """
-        # parser loss
-        losses, vis_results = self(**data_batch, test_mode=False)
-        loss, log_vars = self.parse_losses(losses)
-
-        # optimizer
-        if isinstance(optimizer, dict):
-            for k,opz in optimizer.items():
-                opz.zero_grad()
-
-            loss.backward()
-            for k,opz in optimizer.items():
-                opz.step()
-        else:
-            optimizer.zero_grad()
-
-            loss.backward()
-            optimizer.step()
-
-        log_vars.pop('loss')
-        outputs = dict(
-            log_vars=log_vars,
-            num_samples=len(data_batch['images_lab']),
-            vis_results=vis_results,
-        )
-
-        return outputs    
+      
     
     def frame_reconstruction(self, gts, att, ch, feat_size=32, downsample_rate=8):
         bsz = att.shape[0]

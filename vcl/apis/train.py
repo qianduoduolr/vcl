@@ -149,6 +149,10 @@ def _dist_train(model,
 
     # build runner
     optimizer = build_optimizers(model, cfg.optimizers)
+    optimizer_config = cfg.get('optimizer_config', None)
+    is_init_opz_hook = False if optimizer_config is None else True
+    
+    
     if cfg.runner_type is 'iter':
         runner = IterBasedRunner_Custom(
             model,
@@ -156,7 +160,8 @@ def _dist_train(model,
             optimizer=optimizer,
             work_dir=cfg.work_dir,
             logger=logger,
-            meta=meta)
+            meta=meta,
+            is_init_opz_hook=is_init_opz_hook)
     else:
         runner = EpochBasedRunner_Custom(
             model,
@@ -164,7 +169,8 @@ def _dist_train(model,
             optimizer=optimizer,
             work_dir=cfg.work_dir,
             logger=logger,
-            meta=meta)
+            meta=meta,
+            is_init_opz_hook=is_init_opz_hook)
     # an ugly walkaround to make the .log and .log.json filenames the same
     runner.timestamp = timestamp
 
@@ -172,6 +178,7 @@ def _dist_train(model,
     runner.register_training_hooks(
         cfg.lr_config,
         checkpoint_config=cfg.checkpoint_config,
+        optimizer_config=optimizer_config,
         log_config=cfg.log_config)
     
     if cfg.get('ddp_shuffle', False):
@@ -294,6 +301,8 @@ def _non_dist_train(model,
 
     # build runner
     optimizer = build_optimizers(model, cfg.optimizers)
+    optimizer_config = cfg.get('optimizer_config', None)
+    is_init_opz_hook = False if optimizer_config is None else True
 
     if cfg.runner_type is 'iter':
         runner = IterBasedRunner_Custom(
@@ -302,7 +311,8 @@ def _non_dist_train(model,
             optimizer=optimizer,
             work_dir=cfg.work_dir,
             logger=logger,
-            meta=meta)
+            meta=meta,
+            is_init_opz_hook=is_init_opz_hook)
     else:
         runner = EpochBasedRunner_Custom(
             model,
@@ -310,13 +320,16 @@ def _non_dist_train(model,
             optimizer=optimizer,
             work_dir=cfg.work_dir,
             logger=logger,
-            meta=meta)
+            meta=meta,
+            is_init_opz_hook=is_init_opz_hook)
+        
     # an ugly walkaround to make the .log and .log.json filenames the same
     runner.timestamp = timestamp
 
     # register hooks
     runner.register_training_hooks(
         cfg.lr_config,
+        optimizer_config=optimizer_config,
         checkpoint_config=cfg.checkpoint_config,
         log_config=cfg.log_config)
 

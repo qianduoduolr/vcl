@@ -20,15 +20,17 @@ class EpochBasedRunner_Custom(BaseRunner):
     This runner train models epoch by epoch.
     """
     
-    def __init__(self, model, model_test, *args, **kwargs):
+    def __init__(self, model, model_test, is_init_opz_hook=False, *args, **kwargs):
         super().__init__(model=model, *args, **kwargs)
         self.model_test = model_test
+        self.is_init_opz_hook = is_init_opz_hook
 
     def run_iter(self, data_batch, train_mode, **kwargs):
         if self.batch_processor is not None:
             outputs = self.batch_processor(
                 self.model, data_batch, train_mode=train_mode, **kwargs)
         elif train_mode:
+            kwargs = {**kwargs,  'is_init_opz_hook':self.is_init_opz_hook}
             outputs = self.model.train_step(data_batch, self.optimizer,
                                             **kwargs)
         else:
@@ -51,7 +53,6 @@ class EpochBasedRunner_Custom(BaseRunner):
             self._inner_iter = i
             self.call_hook('before_train_iter')
             self.progress_ratio = self._iter / self._max_iters
-            kwargs = {**kwargs, 'progress_ratio':self.progress_ratio}
             self.run_iter(data_batch, train_mode=True, **kwargs)
             self.call_hook('after_train_iter')
             self._iter += 1
