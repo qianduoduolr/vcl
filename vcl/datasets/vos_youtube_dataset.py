@@ -64,7 +64,7 @@ class VOS_youtube_dataset_rgb(Video_dataset_base):
                 continue
         
             self.samples.append(sample)
-        
+
         logger = get_root_logger()
         logger.info(" Load dataset with {} videos ".format(len(self.samples)))
 

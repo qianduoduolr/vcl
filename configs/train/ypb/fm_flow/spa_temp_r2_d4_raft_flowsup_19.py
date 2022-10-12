@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'spa_temp_d4_r2_raft_test_flowsup_16'
+exp_name = 'spa_temp_d4_r2_raft_test_flowsup_19'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
@@ -101,7 +101,7 @@ model_test = None
 train_cfg = dict(syncbn=True)
 
 test_cfg = dict(
-    zero_flow=True,
+    zero_flow=False,
     precede_frames=20,
     topk=10,
     temperature=0.07,

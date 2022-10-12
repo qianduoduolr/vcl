@@ -326,6 +326,8 @@ class RAFTDecoder(BaseDecoder):
 
         feat_channels = feat_channels if isinstance(tuple,
                                                     list) else [feat_channels]
+        self.feat_channels = feat_channels
+        
         self.net_type = net_type
         self.num_levels = num_levels
         self.radius = radius
@@ -496,6 +498,7 @@ class RAFTDecoder(BaseDecoder):
                      h_feat: torch.Tensor,
                      cxt_feat: torch.Tensor,
                      return_lr: bool = False,
+                     return_corr: bool = False,
                      img_metas=None):
         """Forward function when model training.
         Args:
@@ -510,7 +513,9 @@ class RAFTDecoder(BaseDecoder):
             Sequence[Dict[str, ndarray]]: The batch of predicted optical flow
                 with the same size of images before augmentation.
         """
-
+        if return_corr:
+            return self.corr_block(feat1, feat2)[0]
+        
         if not return_lr:
             flow_pred, flow_pred_lr, corr_pyramid = self.get_flow(feat1, feat2, flow, h_feat, cxt_feat)
             return flow_pred, flow_pred_lr, corr_pyramid
@@ -536,3 +541,91 @@ class RAFTDecoder(BaseDecoder):
             return self.forward_test(*args, **kwargs)
 
         return self.forward_train(*args, **kwargs)
+    
+    
+
+
+@COMPONENTS.register_module()
+class RAFTDecoderVAE(RAFTDecoder):
+    """The decoder of RAFT Net.
+
+    """
+    
+    def __init__(
+        self,
+        *args,
+        **kwargs):
+        super().__init__(*args, **kwargs)
+      
+        self.flow_pred_vae = XHead(self.h_channels, self.feat_channels, 2, x='flow')
+
+
+    def forward_train(
+            self,
+            feat1: torch.Tensor,
+            feat2: torch.Tensor,
+            flow: torch.Tensor,
+            h_feat: torch.Tensor,
+            cxt_feat: torch.Tensor,
+            valid: Optional[torch.Tensor] = None,
+            ):
+        """Forward function when model training.
+        Args:
+            feat1 (Tensor): The feature from the first input image.
+            feat2 (Tensor): The feature from the second input image.
+            flow (Tensor): The last estimated flow from GRU cell.
+            h (Tensor): The hidden state for GRU cell.
+            cxt_feat (Tensor): The contextual feature from the first image.
+            flow_gt (Tensor): The ground truth of optical flow.
+                Defaults to None.
+            valid (Tensor, optional): The valid mask. Defaults to None.
+        Returns:
+            Dict[str, Tensor]: The losses of model.
+        """
+
+        flow_pred, flow_pred_lr, corr_pyramid, var_pred = self.get_flow(feat1, feat2, flow, h_feat, cxt_feat)
+
+
+        return flow_pred, flow_pred_lr, corr_pyramid, var_pred
+    
+    
+    def get_flow(self, feat1: torch.Tensor, feat2: torch.Tensor,
+                flow: torch.Tensor, h: torch.Tensor,
+                cxt_feat: torch.Tensor):
+        """Forward function for RAFTDecoder.
+        Args:
+            feat1 (Tensor): The feature from the first input image.
+            feat2 (Tensor): The feature from the second input image.
+            flow (Tensor): The initialized flow when warm start.
+            h (Tensor): The hidden state for GRU cell.
+            cxt_feat (Tensor): The contextual feature from the first image.
+        Returns:
+            Sequence[Tensor]: The list of predicted optical flow.
+        """
+
+        corr_pyramid = self.corr_block(feat1, feat2)
+        upflow_preds = []
+        lr_preds = []
+        delta_flow = torch.zeros_like(flow)
+        for _ in range(self.iters):
+            flow = flow.detach()
+            corr = self.corr_lookup(corr_pyramid, flow)
+            motion_feat = self.encoder(corr, flow)
+            x = torch.cat([cxt_feat, motion_feat], dim=1)
+            h = self.gru(h, x)
+
+            delta_flow = self.flow_pred(h)
+            flow = flow + delta_flow
+
+            if hasattr(self, 'mask_pred'):
+                mask = .25 * self.mask_pred(h)
+            else:
+                mask = None
+
+            upflow = self._upsample(flow, mask)
+            upflow_preds.append(upflow)
+            lr_preds.append(flow)
+            
+        var_pred = self.flow_pred_vae(h)
+
+        return upflow_preds, lr_preds, corr_pyramid, var_pred

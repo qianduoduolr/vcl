@@ -1,1 +1,1 @@
-train_dry_run
+eval/res18_d4_eval_flow_66

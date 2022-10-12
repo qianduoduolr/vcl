@@ -161,8 +161,8 @@ def main():
             for k,v in model_cfg.items():
                 model.backbone[k] = v
     else:
-        if cfg.model.get('target_model', None) is not None:
-            cfg.model.pop('target_model')
+        # if cfg.model.get('target_model', None) is not None:
+        #     cfg.model.pop('target_model')
         model = cfg.model
 
 

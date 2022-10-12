@@ -134,18 +134,18 @@ def _dist_train(model,
     # put model on gpus
     find_unused_parameters = cfg.get('find_unused_parameters', False)
     
-    model = DistributedDataParallelWrapper(
-        model,
-        device_ids=[torch.cuda.current_device()],
-        broadcast_buffers=False,
-        find_unused_parameters=find_unused_parameters)
+    model = MMDistributedDataParallel(
+            model.cuda(),
+            device_ids=[torch.cuda.current_device()],
+            broadcast_buffers=False,
+            find_unused_parameters=find_unused_parameters)
         
     if model_test is not None:
-        model_test = DistributedDataParallelWrapper(
-                    model_test,
-                    device_ids=[torch.cuda.current_device()],
-                    broadcast_buffers=False,
-                    find_unused_parameters=find_unused_parameters)
+        model_test = MMDistributedDataParallel(
+            model_test.cuda(),
+            device_ids=[torch.cuda.current_device()],
+            broadcast_buffers=False,
+            find_unused_parameters=find_unused_parameters)
 
     # build runner
     optimizer = build_optimizers(model, cfg.optimizers)

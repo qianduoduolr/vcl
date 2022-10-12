@@ -170,8 +170,9 @@ class Framework_V2(BaseModel):
                 _, target_att = non_local_attention(tar_t, refs_t, temprature=self.temperature_t, norm=self.norm)
                 
             losses['correlation_dist_loss'] = self.loss_weight['correlation_dist_loss'] * self.loss(att_g, target_att)
-            
-        return losses
+        
+        
+        return losses, None
     
     def dropout2d_lab(self, arr): # drop same layers for all images
         if not self.training:

@@ -51,17 +51,17 @@ def non_local_attention(tar, refs, per_ref=True, flatten=True, temprature=1.0, m
         if norm:
             tar = F.normalize(tar, dim=-1)
             refs = F.normalize(refs, dim=-1)
-        att_raw = torch.einsum("bic,btjc -> btij", (tar, refs)) / temprature 
+        att = torch.einsum("bic,btjc -> btij", (tar, refs)) / temprature 
     elif mode == 'l2':
         refs = refs.flatten(1,2).transpose(1,2)
         a_sq = refs.pow(2).sum(1).unsqueeze(2)
         ab = refs.transpose(1, 2) @ tar.transpose(1,2)
-        att_raw = (2*ab-a_sq) / math.sqrt(refs.shape[1])
-        att_raw = att_raw.transpose(1,2).view(_, t, att.shape[-1], -1)
+        att = (2*ab-a_sq) / math.sqrt(refs.shape[1])
+        att = att.transpose(1,2).view(_, t, att.shape[-1], -1)
 
     if scaling:
         # scaling
-        att = att_raw / torch.sqrt(torch.tensor(feat_dim).float()) 
+        att = att / torch.sqrt(torch.tensor(feat_dim).float()) 
 
 
     if mask is not None:
@@ -75,12 +75,12 @@ def non_local_attention(tar, refs, per_ref=True, flatten=True, temprature=1.0, m
         # return att for each ref
         att = F.softmax(att, dim=-1)
         out = frame_transform(att, refs, per_ref=per_ref, flatten=flatten)
-        return att_raw, att  
+        return _, att  
     else:
         att_ = att.permute(0, 2, 1, 3).flatten(2)
         att_ = F.softmax(att_, -1)
         out = frame_transform(att_, refs, per_ref=per_ref, flatten=flatten)
-        return att_raw, att_
+        return _, att_
 
 
 def inter_intra_attention(tar, refs, per_ref=True, flatten=True, temprature=1.0, mask=None):

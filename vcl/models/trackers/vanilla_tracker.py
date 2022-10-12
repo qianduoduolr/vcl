@@ -132,7 +132,7 @@ class VanillaTracker(BaseTracker):
 
         return feat_bank
 
-    def get_corrspondence(self, q, k, t=0.001, norm=True, mode='dot', mask=None):
+    def get_corrspondence(self, q, k, t=0.001, norm=True, mode='dot', mask=None, per_ref=True):
 
         query = self.backbone(q)
         key =  self.backbone(torch.cat(k, 0))
@@ -141,10 +141,11 @@ class VanillaTracker(BaseTracker):
         key = key.view(bsz, -1, c, h, w)
 
         # bi(tj)
-        _, corr = non_local_attention(query, key, temprature=t, norm=norm, mode=mode, mask=mask, per_ref=False)
+        _, corr = non_local_attention(query, key, temprature=t, norm=norm, mode=mode, mask=mask, per_ref=per_ref)
 
         # btij
-        corr = corr.view(bsz, corr.shape[1], -1, corr.shape[1]).permute(0, 2, 1, 3)
+        if not per_ref:
+            corr = corr.view(bsz, corr.shape[1], -1, corr.shape[1]).permute(0, 2, 1, 3)
 
         return corr
 

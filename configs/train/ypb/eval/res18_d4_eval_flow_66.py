@@ -12,9 +12,9 @@ model = dict(
             num_levels=4,
             cxt_channels=128,
             h_channels=128,
-            # flow_clamp=1,
+            flow_clamp=-1,
             corr_op_cfg=dict(type='CorrLookup', align_corners=True, radius=2),
-            corr_op_cfg_infer=dict(type='CorrLookup_Infer', align_corners=True, radius=3),
+            corr_op_cfg_infer=dict(type='CorrLookup_Infer', align_corners=True, radius=12),
             warp_op_cfg=dict(type='Warp', mode='bilinear',
                  padding_mode= 'border',
                  align_corners= True,
@@ -90,29 +90,13 @@ model = dict(
                                 act_cfg=dict(type='ReLU')),
                             freeze_bn=True,
                             loss=dict(type='SequenceLoss'),
-                            init_cfg=dict(type='Pretrained', checkpoint='/home/lr/models/optical_flow/raft_8x2_100k_mixed_368x768.pth')
+                            init_cfg=dict(type='Pretrained', checkpoint='/gdata/lirui/models/optical_flow/raft_8x2_100k_mixed_368x768.pth')
                                 ),
             loss=dict(type='SequenceLoss'),
             loss_weight=dict(flow_rec_loss=1),
             drop_ch=False,
             freeze_bn=False
 )
-# model = dict(
-#     type='Framework_V2',
-#     backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2,), pool_type=None),
-#     backbone_t=None,
-#     loss=dict(type='MSELoss',reduction='mean'),
-#     feat_size=[32,],
-#     radius=[6,],
-#     downsample_rate=[8,],
-#     temperature=1.0,
-#     temperature_t=0.07,
-#     T=-1,
-#     momentum=-1,
-#     detach=True,
-#     loss_weight = dict(stage0_l1_loss=1),
-#     pretrained=None
-# )
 
 model_test = None
 
@@ -120,17 +104,18 @@ model_test = None
 train_cfg = dict(syncbn=True)
 
 test_cfg = dict(
-    warp=True,
+    t_step=4,
+    # warp=True,
+    # raft_prop=True,
     use_raft=False,
-    raft_prop=True,
-    zero_flow=True,
-    precede_frames=1,
+    zero_flow=False,
+    precede_frames=20,
     topk=10,
     temperature=0.07,
     strides=(1, 2, 2, 1),
     out_indices=(3, ),
     neighbor_range=24,
-    with_first=False,
+    with_first=True,
     with_first_neighbor=True,
     output_dir='eval_results')
 
@@ -159,8 +144,20 @@ train_pipeline = [
     dict(type='ToTensor', keys=['imgs', 'images_lab'])
 ]
 
+# val_pipeline = [
+#     dict(type='Resize', scale=(-1, 384), keep_ratio=True),
+#     dict(type='Flip', flip_ratio=0),
+#     dict(type='RGB2LAB'),
+#     dict(type='Normalize', **img_norm_cfg_lab),
+#     dict(type='FormatShape', input_format='NCTHW'),
+#     dict(
+#         type='Collect',
+#         keys=['imgs', 'ref_seg_map'],
+#         meta_keys=('video_path', 'original_shape')),
+#     dict(type='ToTensor', keys=['imgs', 'ref_seg_map'])
+# ]
 val_pipeline = [
-    dict(type='Resize', scale=(384, 256), keep_ratio=False),
+    dict(type='Resize', scale=(-1, 480), keep_ratio=True),
     dict(type='Flip', flip_ratio=0),
     dict(type='RGB2LAB', output_keys='images_lab'),
     dict(type='Normalize', **img_norm_cfg),
@@ -185,8 +182,8 @@ data = dict(
     train=
             dict(
             type=train_dataset_type,
-            root='/home/lr/dataset/YouTube-VOS',
-            list_path='/home/lr/dataset/YouTube-VOS/2018/train',
+            root='/gdata/lirui/dataset/YouTube-VOS',
+            list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
             data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train_all_frames/Flows_s256', ANNO='train/Annotations'),
             clip_length=2,
             pipeline=train_pipeline,
@@ -194,8 +191,8 @@ data = dict(
 
     test =  dict(
             type=test_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -203,8 +200,8 @@ data = dict(
     
     val =  dict(
             type=val_dataset_type,
-            root='/home/lr/dataset/DAVIS',
-            list_path='/home/lr/dataset/DAVIS/ImageSets',
+            root='/gdata/lirui/dataset/DAVIS',
+            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -244,7 +241,7 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/home/lr/expdir/VCL/group_stsl/{exp_name}'
+work_dir = f'/gdata/lirui/expdir/VCL/group_stsl/{exp_name}'
 
 
 evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epoch=True
@@ -252,7 +249,7 @@ evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=800, by_epo
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path='/home/lr/expdir/VCL/group_fm_flow/spa_temp_d4_r2_raft_test_flowsup_2/epoch_160.pth',
+                  checkpoint_path='/gdata/lirui/expdir/VCL/group_fm_flow/spa_temp_r2_d4_raft_vae_pretrain/epoch_160.pth',
                   torchvision_pretrained=None
                 )
 
