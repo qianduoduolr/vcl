@@ -262,9 +262,8 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
                     save_image=False,
                     save_path=None,
                     iteration=None):
-        if images_lab is not None: imgs = images_lab
+        
         imgs = imgs.reshape((-1, ) + imgs.shape[2:])
-            
         clip_len = imgs.size(2)
 
         feat_bank, h_feat_bank, cxt_feat_bank  = self.extract_feats(imgs)
@@ -305,6 +304,7 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
 
         for frame_idx in tqdm(range(1, clip_len), total=clip_len-1):
             key_start = max(0, frame_idx - self.test_cfg.precede_frames)
+
             query_feat = feat_bank[:, :,frame_idx].to(imgs.device)
             query_cxt_feat = cxt_feat_bank[:, :,frame_idx].to(imgs.device)
             query_h_feat = h_feat_bank[:, :,frame_idx].to(imgs.device)
@@ -342,7 +342,7 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
 
                     t = min(L-ptr, t_step)
                     flow_init = torch.zeros((t, 2, *query_feat.shape[-2:]), device=query_feat.device)
-                    
+
                     # flow decoder
                     flow, corr = self.decoder(
                             True,
@@ -353,9 +353,6 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
                             cxt_feat=query_cxt_feat[ptr:ptr+t_step],
                             return_lr=True
                         )
-                    
-                    # if torch.distributed.get_rank() == 0:
-                    #     print(ptr, flow.max().item(), flow.min().item(), flow.abs().mean().item())
 
                     if not self.test_cfg.get('with_norm', True):
                         pass

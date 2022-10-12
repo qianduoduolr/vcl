@@ -144,32 +144,32 @@ train_pipeline = [
     dict(type='ToTensor', keys=['imgs', 'images_lab'])
 ]
 
-# val_pipeline = [
-#     dict(type='Resize', scale=(-1, 384), keep_ratio=True),
-#     dict(type='Flip', flip_ratio=0),
-#     dict(type='RGB2LAB'),
-#     dict(type='Normalize', **img_norm_cfg_lab),
-#     dict(type='FormatShape', input_format='NCTHW'),
-#     dict(
-#         type='Collect',
-#         keys=['imgs', 'ref_seg_map'],
-#         meta_keys=('video_path', 'original_shape')),
-#     dict(type='ToTensor', keys=['imgs', 'ref_seg_map'])
-# ]
 val_pipeline = [
-    dict(type='Resize', scale=(-1, 480), keep_ratio=True),
+    dict(type='Resize', scale=(-1, 384), keep_ratio=True),
     dict(type='Flip', flip_ratio=0),
-    dict(type='RGB2LAB', output_keys='images_lab'),
-    dict(type='Normalize', **img_norm_cfg),
-    dict(type='Normalize', **img_norm_cfg_lab, keys='images_lab'),
+    dict(type='RGB2LAB'),
+    dict(type='Normalize', **img_norm_cfg_lab),
     dict(type='FormatShape', input_format='NCTHW'),
-    dict(type='FormatShape', input_format='NCTHW', keys='images_lab'),
     dict(
         type='Collect',
-        keys=['imgs', 'images_lab', 'ref_seg_map'],
+        keys=['imgs', 'ref_seg_map'],
         meta_keys=('video_path', 'original_shape')),
-    dict(type='ToTensor', keys=['imgs', 'images_lab', 'ref_seg_map'])
+    dict(type='ToTensor', keys=['imgs', 'ref_seg_map'])
 ]
+# val_pipeline = [
+#     dict(type='Resize', scale=(-1, 480), keep_ratio=True),
+#     dict(type='Flip', flip_ratio=0),
+#     dict(type='RGB2LAB', output_keys='images_lab'),
+#     dict(type='Normalize', **img_norm_cfg),
+#     dict(type='Normalize', **img_norm_cfg_lab, keys='images_lab'),
+#     dict(type='FormatShape', input_format='NCTHW'),
+#     dict(type='FormatShape', input_format='NCTHW', keys='images_lab'),
+#     dict(
+#         type='Collect',
+#         keys=['imgs', 'images_lab', 'ref_seg_map'],
+#         meta_keys=('video_path', 'original_shape')),
+#     dict(type='ToTensor', keys=['imgs', 'images_lab', 'ref_seg_map'])
+# ]
 
 # demo_pipeline = None
 data = dict(

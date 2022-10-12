@@ -12,9 +12,10 @@ model = dict(
             num_levels=4,
             cxt_channels=128,
             h_channels=128,
+            flow_clamp=-1,
             corr_op_cfg=dict(type='CorrLookup', align_corners=True, radius=2),
             corr_op_cfg_infer=dict(type='CorrLookup_Infer', align_corners=True, radius=12),
-            backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none', pretrained='/gdata/lirui/expdir/VCL/group_stsl_former/final_framework_v2_15/epoch_1600.pth', torchvision_pretrain=False, frozen_stages=4),
+            backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
             cxt_backbone=dict(
                 type='RAFTEncoder',
                 in_channels=3,
