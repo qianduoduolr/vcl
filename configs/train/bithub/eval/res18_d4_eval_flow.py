@@ -73,7 +73,6 @@ test_dataset_type = 'VOS_davis_dataset_test'
 
 
 # train_pipeline = None
-# train_pipeline = None
 img_norm_cfg = dict(mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
 img_norm_cfg_lab = dict(mean=[50, 0, 0], std=[50, 127, 127], to_bgr=False)
 
