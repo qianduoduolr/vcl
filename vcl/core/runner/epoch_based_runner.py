@@ -4,12 +4,9 @@ import shutil
 import time
 import warnings
 
-import torch
-
 import mmcv
-from mmcv.runner import BaseRunner
-from mmcv.runner import RUNNERS
-from mmcv.runner import save_checkpoint
+import torch
+from mmcv.runner import RUNNERS, BaseRunner, save_checkpoint
 from torch.optim import Optimizer
 
 

@@ -1,16 +1,18 @@
 import os
-import numpy as np
+
 import cv2
+import matplotlib.pyplot as plt
+import mmcv
+import numpy as np
 import torch
 import torch.nn.functional as F
-
-import mmcv
-from PIL import Image
-import matplotlib.pyplot as plt
-from .util import *
-from .dim_reduction import *
 from matplotlib import cm
 from mmcv.ops import Correlation
+from PIL import Image
+
+from .dim_reduction import *
+from .util import *
+
 plt.axis('off')
 
 class Correspondence_Visualizer(object):
@@ -248,6 +250,7 @@ def preprocess_(img, mode='rgb'):
     
     
 def compute_flow(corr):
+    
     # assume batched affinity, shape N x H * W x W x H
     h = w = int(corr.shape[-1] ** 0.5)
 
@@ -257,6 +260,9 @@ def compute_flow(corr):
 
     u = nnf % w # nnf.shape[-1]
     v = nnf / h # nnf.shape[-2] # nnf is an IntTensor so rounds automatically
+    
+    u = torch.clamp(u, -w, w)
+    v = torch.clamp(v, -h, h)
 
     rr = torch.arange(u.shape[-1])[None].long().cuda()
 

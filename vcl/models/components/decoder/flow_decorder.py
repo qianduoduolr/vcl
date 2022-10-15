@@ -11,7 +11,6 @@ from mmcv.runner import BaseModule
 
 from ...builder import build_operators
 from ...registry import COMPONENTS
-
 from .base_decoder import BaseDecoder
 
 

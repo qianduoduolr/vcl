@@ -1,18 +1,19 @@
 import copy
+import glob
 import os
 import os.path as osp
 
+import cv2
 import mmcv
 import numpy as np
 import scipy.io as sio
 from mmcv.utils import print_log
 
-from vcl.utils import add_prefix, terminal_is_available
-from .video_dataset import Video_dataset_base
-from .registry import DATASETS
 from vcl.utils import *
-import glob
-import cv2
+from vcl.utils import add_prefix, terminal_is_available
+
+from .registry import DATASETS
+from .video_dataset import Video_dataset_base
 
 
 @DATASETS.register_module()

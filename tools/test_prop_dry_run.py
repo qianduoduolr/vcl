@@ -1,12 +1,12 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-from pickle import FALSE
-import _init_paths
 import argparse
 import os
+from pickle import FALSE
 
+import _init_paths
 import mmcv
 import torch
-from mmcv.parallel import MMDataParallel
+from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import get_dist_info, init_dist, load_checkpoint
 
 from vcl.apis import multi_gpu_test, set_random_seed, single_gpu_test
@@ -17,7 +17,7 @@ from vcl.models import build_model
 
 def parse_args():
     parser = argparse.ArgumentParser(description='mmediting tester')
-    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/train/local/eval/res18_d4_eval.py')
+    parser.add_argument('--config', help='test config file path', default='/home/lr/project/vcl/configs/train/local/eval/res18_d4_jhmdb_eval.py')
     parser.add_argument('--checkpoint', type=str, help='checkpoint file', default='')
     parser.add_argument('--out-indices', nargs='+', type=int, default=[2])
     parser.add_argument('--seed', type=int, default=None, help='random seed')
@@ -181,21 +181,19 @@ def main():
             save_path=args.save_path,
             save_image=args.save_image)
     else:
-        find_unused_parameters = cfg.get('find_unused_parameters', False)
-        model = DistributedDataParallelWrapper(
-            model,
-            device_ids=[torch.cuda.current_device()],
-            broadcast_buffers=False,
-            find_unused_parameters=find_unused_parameters)
-
-        device_id = torch.cuda.current_device()
-
         if args.checkpoint:
-            
             _ = load_checkpoint(
                 model,
                 args.checkpoint,
                 map_location='cpu')
+        
+        find_unused_parameters = cfg.get('find_unused_parameters', False)
+        model = MMDistributedDataParallel(
+            model.cuda(),
+            device_ids=[torch.cuda.current_device()],
+            broadcast_buffers=False,
+            find_unused_parameters=find_unused_parameters)
+
 
         outputs = multi_gpu_test(
             model,

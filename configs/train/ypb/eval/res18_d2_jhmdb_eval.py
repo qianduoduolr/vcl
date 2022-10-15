@@ -1,38 +1,40 @@
 import os
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'dist_nl_l2_layer4_mast_d2'
+exp_name = 'res18_d2_jhmdb_eval'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
 model = dict(
-    type='Dist_Tracker_V2',
-    backbone=dict(type='ResNet',depth=18, strides=(1, 1, 1, 4), out_indices=(2, 3), pool_type='mean'),
-    backbone_t=dict(type='ResNet',depth=50, strides=(1, 1, 1, 4), out_indices=(3, ),pretrained='/gdata/lirui/models/ssl/image_based/detco_200ep_AA.pth'),
-    loss=dict(type='MSELoss',reduction='mean', loss_weight=200),
-    l1_loss=True,
-    feat_size=64,
-    downsample_rate=4,
+    type='Framework_V2',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 1, 1, 1), out_indices=(2,), pool_type='mean'),
+    backbone_t=None,
+    loss=dict(type='MSELoss',reduction='mean'),
+    feat_size=[32,],
+    radius=[6,],
+    downsample_rate=[8,],
     temperature=1.0,
     temperature_t=0.07,
+    T=-1,
     momentum=-1,
-    mask_radius=12,
+    detach=True,
+    loss_weight = dict(stage0_l1_loss=1),
     pretrained=None
 )
-
 # model training and testing settings
 train_cfg = dict(syncbn=True)
 
 test_cfg = dict(
-    precede_frames=20,
+    precede_frames=1,
     topk=10,
     temperature=0.07,
     strides=(1, 1, 1, 1),
     out_indices=(2, ),
-    neighbor_range=48,
-    with_first=True,
+    neighbor_range=20,
+    with_first=False,
     with_first_neighbor=True,
     save_np=True,
     output_dir='eval_results')
@@ -144,11 +146,11 @@ visual_config = None
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}'
+work_dir = f'/gdata/lirui/expdir/VCL/group_stsl/{exp_name}'
 
 eval_config= dict(
                   output_dir=f'{work_dir}/pose_eval_output',
-                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_vqvae_tracker/{exp_name}/epoch_{max_epoch}.pth'
+                  checkpoint_path='/gdata/lirui/expdir/VCL/group_stsl_former/final_framework_v2_15/epoch_1600.pth'
                 )
 
 
@@ -160,5 +162,5 @@ test_mode = True
 
 
 if __name__ == '__main__':
-    make_pbs(exp_name, docker_name)
-    make_local_config(exp_name)
+
+    make_local_config_back(exp_name, file='eval')

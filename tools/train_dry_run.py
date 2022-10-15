@@ -1,14 +1,14 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-import _init_paths
 import argparse
 import copy
 import os
 import os.path as osp
+import random
 import time
 
+import _init_paths
 import mmcv
 import torch
-import random
 from mmcv import Config
 from mmcv.runner import init_dist
 
@@ -75,6 +75,11 @@ def main():
         
     if cfg.get('test_mode', False):
         return 0
+    
+    # Load eval_config from cfg
+    eval_config = cfg.get('eval_config', {})
+    if cfg.resume_from is None and os.path.exists(osp.abspath(cfg.work_dir)) and not eval_config.get('dry_run', False):
+        return
     
     # update configs according to CLI args
     if args.work_dir is not None:

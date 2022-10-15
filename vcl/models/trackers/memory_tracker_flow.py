@@ -1,36 +1,38 @@
-from builtins import isinstance, list
 import enum
 import os.path as osp
+import tempfile
+from builtins import isinstance, list
 from collections import *
 from pickle import NONE
 from re import A
 from turtle import forward
 
 import mmcv
-import tempfile
-from tqdm import tqdm
-from mmcv.runner import auto_fp16, load_checkpoint
-from dall_e  import map_pixels, unmap_pixels, load_model
-from torch import bilinear, unsqueeze
-from mmcv.runner import CheckpointLoader
-from mmcv.ops import Correlation
-
-
-from vcl.models.common.correlation import *
-from vcl.models.common.hoglayer import *
-from vcl.models.common import images2video, masked_attention_efficient, pil_nearest_interpolate, spatial_neighbor, video2images, non_local_attention
-from vcl.models.common.local_attention import flow_guided_attention_efficient, flow_guided_attention_efficient_v2
-from vcl.models.losses.losses import l1_loss
-
-from .base import BaseModel
-from ..builder import build_backbone, build_components, build_loss, build_operators, build_model
-from ..registry import MODELS
-from vcl.utils import *
-
 import torch.nn as nn
 import torch.nn.functional as F
-from .modules import *
+from dall_e import load_model, map_pixels, unmap_pixels
+from mmcv.ops import Correlation
+from mmcv.runner import CheckpointLoader, auto_fp16, load_checkpoint
+from torch import bilinear, unsqueeze
+from tqdm import tqdm
+
+from vcl.models.common import (images2video, masked_attention_efficient,
+                               non_local_attention, pil_nearest_interpolate,
+                               spatial_neighbor, video2images)
+from vcl.models.common.correlation import *
+from vcl.models.common.hoglayer import *
+from vcl.models.common.local_attention import (
+    flow_guided_attention_efficient, flow_guided_attention_efficient_v2)
+from vcl.models.losses.losses import l1_loss
+from vcl.utils import *
+
+from ..builder import (build_backbone, build_components, build_loss,
+                       build_model, build_operators)
+from ..registry import MODELS
+from .base import BaseModel
 from .memory_tracker import *
+from .modules import *
+
 
 @MODELS.register_module()
 class Memory_Tracker_Flow(Memory_Tracker_Custom):
@@ -43,6 +45,7 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
                  num_levels: int,
                  cxt_channels: int,
                  h_channels: int,
+                 corr_op_cfg_sample = None,
                  target_model: dict = None,
                  flow_clamp: int = -1,
                  flow_detach: bool = False,
@@ -70,8 +73,11 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
         self.loss = build_loss(loss)
         self.prior_loss = build_loss(prior_loss) if prior_loss is not None else None
         
+        if corr_op_cfg_sample == None: corr_op_cfg_sample = corr_op_cfg
         self.corr_lookup = build_operators(corr_op_cfg)
         self.corr_lookup_inference = build_operators(corr_op_cfg_infer)
+        self.corr_lookup_sample = build_operators(corr_op_cfg_sample)
+        
         self.warp = build_operators(warp_op_cfg) if warp_op_cfg is not None else None
 
         assert self.num_levels == self.decoder.num_levels
@@ -151,7 +157,7 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
 
         
         if self.prior_loss is not None:
-            preds, preds_lr, corr_, logvar_pred  = self.decoder(
+            preds, _, corr_, logvar_pred  = self.decoder(
                 False,
                 feat1,
                 feat2,
@@ -161,7 +167,7 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
             )
         else:
             # interative update the flow B x 2 x H x W
-            preds, preds_lr, corr_  = self.decoder(
+            preds, _, corr_  = self.decoder(
                 False,
                 feat1,
                 feat2,
@@ -171,7 +177,7 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
             )
 
         if self.flow_clamp != -1:
-            preds_lr = [torch.clamp(pred_lr, -self.flow_clamp, self.flow_clamp) for pred_lr in preds_lr]
+            preds = [torch.clamp(pred, -self.flow_clamp, self.flow_clamp) for pred in preds]
         
         
         if self.loss_weight['flow_rec_loss'] > 0:
@@ -180,9 +186,10 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
             else:
                 recs = []
                 gt = images_lab_gt[:,0,ch,0] * 20
-                ref_v = self.prep(images_lab_gt[:,0,ch,1]).unsqueeze(1).repeat(1, H*W, 1, 1, 1).flatten(0,1)
-                for pred_lr in preds_lr:
-                    update_v = self.corr_lookup([ref_v], pred_lr).reshape(bsz, 1, -1, H, W)
+                ref_v = images_lab_gt[:,0,ch,1].unsqueeze(1).repeat(1, H*W, 1, 1, 1).flatten(0,1)
+                preds_lr = [pred[:,:,::self.downsample_rate[0],::self.downsample_rate[0]] / self.downsample_rate[0] for pred in preds]
+                for pred_hr, pred_lr in zip(preds, preds_lr):
+                    update_v = self.corr_lookup_sample([ref_v], pred_hr).reshape(bsz, 1, -1, H, W)
                     if self.flow_detach:
                         corr_v = self.corr_lookup([corr], pred_lr).reshape(bsz, 1, -1, H, W)
                     else:
@@ -893,21 +900,19 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
     
     
     def forward_test_raft_prop(self, imgs, ref_seg_map, img_meta, 
-                images_lab=None,
             flows=None,
             save_image=False,
             save_path=None,
             iteration=None):
         
         # images_lab used for feature matching, RGB imgs used for optical flow
-        imgs_ = imgs.reshape((-1, ) + imgs.shape[2:])
-        imgs = images_lab.reshape((-1, ) + images_lab.shape[2:])
+        imgs = imgs.reshape((-1, ) + imgs.shape[2:])
         
         assert self.test_cfg.get('precede_frames', 1) == 1
         
         B, C, clip_len, H, W = imgs.shape
 
-        feat_shape = [H//8, W//8]
+        feat_shape = [H, W]
 
         input_onehot = ref_seg_map.ndim == 4
         if not input_onehot:
@@ -923,7 +928,7 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
         else:
             resized_seg_map = F.interpolate(
                 ref_seg_map,
-                size=feat_shape[2:],
+                size=feat_shape,
                 mode='bilinear',
                 align_corners=False).float()
             ref_seg_map = F.interpolate(
@@ -942,7 +947,7 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
             key_start = max(0, frame_idx - self.test_cfg.precede_frames)
             value_logits = torch.stack(
                 seg_bank[key_start:frame_idx], dim=2).to(imgs.device)
-            imgs_flow = imgs_[:, :, key_start:frame_idx]
+            imgs_flow = imgs[:, :, key_start:frame_idx]
                 
             L = imgs_flow.shape[2]
             C = resized_seg_map.shape[1]
@@ -956,10 +961,10 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
                 for ptr in range(0, L, t_step):
                     
                     ref_imgs = imgs_flow[:, :, ptr:ptr+t_step].permute(2, 0, 1, 3, 4)
-                    tar_imgs = imgs_[:, :, frame_idx:frame_idx+1].permute(2, 0, 1, 3, 4).repeat(ref_imgs.shape[0], 1, 1, 1, 1)
+                    tar_imgs = imgs[:, :, frame_idx:frame_idx+1].permute(2, 0, 1, 3, 4).repeat(ref_imgs.shape[0], 1, 1, 1, 1)
                     flow_imgs = torch.stack([tar_imgs, ref_imgs], 3)
                     
-                    flow = self.target_model(test_mode=True, imgs=flow_imgs, return_lr=True)[0]
+                    flow = self.target_model(test_mode=True, imgs=flow_imgs)[0][-1]
                     
                     if self.flow_clamp != -1:
                         flow = torch.clamp(flow, -self.flow_clamp, self.flow_clamp)
@@ -969,14 +974,6 @@ class Memory_Tracker_Flow(Memory_Tracker_Custom):
                         
                     seg_logit = self.warp(value_logits[ptr:ptr+t_step], flow)
                     
-            
-                    # a = F.interpolate(
-                    #     seg_logit,
-                    #     size=img_meta[0]['original_shape'][:2],
-                    #     mode='bilinear',
-                    #     align_corners=False).argmax(dim=1).permute(1,2,0).cpu()
-                    # a = F.one_hot(a)[:,:,0].numpy()
-                
 
                     del flow_imgs, ref_imgs, tar_imgs
 

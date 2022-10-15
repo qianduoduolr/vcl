@@ -1,14 +1,14 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-import _init_paths
 import argparse
 import copy
 import os
 import os.path as osp
+import random
 import time
 
+import _init_paths
 import mmcv
 import torch
-import random
 from mmcv import Config
 from mmcv.runner import init_dist
 
@@ -20,7 +20,7 @@ from vcl.utils import collect_env, get_root_logger
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train an editor')
-    parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/local/fm_flow/spa_temp_r2_d4_raft_vae.py')
+    parser.add_argument('--config', help='train config file path', default='/home/lr/project/vcl/configs/train/local/fm_flow/spa_temp_r2_d4_raft.py')
     parser.add_argument('--work-dir', help='the dir to save logs and models')
     parser.add_argument(
         '--resume-from', help='the checkpoint file to resume from')

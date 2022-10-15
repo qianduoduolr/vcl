@@ -2,7 +2,8 @@
 import torch.nn as nn
 from mmcv import build_from_cfg
 
-from .registry import BACKBONES, COMPONENTS, LOSSES, MODELS, DROP_LAYERS, OPERATORS
+from .registry import (BACKBONES, COMPONENTS, DROP_LAYERS, LOSSES, MODELS,
+                       OPERATORS)
 
 
 def build(cfg, registry, default_args=None):

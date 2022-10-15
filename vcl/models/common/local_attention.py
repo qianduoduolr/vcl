@@ -1,10 +1,13 @@
+import math
+import time
+from typing import List
+
 import torch
 import torch.nn.functional as F
 from torch.nn.modules.utils import _pair
-from typing import List
-import math, time
 
 from vcl.utils.visualize import affanity
+
 
 def cat(tensors: List[torch.Tensor], dim: int = 0):
     """Efficient version of torch.cat that avoids a copy if there is only a

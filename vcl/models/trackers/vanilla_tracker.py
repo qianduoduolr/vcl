@@ -8,14 +8,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.runner import auto_fp16
 
-from ..builder import build_backbone, build_loss, build_components
+from ...utils import *
 from ..backbones import ResNet
+from ..builder import build_backbone, build_components, build_loss
 from ..common import (cat, images2video, masked_attention_efficient,
-                      pil_nearest_interpolate, spatial_neighbor, video2images, non_local_attention)
-
+                      non_local_attention, pil_nearest_interpolate,
+                      spatial_neighbor, video2images)
 from ..registry import MODELS
 from .base import BaseModel
-from ...utils import *
+
 
 @MODELS.register_module()
 class BaseTracker(BaseModel):
@@ -234,6 +235,7 @@ class VanillaTracker(BaseTracker):
                     spatial_neighbor_mask,
                     temperature=self.test_cfg.temperature,
                     topk=self.test_cfg.topk,
+                    step=self.test_cfg.get('step', 32),
                     normalize=self.test_cfg.get('with_norm', True),
                     non_mask_len=0 if self.test_cfg.get(
                         'with_first_neighbor', True) else 1,
@@ -271,7 +273,7 @@ class VanillaTracker(BaseTracker):
             seg_preds = np.stack(seg_preds, axis=1)
             if self.save_np:
                 assert seg_preds.shape[0] == 1
-                eval_dir = '.eval'
+                eval_dir = f'/gdata/lirui/eval_test'
                 mmcv.mkdir_or_exist(eval_dir)
                 temp_file = tempfile.NamedTemporaryFile(
                     dir=eval_dir, suffix='.npy', delete=False)

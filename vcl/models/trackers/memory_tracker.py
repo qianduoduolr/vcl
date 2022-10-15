@@ -1,36 +1,31 @@
-from builtins import isinstance, list
 import enum
 import os.path as osp
+import tempfile
+from builtins import isinstance, list
 from collections import *
 from pickle import NONE
 from re import A
 from turtle import forward
 
 import mmcv
-import tempfile
-from mmcv.runner import auto_fp16, load_checkpoint
-from dall_e  import map_pixels, unmap_pixels, load_model
-from torch import bilinear, unsqueeze
-from mmcv.runner import CheckpointLoader
+import torch.nn as nn
+import torch.nn.functional as F
+from dall_e import load_model, map_pixels, unmap_pixels
 from mmcv.ops import Correlation
-
+from mmcv.runner import CheckpointLoader, auto_fp16, load_checkpoint
+from torch import bilinear, unsqueeze
 
 from vcl.models.common.correlation import *
 from vcl.models.common.hoglayer import *
 from vcl.models.losses.losses import l1_loss
-
-from .base import BaseModel
-from ..builder import build_backbone, build_components, build_loss
-from ..registry import MODELS
 from vcl.utils import *
 
-import torch.nn as nn
-import torch.nn.functional as F
+from ..builder import build_backbone, build_components, build_loss
+from ..registry import MODELS
+from .base import BaseModel
 from .modules import *
 
 
-
-    
 @MODELS.register_module()
 class Memory_Tracker_Custom(BaseModel):
     def __init__(self,

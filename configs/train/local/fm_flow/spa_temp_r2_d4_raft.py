@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
 from vcl.utils import *
 
-exp_name = 'spa_temp_d4_r2_raft_frozen_test'
+exp_name = 'spa_temp_r2_d4_raft'
 docker_name = 'bit:5000/lirui_torch1.8_cuda11.1_corres'
 
 # model settings
@@ -13,8 +13,11 @@ model = dict(
             num_levels=4,
             cxt_channels=128,
             h_channels=128,
+            downsample_rate=[8,],
             corr_op_cfg=dict(type='CorrLookup', align_corners=True, radius=2),
-            backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none',            pretrained='/gdata/lirui/expdir/VCL/group_stsl_former/final_framework_v2_15/epoch_1600.pth', torchvision_pretrain=False, frozen_stages=4),
+            corr_op_cfg_infer=dict(type='CorrLookup_Infer', align_corners=True, radius=12),
+            corr_op_cfg_sample=dict(type='CorrLookupSample', align_corners=True, radius=16, interval=8),
+            backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
             cxt_backbone=dict(
                 type='RAFTEncoder',
                 in_channels=3,
@@ -35,18 +38,71 @@ model = dict(
                 num_levels=4,
                 radius=4,
                 iters=6,
-                mask_pred=False,
+                mask_pred=True,
                 corr_op_cfg=dict(type='CorrLookup', align_corners=True),
                 gru_type='SeqConv',
-                # flow_loss=dict(type='SequenceLoss'),
                 act_cfg=dict(type='ReLU')),
+            
+            target_model=dict(
+                            type='RAFT',
+                            num_levels=4,
+                            radius=4,
+                            cxt_channels=128,
+                            h_channels=128,
+                            backbone=dict(
+                                type='RAFTEncoder',
+                                in_channels=3,
+                                out_channels=256,
+                                net_type='Basic',
+                                norm_cfg=dict(type='IN'),
+                                init_cfg=[
+                                    dict(
+                                        type='Kaiming',
+                                        layer=['Conv2d'],
+                                        mode='fan_out',
+                                        nonlinearity='relu'),
+                                    dict(type='Constant', layer=['InstanceNorm2d'], val=1, bias=0)
+                                ]),
+                            cxt_backbone=dict(
+                                type='RAFTEncoder',
+                                in_channels=3,
+                                out_channels=256,
+                                net_type='Basic',
+                                # norm_cfg=dict(type='SyncBN'),
+                                init_cfg=[
+                                    dict(
+                                        type='Kaiming',
+                                        layer=['Conv2d'],
+                                        mode='fan_out',
+                                        nonlinearity='relu'),
+                                    dict(type='Constant', layer=['SyncBatchNorm2d'], val=1, bias=0)
+                                ]),
+                            decoder=dict(
+                                type='RAFTDecoder',
+                                net_type='Basic',
+                                num_levels=4,
+                                radius=4,
+                                iters=30,
+                                corr_op_cfg=dict(type='CorrLookup', align_corners=True),
+                                gru_type='SeqConv',
+                                act_cfg=dict(type='ReLU')),
+                            freeze_bn=True,
+                            loss=dict(type='SequenceLoss'),
+                            init_cfg=dict(type='Pretrained', checkpoint='/home/lr/models/optical_flow/raft_8x2_100k_mixed_368x768.pth',map_location='cpu')
+                                ),
             loss=dict(type='SequenceLoss'),
-            loss_weight=dict(flow_rec_loss=1),
+            # prior_loss=dict(type='Kl_Loss_Gaussion'),
+            loss_weight=dict(flow_rec_loss=1, vae_prior_loss=1, vae_rec_loss=1, raft_gt_loss=0.01),
+            drop_ch=True,
             freeze_bn=False
 )
 
 
-model_test = None
+model_test = model_test = dict(
+    type='VanillaTracker',
+    backbone=dict(type='ResNet',depth=18, strides=(1, 2, 2, 1), out_indices=(2, ), pool_type='none'),
+)
+
 
 # model training and testing settings
 train_cfg = dict(syncbn=True)
@@ -75,7 +131,7 @@ img_norm_cfg_lab = dict(mean=[50, 0, 0], std=[50, 127, 127], to_bgr=False)
 
 train_pipeline = [
     dict(type='RandomResizedCrop', area_range=(0.6,1.0), aspect_ratio_range=(1.5, 2.0),),
-    dict(type='Resize', scale=(256, 256), keep_ratio=False),
+    dict(type='Resize', scale=(128, 128), keep_ratio=False),
     dict(type='Flip', flip_ratio=0.5),
     dict(type='RGB2LAB', output_keys='images_lab'),
     dict(type='Normalize', **img_norm_cfg),
@@ -103,7 +159,7 @@ val_pipeline = [
 # demo_pipeline = None
 data = dict(
     workers_per_gpu=2,
-    train_dataloader=dict(samples_per_gpu=32, drop_last=True),  # 4 gpus
+    train_dataloader=dict(samples_per_gpu=1, drop_last=True),  # 4 gpus
     val_dataloader=dict(samples_per_gpu=1),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=1),
 
@@ -113,10 +169,11 @@ data = dict(
             type='RepeatDataset',
             dataset=  dict(
                     type=train_dataset_type,
-                    root='/gdata/lirui/dataset/YouTube-VOS',
-                    list_path='/gdata/lirui/dataset/YouTube-VOS/2018/train',
-                    data_prefix=dict(RGB='train/JPEGImages_s256', FLOW='train/Flows_s256_flo', ANNO='train/Annotations'),
+                    root='/home/lr/dataset/YouTube-VOS',
+                    list_path='/home/lr/dataset/YouTube-VOS/2018/train',
+                    data_prefix=dict(RGB='train/JPEGImages_s256', FLOW=None, ANNO=None),
                     clip_length=2,
+                    # steps=dict(v=[1,3,5], p=[0.5,0.3,0.2]),
                     pipeline=train_pipeline,
             test_mode=False),
             times=10,
@@ -125,8 +182,8 @@ data = dict(
 
     test =  dict(
             type=test_dataset_type,
-            root='/gdata/lirui/dataset/DAVIS',
-            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
+            root='/home/lr/dataset/DAVIS',
+            list_path='/home/lr/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -134,8 +191,8 @@ data = dict(
     
     val =  dict(
             type=val_dataset_type,
-            root='/gdata/lirui/dataset/DAVIS',
-            list_path='/gdata/lirui/dataset/DAVIS/ImageSets',
+            root='/home/lr/dataset/DAVIS',
+            list_path='/home/lr/dataset/DAVIS/ImageSets',
             data_prefix='2017',
             pipeline=val_pipeline,
             test_mode=True
@@ -149,6 +206,9 @@ optimizers = dict(
     eps=1e-08,
     weight_decay=0.0001,
     amsgrad=False)
+
+optimizer_config = dict()
+
 # learning policy
 # total_iters = 200000
 runner_type='epoch'
@@ -159,7 +219,6 @@ lr_config = dict(
     pct_start=0.05,
     anneal_strategy='linear')
 
-work_dir = f'/gdata/lirui/expdir/VCL/group_fm_flow/{exp_name}'
 
 checkpoint_config = dict(interval=max_epoch//2, save_optimizer=True, by_epoch=True)
 log_config = dict(
@@ -167,27 +226,22 @@ log_config = dict(
     hooks=[
         dict(type='TextLoggerHook', by_epoch=False),
         dict(type='TensorboardLoggerHook', by_epoch=False, interval=10),
-          dict(type='WandbLoggerHook', 
-            init_kwargs=dict(project='video_correspondence_cmp', 
-                            name=exp_name, 
-                            config=model, 
-                            dir=work_dir), 
-            log_artifact=False)
     ])
 
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
+work_dir = f'/home/lr/expdir/VCL/group_fm_flow/{exp_name}'
 
-visual_config = dict(type='VisualizationHook', interval=500, res_name_list=['flow', 'imgs'], output_dir=work_dir+'/vis')
+visual_config = dict(type='VisualizationHook', interval=50, res_name_list=['flow', 'imgs'], output_dir=work_dir+'/vis')
 
 
-# evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=max_epoch//2, by_epoch=True
-#                   )
+evaluation = dict(output_dir=f'{work_dir}/eval_output_val', interval=max_epoch//2, by_epoch=True
+                  )
 
 eval_config= dict(
                   output_dir=f'{work_dir}/eval_output',
-                  checkpoint_path=f'/gdata/lirui/expdir/VCL/group_fm_flow/{exp_name}/epoch_{max_epoch}.pth'
+                  checkpoint_path=f'/home/lr/expdir/VCL/group_fm_flow/{exp_name}/epoch_{max_epoch}.pth'
                 )
 
 
